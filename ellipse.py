@@ -122,8 +122,6 @@ class EllipseFitter:
 
         print(f"fit_ellipse_to_rect: {rect=}")
 
-        img = cv2.imread(self.filename, cv2.IMREAD_GRAYSCALE)
-
         x0, y0 = rect[0]
         x1, y1 = rect[1]
         if x0 > x1:
@@ -131,9 +129,31 @@ class EllipseFitter:
         if y0 > y1:
             y1, y0 = y0, y1
 
-        image_pts = np.nonzero(img[y0:y1, x0:x1])
+        if self.perimeter_pts is not None:
 
-        coeffs = fit_ellipse(image_pts[1], image_pts[0])
+            x_vec = []
+            y_vec = []
+            for x, y in self.perimeter_pts:
+
+                if x0 <= x and x <= x1 and y0 <= y and y <= y1:
+                    x_vec.append(x-x0)
+                    y_vec.append(y-y0)
+
+            x_vec = np.asarray(x_vec, dtype=np.float32)
+            y_vec = np.asarray(y_vec, dtype=np.float32)
+
+        else:
+
+            img = cv2.imread(self.filename, cv2.IMREAD_GRAYSCALE)
+            image_pts = np.nonzero(img[y0:y1, x0:x1])
+            x_vec = image_pts[1]
+            y_vec = image_pts[0]
+
+        print(f"{x_vec=} {y_vec=}")
+
+        coeffs = fit_ellipse(x_vec, y_vec)
+
+        print(f"{coeffs=}")
 
         ellipse_pts = get_ellipse_pts(cart_to_pol(coeffs))
 
@@ -188,7 +208,7 @@ class EllipseFitter:
             for xy in self.perimeter_pts:
                 graph.draw_point(xy, size=1, color='yellow')
 
-        if self.approx_pts is not None and False:
+        if self.approx_pts is not None:
             xy_tuples = list(tuple(i[0]) for i in self.approx_pts)
             graph.draw_lines(xy_tuples, color='#00ff00', width=2)
 
