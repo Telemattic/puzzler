@@ -111,29 +111,18 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi):
 
 class EllipseFitter:
 
-    def __init__(self):
+    def __init__(self, filename):
+        self.filename = filename
         self.ellipse_pts = None
         self.mouse_rect = None
-
-    def render(self):
-
-        graph = self.window['graph']
-        graph.erase()
-
-        id = graph.draw_image(filename="A01_class.png", location=(0,0))
-        print(f"draw_image: {id=}")
-
-        if self.mouse_rect:
-            tl, br = self.mouse_rect[0], self.mouse_rect[1]
-            graph.draw_rectangle(tl, br, line_color='red', line_width=3)
-
-        if self.ellipse_pts:
-            graph.draw_lines(self.ellipse_pts, color='blue', width=1)
+        self.approx_pts = None
+        self.perimeter_pts = None
 
     def fit_ellipse_to_rect(self, rect):
+
         print(f"fit_ellipse_to_rect: {rect=}")
-        img = cv2.imread('A01_class.png', cv2.IMREAD_GRAYSCALE)
-        print(f"{img.shape=}")
+
+        img = cv2.imread(self.filename, cv2.IMREAD_GRAYSCALE)
 
         x0, y0 = rect[0]
         x1, y1 = rect[1]
@@ -143,21 +132,34 @@ class EllipseFitter:
             y1, y0 = y0, y1
 
         image_pts = np.nonzero(img[y0:y1, x0:x1])
-        print(f"{image_pts=}")
 
         coeffs = fit_ellipse(image_pts[1], image_pts[0])
 
         ellipse_pts = get_ellipse_pts(cart_to_pol(coeffs))
 
-        print(f"{ellipse_pts=}")
-
         ret = list(zip(ellipse_pts[0]+x0, ellipse_pts[1]+y0))
 
-        # ret = list(zip(image_pts[1]+x0, image_pts[0]+y0))
-
-        print(f"{ret=}")
-
         return ret
+
+    def approx_poly(self, event, values):
+
+        img = cv2.imread(self.filename, cv2.IMREAD_GRAYSCALE)
+        img = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)[1]
+
+        contours = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        assert len(contours) == 2
+        c = max(contours[0], key=cv2.contourArea)
+
+        self.perimeter_pts = list(tuple(i[0]) for i in c)
+
+        eps = float(self.window['epsilon'].get())
+
+        approx_pts = cv2.approxPolyDP(c, eps, True)
+        # print(f"{len(approx_pts)=} {approx_pts=}")
+
+        self.approx_pts = approx_pts
+
+        self.render()
 
     def handle_mouse(self, event, values):
 
@@ -174,6 +176,37 @@ class EllipseFitter:
 
         self.render()
 
+    def render(self):
+
+        graph = self.window['graph']
+        graph.erase()
+
+        id = graph.draw_image(filename=self.filename, location=(0,0))
+        print(f"draw_image: {id=}")
+
+        if self.perimeter_pts is not None:
+            for xy in self.perimeter_pts:
+                graph.draw_point(xy, size=1, color='yellow')
+
+        if self.approx_pts is not None and False:
+            xy_tuples = list(tuple(i[0]) for i in self.approx_pts)
+            graph.draw_lines(xy_tuples, color='#00ff00', width=2)
+
+            for i in range(len(xy_tuples)):
+                x0, y0 = xy_tuples[i-2]
+                x1, y1 = xy_tuples[i-1]
+                x2, y2 = xy_tuples[i]
+                area = (x1-x0) * (y2-y1) - (x2-x1)*(y1-y0)
+                color = 'red' if area >= 0 else 'blue'
+                graph.draw_point((x1,y1), size=5, color=color)
+
+        if self.ellipse_pts:
+            graph.draw_lines(self.ellipse_pts, color='blue', width=2)
+
+        if self.mouse_rect:
+            tl, br = self.mouse_rect[0], self.mouse_rect[1]
+            graph.draw_rectangle(tl, br, line_color='red', line_width=2)
+
     def ui(self):
 
         layout = [
@@ -184,7 +217,8 @@ class EllipseFitter:
                       key='graph',
                       drag_submits=True,
                       enable_events=True,
-                      metadata=self)]
+                      metadata=self)],
+            [sg.Button('Approx Poly', key='approx_poly'), sg.Text('Epsilon'), sg.InputText('1.0',key='epsilon', size=(5,1))]
         ]
         self.window = sg.Window('Ellipse Fitter', layout, finalize=True)
         self.render()
@@ -195,12 +229,14 @@ class EllipseFitter:
                 break
             elif event in {'graph','graph+UP'}:
                 self.handle_mouse(event, values)
+            elif event == 'approx_poly':
+                self.approx_poly(event, values)
             else:
                 print(event, values)
 
 def main():
 
-    e = EllipseFitter()
+    e = EllipseFitter('A02_extract.png')
     e.ui()
 
 if __name__ == '__main__':
