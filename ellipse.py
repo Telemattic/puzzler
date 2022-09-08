@@ -1,3 +1,5 @@
+import argparse
+import bisect
 import cv2
 import numpy as np
 import PySimpleGUI as sg
@@ -108,6 +110,106 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi):
     y = y0 + ap * np.cos(t) * np.sin(phi) + bp * np.sin(t) * np.cos(phi)
     return x, y
 
+class TabComputer:
+
+    def __init__(self, filename, epsilon):
+        
+        self.filename = filename
+        self.epsilon  = epsilon
+
+        self.init_perimeter(filename)
+        self.init_approx_poly(epsilon)
+        
+        self.ellipses = []
+
+        print(f"{np.squeeze(self.perimeter)=}")
+        print(f"{self.approx_poly=}")
+        print(f"{self.compute_convexity_defects()=}")
+
+        for defect in self.compute_convexity_defects():
+
+            if defect[3] < 8000:
+                continue
+            
+            l, r, c = defect[0], defect[1], defect[2]
+            ellipse = self.fit_ellipse(l, r, c)
+            if ellipse is not None:
+                self.ellipses.append(ellipse)
+
+        print(f"{self.ellipses=}")
+
+    def fit_ellipse(self, l, r, c):
+
+        print(f"fit_ellipse: {l=} {r=} {c=}")
+
+        i = bisect.bisect(self.approx_poly, c)
+
+        a = i
+        while l < self.approx_poly[a] and self.signed_area(a) > 0:
+            a -= 1
+
+        b = i
+        while self.approx_poly[b] < r and self.signed_area(b) > 0:
+            b += 1
+
+        print(f"  approx: {i=} {a=} {b=}")
+        
+        a = self.approx_poly[a]
+        b = self.approx_poly[b]
+        
+        print(f"  perimeter: {a=} {b=}")
+
+        x = np.asarray(self.perimeter[a:b,0,0], dtype=np.float32)
+        y = np.asarray(self.perimeter[a:b,0,1], dtype=np.float32)
+        print(f"  {x=} {y=}")
+
+        ret = fit_ellipse(x, y)
+
+        print(f"  {ret.shape=} {ret.dtype=} {ret.dtype.name=}")
+        print(f"  {ret=}")
+
+        # throw away complex results, wtf is going on here anyway?
+        if ret.dtype.kind == 'c':
+            return None
+        
+        return ret
+
+    def signed_area(self, i):
+        x0, y0 = self.perimeter[self.approx_poly[i-1]][0]
+        x1, y1 = self.perimeter[self.approx_poly[i]][0]
+        x2, y2 = self.perimeter[self.approx_poly[i+1]][0]
+        return (x1-x0) * (y2-y1) - (x2-x1)*(y1-y0)
+
+    def init_perimeter(self, filename):
+        img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+        thresh = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)[1]
+        contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        assert len(contours) == 2
+        self.perimeter = max(contours[0], key=cv2.contourArea)
+        self.point_to_index = dict()
+        for i, xy in enumerate(np.squeeze(self.perimeter)):
+            self.point_to_index[tuple(xy)] = i
+
+    def compute_convexity_defects(self):
+        convex_hull = cv2.convexHull(self.perimeter, returnPoints=False)
+        return np.squeeze(cv2.convexityDefects(self.perimeter, convex_hull))
+
+    def init_approx_poly(self, epsilon):
+        approx = cv2.approxPolyDP(self.perimeter, epsilon, True)
+        poly = list(self.point_to_index[tuple(xy)] for xy in np.squeeze(approx))
+
+        reset = None
+        for i in range(1,len(poly)):
+            if poly[i-1] > poly[i]:
+                assert reset is None
+                reset = i
+            else:
+                assert poly[i-1] < poly[i]
+                
+        if reset:
+            poly = poly[reset:] + poly[:reset]
+
+        self.approx_poly = poly
 
 class EllipseFitter:
 
@@ -117,6 +219,9 @@ class EllipseFitter:
         self.mouse_rect = None
         self.approx_pts = None
         self.perimeter_pts = None
+        self.convex_hull = None
+        self.convexity_defects = None
+        self.ellipses = None
 
     def fit_ellipse_to_rect(self, rect):
 
@@ -170,6 +275,19 @@ class EllipseFitter:
         assert len(contours) == 2
         c = max(contours[0], key=cv2.contourArea)
 
+        convex_hull = cv2.convexHull(c, returnPoints=False)
+        self.convex_hull = np.squeeze(c[convex_hull])
+        # print(f"{self.convex_hull=}")
+
+        self.convexity_defects = []
+        convexity_defects = cv2.convexityDefects(c, convex_hull)
+        for defect in np.squeeze(convexity_defects):
+            p0 = tuple(*c[defect[0]])
+            p1 = tuple(*c[defect[1]])
+            p2 = tuple(*c[defect[2]])
+            self.convexity_defects.append([p0, p2, p1])
+        # print(f"{self.convexity_defects=}")
+
         self.perimeter_pts = list(tuple(i[0]) for i in c)
 
         eps = float(self.window['epsilon'].get())
@@ -179,6 +297,12 @@ class EllipseFitter:
 
         self.approx_pts = approx_pts
 
+        self.render()
+
+    def ellipsify(self, event, values):
+        epsilon = float(self.window['epsilon'].get())
+        tab_computer = TabComputer(self.filename, epsilon)
+        self.ellipses = tab_computer.ellipses
         self.render()
 
     def handle_mouse(self, event, values):
@@ -208,6 +332,11 @@ class EllipseFitter:
             for xy in self.perimeter_pts:
                 graph.draw_point(xy, size=1, color='yellow')
 
+        if self.convex_hull is not None:
+            xy_tuples = list(tuple(i) for i in self.convex_hull)
+            xy_tuples.append(xy_tuples[0])
+            graph.draw_lines(xy_tuples, color='yellow', width=1)
+
         if self.approx_pts is not None:
             xy_tuples = list(tuple(i[0]) for i in self.approx_pts)
             graph.draw_lines(xy_tuples, color='#00ff00', width=2)
@@ -220,8 +349,22 @@ class EllipseFitter:
                 color = 'red' if area >= 0 else 'blue'
                 graph.draw_point((x1,y1), size=5, color=color)
 
+        if self.convexity_defects is not None:
+            for defect in self.convexity_defects:
+                graph.draw_lines(defect, color='lightblue', width=1)
+
         if self.ellipse_pts:
             graph.draw_lines(self.ellipse_pts, color='blue', width=2)
+
+        if self.ellipses is not None:
+            for i, coeffs in enumerate(self.ellipses):
+                poly = cart_to_pol(coeffs)
+                print(f"{i}: {poly=}")
+                pts = get_ellipse_pts(poly, npts=20)
+                pts = list(zip(pts[0], pts[1]))
+                print(f"  {pts=}")
+                graph.draw_lines(pts, color='blue', width=2)
+                graph.draw_text(f"{i}", (poly[0], poly[1]), color='red')
 
         if self.mouse_rect:
             tl, br = self.mouse_rect[0], self.mouse_rect[1]
@@ -238,7 +381,10 @@ class EllipseFitter:
                       drag_submits=True,
                       enable_events=True,
                       metadata=self)],
-            [sg.Button('Approx Poly', key='approx_poly'), sg.Text('Epsilon'), sg.InputText('1.0',key='epsilon', size=(5,1))]
+            [sg.Button('Approx Poly', key='approx_poly'),
+             sg.Text('Epsilon'),
+             sg.InputText('1.0',key='epsilon', size=(5,1))],
+            [sg.Button('Ellipsify', key='ellipsify')]
         ]
         self.window = sg.Window('Ellipse Fitter', layout, finalize=True)
         self.render()
@@ -251,12 +397,19 @@ class EllipseFitter:
                 self.handle_mouse(event, values)
             elif event == 'approx_poly':
                 self.approx_poly(event, values)
+            elif event == 'ellipsify':
+                self.ellipsify(event, values)
             else:
                 print(event, values)
 
 def main():
 
-    e = EllipseFitter('A02_extract.png')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("image")
+
+    args = parser.parse_args()
+
+    e = EllipseFitter(args.image)
     e.ui()
 
 if __name__ == '__main__':
