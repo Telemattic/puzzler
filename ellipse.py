@@ -1,6 +1,7 @@
 import argparse
 import bisect
 import cv2
+import itertools
 import math
 import numpy as np
 import PySimpleGUI as sg
@@ -120,6 +121,8 @@ class TabComputer:
 
         self.init_perimeter(filename)
         self.init_approx_poly(epsilon)
+
+        self.curvature_runs()
         
         self.ellipses = []
 
@@ -137,7 +140,14 @@ class TabComputer:
             if ellipse is not None:
                 self.ellipses.append(ellipse)
 
-        print(f"{self.ellipses=}")
+    def curvature_runs(self):
+
+        n = len(self.approx_poly)
+        signs = [self.signed_area(i) > 0 for i in range(n)]
+        print(f"{signs=}")
+
+        signs = [(k,len(list(g))) for k, g in itertools.groupby(signs)]
+        print(f"{signs=}")
 
     def fit_ellipse(self, l, r, c):
 
@@ -162,7 +172,8 @@ class TabComputer:
 
         x = np.asarray(self.perimeter[a:b,0,0], dtype=np.float32)
         y = np.asarray(self.perimeter[a:b,0,1], dtype=np.float32)
-        print(f"  {x=} {y=}")
+
+        # print(f"  {x=} {y=}")
 
         coeffs = fit_ellipse(x, y)
 
@@ -182,11 +193,18 @@ class TabComputer:
         angle1 = math.atan2(y1-cy, x1-cx) * 180. / math.pi
         angles = [angle0, angle1]
 
-        print(f"{angles=}")
+        diff = angle1 - angle0
+        if diff < 0:
+            diff += 360.
+
+        print(f"  angles={angle0:.1f},{angle1:.1f} -> {diff:.1f}")
         
         return {'coeffs': coeffs, 'poly': poly, 'points': points, 'angles': angles}
 
     def signed_area(self, i):
+        n = len(self.approx_poly)
+        if i+1 >= n:
+            i -= n
         x0, y0 = self.perimeter[self.approx_poly[i-1]][0]
         x1, y1 = self.perimeter[self.approx_poly[i]][0]
         x2, y2 = self.perimeter[self.approx_poly[i+1]][0]
@@ -338,8 +356,7 @@ class EllipseFitter:
         graph.erase()
 
         if self.window['render_image'].get():
-            id = graph.draw_image(filename=self.filename, location=(0,0))
-            print(f"draw_image: {id=}")
+            graph.draw_image(filename=self.filename, location=(0,0))
 
         if self.window['render_perimeter'].get():
             if self.perimeter_pts is not None:
@@ -352,10 +369,11 @@ class EllipseFitter:
                 xy_tuples.append(xy_tuples[0])
                 graph.draw_lines(xy_tuples, color='yellow', width=1)
 
-        if self.ellipses is not None:
-            for i, ellipse in enumerate(self.ellipses):
-                for p in ellipse['points']:
-                    graph.draw_point(p, size=8, color='purple')
+        if self.window['render_ellipse_points'].get():
+            if self.ellipses is not None:
+                for i, ellipse in enumerate(self.ellipses):
+                    for p in ellipse['points']:
+                        graph.draw_point(p, size=8, color='purple')
 
         if self.window['render_approx_poly'].get():
             if self.approx_pts is not None:
@@ -379,19 +397,21 @@ class EllipseFitter:
                 for defect in self.convexity_defects:
                     graph.draw_lines(defect, color='lightblue', width=1)
 
-        if self.ellipse_pts:
-            graph.draw_lines(self.ellipse_pts, color='blue', width=2)
+        if self.window['render_ellipses'].get():
+            if self.ellipse_pts:
+                graph.draw_lines(self.ellipse_pts, color='blue', width=2)
 
-        if self.ellipses is not None:
-            for i, ellipse in enumerate(self.ellipses):
-                poly = ellipse['poly']
-                angles = ellipse['angles']
-                print(f"{i}: x,y={poly[0]:.1f},{poly[1]:.1f} angles={angles[0]:.1f},{angles[1]:.1f}")
-                pts = get_ellipse_pts(poly, npts=20)
-                pts = list(zip(pts[0], pts[1]))
-                # print(f"  {pts=}")
-                graph.draw_lines(pts, color='blue', width=2)
-                graph.draw_text(f"{i}", (poly[0], poly[1]), color='red')
+        if self.window['render_ellipses'].get():
+            if self.ellipses is not None:
+                for i, ellipse in enumerate(self.ellipses):
+                    poly = ellipse['poly']
+                    angles = ellipse['angles']
+                    print(f"{i}: x,y={poly[0]:.1f},{poly[1]:.1f} angles={angles[0]:.1f},{angles[1]:.1f}")
+                    pts = get_ellipse_pts(poly, npts=20)
+                    pts = list(zip(pts[0], pts[1]))
+                    # print(f"  {pts=}")
+                    graph.draw_lines(pts, color='blue', width=2)
+                    graph.draw_text(f"{i}", (poly[0], poly[1]), color='red')
 
         if self.mouse_rect:
             tl, br = self.mouse_rect[0], self.mouse_rect[1]
@@ -403,11 +423,23 @@ class EllipseFitter:
             sg.CB('Image',       default=True, enable_events=True, key='render_image'),
             sg.CB('Perimeter',   default=True, enable_events=True, key='render_perimeter'),
             sg.CB('Convex Hull', default=True, enable_events=True, key='render_convex_hull'),
-            sg.CB('Defects',     default=True, enable_events=True, key='render_convexity_defects'),
+            sg.CB('Defects',     default=True, enable_events=True, key='render_convexity_defects')
+        ]
+
+        approx_layout = [
+            sg.Button('Approx', key='button_approx'),
+            sg.Text('Epsilon'),
+            sg.InputText('1.0',key='epsilon', size=(5,1), enable_events=True),
             sg.CB('Approx Poly', default=True, enable_events=True, key='render_approx_poly'),
             sg.CB('Curvature',   default=True, enable_events=True, key='render_curvature')
         ]
 
+        tabs_layout = [
+            sg.Button('Ellipsify', key='button_ellipsify'),
+            sg.CB('Points', default=True, enable_events=True, key='render_ellipse_points'),
+            sg.CB('Ellipses', default=True, enable_events=True, key='render_ellipses')
+        ]
+        
         layout = [
             [sg.Graph(canvas_size=(551,551),
                       graph_bottom_left = (0,550),
@@ -418,10 +450,8 @@ class EllipseFitter:
                       enable_events=True,
                       metadata=self)],
             [sg.Frame('Render', [render_layout])],
-            [sg.Button('Approx Poly', key='approx_poly'),
-             sg.Text('Epsilon'),
-             sg.InputText('1.0',key='epsilon', size=(5,1))],
-            [sg.Button('Ellipsify', key='ellipsify')]
+            [sg.Frame('Approx', [approx_layout])],
+            [sg.Frame('Tabs',   [tabs_layout])]
         ]
         self.window = sg.Window('Ellipse Fitter', layout, finalize=True)
         self.render()
@@ -432,9 +462,9 @@ class EllipseFitter:
                 break
             elif event in {'graph','graph+UP'}:
                 self.handle_mouse(event, values)
-            elif event == 'approx_poly':
+            elif event == 'button_approx':
                 self.approx_poly(event, values)
-            elif event == 'ellipsify':
+            elif event == 'button_ellipsify':
                 self.ellipsify(event, values)
             elif event.startswith('render_'):
                 self.render()
