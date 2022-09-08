@@ -337,38 +337,47 @@ class EllipseFitter:
         graph = self.window['graph']
         graph.erase()
 
-        id = graph.draw_image(filename=self.filename, location=(0,0))
-        print(f"draw_image: {id=}")
+        if self.window['render_image'].get():
+            id = graph.draw_image(filename=self.filename, location=(0,0))
+            print(f"draw_image: {id=}")
 
-        if self.perimeter_pts is not None:
-            for xy in self.perimeter_pts:
-                graph.draw_point(xy, size=1, color='yellow')
+        if self.window['render_perimeter'].get():
+            if self.perimeter_pts is not None:
+                for xy in self.perimeter_pts:
+                    graph.draw_point(xy, size=1, color='yellow')
 
-        if self.convex_hull is not None:
-            xy_tuples = list(tuple(i) for i in self.convex_hull)
-            xy_tuples.append(xy_tuples[0])
-            graph.draw_lines(xy_tuples, color='yellow', width=1)
+        if self.window['render_convex_hull'].get():
+            if self.convex_hull is not None:
+                xy_tuples = list(tuple(i) for i in self.convex_hull)
+                xy_tuples.append(xy_tuples[0])
+                graph.draw_lines(xy_tuples, color='yellow', width=1)
 
         if self.ellipses is not None:
             for i, ellipse in enumerate(self.ellipses):
                 for p in ellipse['points']:
                     graph.draw_point(p, size=8, color='purple')
-                    
-        if self.approx_pts is not None:
-            xy_tuples = list(tuple(i[0]) for i in self.approx_pts)
-            graph.draw_lines(xy_tuples, color='#00ff00', width=2)
 
-            for i in range(len(xy_tuples)):
-                x0, y0 = xy_tuples[i-2]
-                x1, y1 = xy_tuples[i-1]
-                x2, y2 = xy_tuples[i]
-                area = (x1-x0) * (y2-y1) - (x2-x1)*(y1-y0)
-                color = 'red' if area >= 0 else 'blue'
-                graph.draw_point((x1,y1), size=5, color=color)
+        if self.window['render_approx_poly'].get():
+            if self.approx_pts is not None:
+                xy_tuples = list(tuple(i[0]) for i in self.approx_pts)
+                graph.draw_lines(xy_tuples, color='#00ff00', width=2)
 
-        if self.convexity_defects is not None:
-            for defect in self.convexity_defects:
-                graph.draw_lines(defect, color='lightblue', width=1)
+        if self.window['render_curvature'].get():
+            if self.approx_pts is not None:
+                xy_tuples = list(tuple(i[0]) for i in self.approx_pts)
+
+                for i in range(len(xy_tuples)):
+                    x0, y0 = xy_tuples[i-2]
+                    x1, y1 = xy_tuples[i-1]
+                    x2, y2 = xy_tuples[i]
+                    area = (x1-x0) * (y2-y1) - (x2-x1)*(y1-y0)
+                    color = 'red' if area >= 0 else 'blue'
+                    graph.draw_point((x1,y1), size=5, color=color)
+
+        if self.window['render_convexity_defects'].get():
+            if self.convexity_defects is not None:
+                for defect in self.convexity_defects:
+                    graph.draw_lines(defect, color='lightblue', width=1)
 
         if self.ellipse_pts:
             graph.draw_lines(self.ellipse_pts, color='blue', width=2)
@@ -390,6 +399,15 @@ class EllipseFitter:
 
     def ui(self):
 
+        render_layout = [
+            sg.CB('Image',       default=True, enable_events=True, key='render_image'),
+            sg.CB('Perimeter',   default=True, enable_events=True, key='render_perimeter'),
+            sg.CB('Convex Hull', default=True, enable_events=True, key='render_convex_hull'),
+            sg.CB('Defects',     default=True, enable_events=True, key='render_convexity_defects'),
+            sg.CB('Approx Poly', default=True, enable_events=True, key='render_approx_poly'),
+            sg.CB('Curvature',   default=True, enable_events=True, key='render_curvature')
+        ]
+
         layout = [
             [sg.Graph(canvas_size=(551,551),
                       graph_bottom_left = (0,550),
@@ -399,6 +417,7 @@ class EllipseFitter:
                       drag_submits=True,
                       enable_events=True,
                       metadata=self)],
+            [sg.Frame('Render', [render_layout])],
             [sg.Button('Approx Poly', key='approx_poly'),
              sg.Text('Epsilon'),
              sg.InputText('1.0',key='epsilon', size=(5,1))],
@@ -417,6 +436,8 @@ class EllipseFitter:
                 self.approx_poly(event, values)
             elif event == 'ellipsify':
                 self.ellipsify(event, values)
+            elif event.startswith('render_'):
+                self.render()
             else:
                 print(event, values)
 
