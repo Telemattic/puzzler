@@ -1,6 +1,7 @@
 import argparse
 import bisect
 import cv2
+import math
 import numpy as np
 import PySimpleGUI as sg
 
@@ -163,16 +164,27 @@ class TabComputer:
         y = np.asarray(self.perimeter[a:b,0,1], dtype=np.float32)
         print(f"  {x=} {y=}")
 
-        ret = fit_ellipse(x, y)
-
-        print(f"  {ret.shape=} {ret.dtype=} {ret.dtype.name=}")
-        print(f"  {ret=}")
+        coeffs = fit_ellipse(x, y)
 
         # throw away complex results, wtf is going on here anyway?
-        if ret.dtype.kind == 'c':
+        if coeffs.dtype.kind == 'c':
             return None
+
+        poly = cart_to_pol(coeffs)
+
+        points = list(zip(x,y))
+
+        cx, cy = poly[0], poly[1]
+        x0, y0 = points[0]
+        x1, y1 = points[-1]
+
+        angle0 = math.atan2(y0-cy, x0-cx) * 180. / math.pi
+        angle1 = math.atan2(y1-cy, x1-cx) * 180. / math.pi
+        angles = [angle0, angle1]
+
+        print(f"{angles=}")
         
-        return ret
+        return {'coeffs': coeffs, 'poly': poly, 'points': points, 'angles': angles}
 
     def signed_area(self, i):
         x0, y0 = self.perimeter[self.approx_poly[i-1]][0]
@@ -337,6 +349,11 @@ class EllipseFitter:
             xy_tuples.append(xy_tuples[0])
             graph.draw_lines(xy_tuples, color='yellow', width=1)
 
+        if self.ellipses is not None:
+            for i, ellipse in enumerate(self.ellipses):
+                for p in ellipse['points']:
+                    graph.draw_point(p, size=8, color='purple')
+                    
         if self.approx_pts is not None:
             xy_tuples = list(tuple(i[0]) for i in self.approx_pts)
             graph.draw_lines(xy_tuples, color='#00ff00', width=2)
@@ -357,12 +374,13 @@ class EllipseFitter:
             graph.draw_lines(self.ellipse_pts, color='blue', width=2)
 
         if self.ellipses is not None:
-            for i, coeffs in enumerate(self.ellipses):
-                poly = cart_to_pol(coeffs)
-                print(f"{i}: {poly=}")
+            for i, ellipse in enumerate(self.ellipses):
+                poly = ellipse['poly']
+                angles = ellipse['angles']
+                print(f"{i}: x,y={poly[0]:.1f},{poly[1]:.1f} angles={angles[0]:.1f},{angles[1]:.1f}")
                 pts = get_ellipse_pts(poly, npts=20)
                 pts = list(zip(pts[0], pts[1]))
-                print(f"  {pts=}")
+                # print(f"  {pts=}")
                 graph.draw_lines(pts, color='blue', width=2)
                 graph.draw_text(f"{i}", (poly[0], poly[1]), color='red')
 
