@@ -112,6 +112,65 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi):
     y = y0 + ap * np.cos(t) * np.sin(phi) + bp * np.sin(t) * np.cos(phi)
     return x, y
 
+class PerimeterComputer:
+
+    def __init__(self, filename):
+        self.points = self._compute_points(filename)
+        self.index  = self._init_index(self.points)
+
+    @staticmethod
+    def _compute_points(filename):
+        img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+        thresh = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)[1]
+        contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        assert len(contours) == 2
+        return max(contours[0], key=cv2.contourArea)
+
+    @staticmethod
+    def _init_index(points):
+        return dict((tuple(xy), i) for i, xy in enumerate(np.squeeze(points)))
+
+class ApproxPolyComputer:
+
+    def __init__(self, perimeter, epsilon):
+        self.epsilon = epsilon
+        self.index   = self._compute_poly(perimeter, epsilon)
+        self.signed_area = self._compute_signed_areas(perimeter, self.poly)
+
+    @staticmethod
+    def _compute_poly(perimeter, epsilon):
+        
+        approx = cv2.approxPolyDP(perimeter.points, epsilon, True)
+        poly = list(perimeter.index[tuple(xy)] for xy in np.squeeze(approx))
+
+        reset = None
+        for i in range(1,len(poly)):
+            if poly[i-1] > poly[i]:
+                assert reset is None
+                reset = i
+            else:
+                assert poly[i-1] < poly[i]
+                
+        if reset:
+            poly = poly[reset:] + poly[:reset]
+
+        return poly
+
+    @staticmethod
+    def _compute_signed_areas(perimeter, poly):
+        points = np.squeeze(perimeter.points)
+        n = len(poly)
+        signed_areas = []
+        for i in range(n):
+            if i+1 >= n:
+                i -= n
+            x0, y0 = points[self.approx_poly[i-1]]
+            x1, y1 = points[self.approx_poly[i]]
+            x2, y2 = points[self.approx_poly[i+1]]
+            area = (x1-x0) * (y2-y1) - (x2-x1)*(y1-y0)
+            signed_areas.append(area)
+        return signed_areas
+
 class TabComputer:
 
     def __init__(self, filename, epsilon):
@@ -211,6 +270,11 @@ class TabComputer:
         return (x1-x0) * (y2-y1) - (x2-x1)*(y1-y0)
 
     def init_perimeter(self, filename):
+        pc = PerimeterComputer(filename)
+        self.perimeter = pc.points
+        self.point_to_index = pc.index
+        return
+        
         img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
         thresh = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)[1]
         contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
