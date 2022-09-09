@@ -20,9 +20,11 @@ def describe_type_of(x):
 
 class ImageSegmenter:
 
-    def __init__(self, filename):
-        self.image_path    = filename
-        self.metadata_path = os.path.splitext(os.path.basename(filename))[0] + '.json'
+    def __init__(self, image_path, metadata_path, pieces_path):
+        self.image_path    = image_path
+        self.metadata_path = metadata_path
+        self.pieces_path   = pieces_path
+        
         self.tempdir  = tempfile.TemporaryDirectory(dir='C:\\Temp')
 
         img = cv.imread(self.image_path)
@@ -104,11 +106,12 @@ class ImageSegmenter:
         self.next_label()
         self.render()
 
-        self.save_json()
+        if self.metadata_path is not None:
+            self.save_json()
 
     def load_json(self):
 
-        if not os.path.exists(self.metadata_path):
+        if self.metadata_path is None or not os.path.exists(self.metadata_path):
             return None
 
         with open(self.metadata_path, 'r') as f:
@@ -132,16 +135,18 @@ class ImageSegmenter:
 
         img = cv.imread(self.image_path)
         s = self.image_scale
+        w, h = img.shape[1], img.shape[0]
+        pad  = 50
 
         for i, l in enumerate(self.labels):
             if l == '':
                 continue
-            path = f"piece_{l}.jpg"
-            x, y, w, h = self.rects[i]
-            x0 = x * s
-            y0 = y * s
-            x1 = (x + w) * s
-            y1 = (y + h) * s
+            path = os.path.join(self.pieces_path, f"piece_{l}.jpg")
+            rx, ry, rw, rh = self.rects[i]
+            x0 = rx * s - pad
+            y0 = ry * s - pad
+            x1 = (rx + rw) * s + pad
+            y1 = (ry + rh) * s + pad
             subimage = img[y0:y1,x0:x1]
 
             print(f"{path}: img[{y0}:{y1},{x0}:{x1}]")
@@ -195,6 +200,7 @@ class ImageSegmenter:
                       key='graph',
                       enable_events=True,
                       metadata=self)],
+            [sg.Text(f"Image: {self.image_path}\nMetadata: {self.metadata_path}\nPieces: {self.pieces_path}")],
             [sg.Text("Label"), sg.InputText("A1", key='label', size=(5,1))],
             [sg.Button('Segment', key='button_segment')]
         ]
@@ -215,11 +221,13 @@ class ImageSegmenter:
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("image")
+    parser.add_argument("-i", "--image")
+    parser.add_argument("-m", "--metadata")
+    parser.add_argument("-p", "--pieces")
 
     args = parser.parse_args()
 
-    e = ImageSegmenter(args.image)
+    e = ImageSegmenter(args.image, args.metadata, args.pieces)
     e.ui()
 
 if __name__ == '__main__':
