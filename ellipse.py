@@ -134,8 +134,8 @@ class ApproxPolyComputer:
 
     def __init__(self, perimeter, epsilon):
         self.epsilon = epsilon
-        self.index   = self._compute_poly(perimeter, epsilon)
-        self.signed_area = self._compute_signed_areas(perimeter, self.poly)
+        self.indexes = self._compute_poly(perimeter, epsilon)
+        self.signed_area = self._compute_signed_areas(perimeter, self.indexes)
 
     @staticmethod
     def _compute_poly(perimeter, epsilon):
@@ -157,16 +157,16 @@ class ApproxPolyComputer:
         return poly
 
     @staticmethod
-    def _compute_signed_areas(perimeter, poly):
+    def _compute_signed_areas(perimeter, indexes):
         points = np.squeeze(perimeter.points)
-        n = len(poly)
+        n = len(indexes)
         signed_areas = []
         for i in range(n):
             if i+1 >= n:
                 i -= n
-            x0, y0 = points[self.approx_poly[i-1]]
-            x1, y1 = points[self.approx_poly[i]]
-            x2, y2 = points[self.approx_poly[i+1]]
+            x0, y0 = points[indexes[i-1]]
+            x1, y1 = points[indexes[i]]
+            x2, y2 = points[indexes[i+1]]
             area = (x1-x0) * (y2-y1) - (x2-x1)*(y1-y0)
             signed_areas.append(area)
         return signed_areas
@@ -176,18 +176,12 @@ class TabComputer:
     def __init__(self, filename, epsilon):
         
         self.filename = filename
-        self.epsilon  = epsilon
-
-        self.init_perimeter(filename)
-        self.init_approx_poly(epsilon)
+        self.perimeter = PerimeterComputer(filename)
+        self.approx_poly = ApproxPolyComputer(self.perimeter, epsilon)
 
         self.curvature_runs()
         
         self.ellipses = []
-
-        print(f"{np.squeeze(self.perimeter)=}")
-        print(f"{self.approx_poly=}")
-        print(f"{self.compute_convexity_defects()=}")
 
         for defect in self.compute_convexity_defects():
 
@@ -201,8 +195,8 @@ class TabComputer:
 
     def curvature_runs(self):
 
-        n = len(self.approx_poly)
-        signs = [self.signed_area(i) > 0 for i in range(n)]
+        n = len(self.approx_poly.indexes)
+        signs = [self.approx_poly.signed_area[i] > 0 for i in range(n)]
         print(f"{signs=}")
 
         signs = [(k,len(list(g))) for k, g in itertools.groupby(signs)]
@@ -212,25 +206,27 @@ class TabComputer:
 
         print(f"fit_ellipse: {l=} {r=} {c=}")
 
-        i = bisect.bisect(self.approx_poly, c)
+        indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
+
+        i = bisect.bisect(indexes, c)
 
         a = i
-        while l < self.approx_poly[a] and self.signed_area(a) > 0:
+        while l < indexes[a] and signed_area[a] > 0:
             a -= 1
 
         b = i
-        while self.approx_poly[b] < r and self.signed_area(b) > 0:
+        while indexes[b] < r and signed_area[b] > 0:
             b += 1
 
         print(f"  approx: {i=} {a=} {b=}")
         
-        a = self.approx_poly[a]
-        b = self.approx_poly[b]
+        a = indexes[a]
+        b = indexes[b]
         
         print(f"  perimeter: {a=} {b=}")
 
-        x = np.asarray(self.perimeter[a:b,0,0], dtype=np.float32)
-        y = np.asarray(self.perimeter[a:b,0,1], dtype=np.float32)
+        x = np.asarray(self.perimeter.points[a:b,0,0], dtype=np.float32)
+        y = np.asarray(self.perimeter.points[a:b,0,1], dtype=np.float32)
 
         # print(f"  {x=} {y=}")
 
@@ -260,50 +256,9 @@ class TabComputer:
         
         return {'coeffs': coeffs, 'poly': poly, 'points': points, 'angles': angles}
 
-    def signed_area(self, i):
-        n = len(self.approx_poly)
-        if i+1 >= n:
-            i -= n
-        x0, y0 = self.perimeter[self.approx_poly[i-1]][0]
-        x1, y1 = self.perimeter[self.approx_poly[i]][0]
-        x2, y2 = self.perimeter[self.approx_poly[i+1]][0]
-        return (x1-x0) * (y2-y1) - (x2-x1)*(y1-y0)
-
-    def init_perimeter(self, filename):
-        pc = PerimeterComputer(filename)
-        self.perimeter = pc.points
-        self.point_to_index = pc.index
-        return
-        
-        img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
-        thresh = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)[1]
-        contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        assert len(contours) == 2
-        self.perimeter = max(contours[0], key=cv2.contourArea)
-        self.point_to_index = dict()
-        for i, xy in enumerate(np.squeeze(self.perimeter)):
-            self.point_to_index[tuple(xy)] = i
-
     def compute_convexity_defects(self):
-        convex_hull = cv2.convexHull(self.perimeter, returnPoints=False)
-        return np.squeeze(cv2.convexityDefects(self.perimeter, convex_hull))
-
-    def init_approx_poly(self, epsilon):
-        approx = cv2.approxPolyDP(self.perimeter, epsilon, True)
-        poly = list(self.point_to_index[tuple(xy)] for xy in np.squeeze(approx))
-
-        reset = None
-        for i in range(1,len(poly)):
-            if poly[i-1] > poly[i]:
-                assert reset is None
-                reset = i
-            else:
-                assert poly[i-1] < poly[i]
-                
-        if reset:
-            poly = poly[reset:] + poly[:reset]
-
-        self.approx_poly = poly
+        convex_hull = cv2.convexHull(self.perimeter.points, returnPoints=False)
+        return np.squeeze(cv2.convexityDefects(self.perimeter.points, convex_hull))
 
 class EllipseFitter:
 
