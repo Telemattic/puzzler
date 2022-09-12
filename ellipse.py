@@ -2,6 +2,7 @@ import argparse
 import bisect
 import cv2
 import itertools
+import json
 import math
 import numpy as np
 import PySimpleGUI as sg
@@ -112,23 +113,18 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi):
     y = y0 + ap * np.cos(t) * np.sin(phi) + bp * np.sin(t) * np.cos(phi)
     return x, y
 
-class PerimeterComputer:
+class PerimeterLoader:
 
     def __init__(self, filename):
-        self.points = self._compute_points(filename)
-        self.index  = self._init_index(self.points)
+        
+        with open(filename) as f:
+            data = json.load(f)
+        points = data['contour']
 
-    @staticmethod
-    def _compute_points(filename):
-        img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
-        thresh = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)[1]
-        contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        assert len(contours) == 2
-        return max(contours[0], key=cv2.contourArea)
-
-    @staticmethod
-    def _init_index(points):
-        return dict((tuple(xy), i) for i, xy in enumerate(np.squeeze(points)))
+        self.bbox   = tuple(data['bbox'])
+        self.points = np.array(points)
+        print(f"{self.bbox=} {self.points.shape=}")
+        self.index = dict((tuple(xy), i) for i, xy in enumerate(points))
 
 class ApproxPolyComputer:
 
@@ -173,10 +169,9 @@ class ApproxPolyComputer:
 
 class TabComputer:
 
-    def __init__(self, filename, epsilon):
+    def __init__(self, perimeter, epsilon):
         
-        self.filename = filename
-        self.perimeter = PerimeterComputer(filename)
+        self.perimeter = perimeter
         self.approx_poly = ApproxPolyComputer(self.perimeter, epsilon)
 
         self.curvature_runs()
@@ -225,8 +220,8 @@ class TabComputer:
         
         print(f"  perimeter: {a=} {b=}")
 
-        x = np.asarray(self.perimeter.points[a:b,0,0], dtype=np.float32)
-        y = np.asarray(self.perimeter.points[a:b,0,1], dtype=np.float32)
+        x = np.asarray(self.perimeter.points[a:b,0], dtype=np.float32)
+        y = np.asarray(self.perimeter.points[a:b,1], dtype=np.float32)
 
         # print(f"  {x=} {y=}")
 
@@ -269,9 +264,8 @@ class TabComputer:
 class EllipseFitter:
 
     def __init__(self, filename):
-        self.filename = filename
+        self.perimeter = PerimeterLoader(filename)
         self.epsilon  = 1.
-        self.perimeter = PerimeterComputer(filename)
         self.convex_hull = None
         self.approx_pts = None
         self.convexity_defects = None
@@ -281,24 +275,26 @@ class EllipseFitter:
 
         apc = ApproxPolyComputer(self.perimeter, self.epsilon)
 
-        convex_hull = cv2.convexHull(self.perimeter.points, returnPoints=False)
-        self.convex_hull = np.squeeze(self.perimeter.points[convex_hull])
+        points = self.perimeter.points
+
+        convex_hull = cv2.convexHull(points, returnPoints=False)
+        self.convex_hull = np.squeeze(points[convex_hull])
 
         self.convexity_defects = []
-        convexity_defects = cv2.convexityDefects(self.perimeter.points, convex_hull)
+        convexity_defects = cv2.convexityDefects(points, convex_hull)
         for defect in np.squeeze(convexity_defects):
-            p0 = tuple(*self.perimeter.points[defect[0]])
-            p1 = tuple(*self.perimeter.points[defect[1]])
-            p2 = tuple(*self.perimeter.points[defect[2]])
+            p0 = tuple(points[defect[0]])
+            p1 = tuple(points[defect[1]])
+            p2 = tuple(points[defect[2]])
             self.convexity_defects.append([p0, p2, p1])
 
-        self.approx_pts = [tuple(*self.perimeter.points[i]) for i in apc.indexes]
+        self.approx_pts = [tuple(points[i]) for i in apc.indexes]
         self.signed_area = apc.signed_area
 
         self.render()
 
     def ellipsify(self):
-        tab_computer = TabComputer(self.filename, self.epsilon)
+        tab_computer = TabComputer(self.perimeter, self.epsilon)
         self.ellipses = tab_computer.ellipses
         
         self.render()
@@ -308,12 +304,9 @@ class EllipseFitter:
         graph = self.window['graph']
         graph.erase()
 
-        if self.window['render_image'].get():
-            graph.draw_image(filename=self.filename, location=(0,0))
-
         if self.window['render_perimeter'].get():
                 for xy in self.perimeter.points:
-                    graph.draw_point(tuple(*xy), size=1, color='yellow')
+                    graph.draw_point(tuple(xy), size=1, color='yellow')
 
         if self.window['render_convex_hull'].get():
             if self.convex_hull is not None:
@@ -329,7 +322,7 @@ class EllipseFitter:
 
         if self.window['render_approx_poly'].get():
             if self.approx_pts is not None:
-                graph.draw_lines(self.approx_pts, color='#00ff00', width=2)
+                graph.draw_lines(self.approx_pts + [self.approx_pts[0]], color='#00ff00', width=2)
 
         if self.window['render_curvature'].get():
             if self.approx_pts is not None and self.signed_area is not None:
@@ -362,7 +355,6 @@ class EllipseFitter:
     def ui(self):
 
         render_layout = [
-            sg.CB('Image',       default=True, enable_events=True, key='render_image'),
             sg.CB('Perimeter',   default=True, enable_events=True, key='render_perimeter'),
             sg.CB('Convex Hull', default=True, enable_events=True, key='render_convex_hull'),
             sg.CB('Defects',     default=True, enable_events=True, key='render_convexity_defects')
@@ -382,11 +374,20 @@ class EllipseFitter:
             sg.CB('Points', default=True, enable_events=True, key='render_ellipse_points'),
             sg.CB('Ellipses', default=True, enable_events=True, key='render_ellipses')
         ]
+
+        bbox = self.perimeter.bbox
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        s = 1
+        if max(w,h) > 1000:
+            s = 1000 / max(w,h)
+
+        print(f"{w=} {h=} {s=}")
         
         layout = [
-            [sg.Graph(canvas_size=(551,551),
-                      graph_bottom_left = (0,550),
-                      graph_top_right = (550,0),
+            [sg.Graph(canvas_size=(int(w * s), int(h * s)),
+                      graph_bottom_left = (bbox[0],bbox[3]),
+                      graph_top_right = (bbox[2],bbox[1]),
                       background_color='black',
                       key='graph',
                       drag_submits=True,
