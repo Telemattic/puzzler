@@ -16,6 +16,7 @@ class PerimeterComputer:
         self.tempdir = tempfile.TemporaryDirectory(dir='C:\\Temp')
 
         img = cv.imread(self.image_path)
+        assert img is not None
         
         w, h = img.shape[1], img.shape[0]
         self.image_size  = (w,h)
@@ -34,14 +35,17 @@ class PerimeterComputer:
         self._add_image(os.path.join(self.tempdir.name, "gray.png"), gray, 'Gray')
         self._add_image(os.path.join(self.tempdir.name, "thresh.png"), thresh, 'Thresh')
         
-        contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
 
         assert isinstance(contours, tuple) and 2 == len(contours)
 
         self.contour = max(contours[0], key=cv.contourArea)
 
         if self.output_path:
-            data = {'contour': np.squeeze(self.contour).tolist()}
+            data = {
+                'bbox': [0, 0, w, h],
+                'contour': np.squeeze(self.contour).tolist()
+            }
             with open(self.output_path, 'w') as f:
                 json.dump(data, f)
 
