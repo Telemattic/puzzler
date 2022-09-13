@@ -5,6 +5,7 @@ import itertools
 import json
 import math
 import numpy as np
+import operator
 import PySimpleGUI as sg
 
 # https://scipython.com/blog/direct-linear-least-squares-fitting-of-an-ellipse/
@@ -184,22 +185,52 @@ class TabComputer:
                 continue
             
             l, r, c = defect[0], defect[1], defect[2]
-            ellipse = self.fit_ellipse(l, r, c)
+            ellipse = self.fit_ellipse_to_convexity_defect(l, r, c)
             if ellipse is not None:
                 self.ellipses.append(ellipse)
 
+        for in_out, indices in self.curvature_runs():
+            if in_out:
+                continue
+            ellipse = self.fit_ellipse_to_outdent(indices[0], indices[-1])
+            if ellipse is not None:
+                self.ellipses.append(ellipse)
+            
     def curvature_runs(self):
 
-        n = len(self.approx_poly.indexes)
-        signs = [self.approx_poly.signed_area[i] > 0 for i in range(n)]
+        indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
+        signs = [(area > 0, i) for i, area in zip(indexes, signed_area)]
         print(f"{signs=}")
 
-        signs = [(k,len(list(g))) for k, g in itertools.groupby(signs)]
+        signs = [(k,list(i for _, i in g)) for k, g in itertools.groupby(signs,key=operator.itemgetter(0))]
         print(f"{signs=}")
 
-    def fit_ellipse(self, l, r, c):
+        return signs
 
-        print(f"fit_ellipse: {l=} {r=} {c=}")
+    def fit_ellipse_to_outdent(self, l, r):
+        
+        print(f"fit_ellipse_to_outdent: {l=} {r=}")
+
+        indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
+
+        a = bisect.bisect_left(indexes, l)
+        while signed_area[a] < 0:
+            a -= 1
+
+        b = bisect.bisect_left(indexes, r)
+        n = len(signed_area)
+        while signed_area[b] < 0:
+            b += 1
+            if b == n:
+                return None
+
+        print(f"  approx: {a=} {b=}")
+
+        return self.fit_ellipse(indexes[a], indexes[b], False)
+
+    def fit_ellipse_to_convexity_defect(self, l, r, c):
+    
+        print(f"fit_ellipse_to_convexity_defect: {l=} {r=} {c=}")
 
         indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
 
@@ -214,16 +245,20 @@ class TabComputer:
             b += 1
 
         print(f"  approx: {i=} {a=} {b=}")
-        
-        a = indexes[a]
-        b = indexes[b]
-        
-        print(f"  perimeter: {a=} {b=}")
 
-        x = np.asarray(self.perimeter.points[a:b,0], dtype=np.float32)
-        y = np.asarray(self.perimeter.points[a:b,1], dtype=np.float32)
+        return self.fit_ellipse(indexes[a], indexes[b], True)
 
-        # print(f"  {x=} {y=}")
+    def fit_ellipse(self, a, b, indent):
+
+        print(f"fit_ellipse: {a=} {b=} {indent=}")
+
+        if a > b:
+            pp = self.perimeter.points
+            x = np.hstack((np.asarray(pp[a:,0], dtype=np.float32), np.asarray(pp[:b,0], dtype=np.float32)))
+            y = np.hstack((np.asarray(pp[a:,1], dtype=np.float32), np.asarray(pp[:b,1], dtype=np.float32)))
+        else:
+            x = np.asarray(self.perimeter.points[a:b,0], dtype=np.float32)
+            y = np.asarray(self.perimeter.points[a:b,1], dtype=np.float32)
 
         coeffs = None
         try:
@@ -242,8 +277,8 @@ class TabComputer:
         points = list(zip(x,y))
 
         cx, cy = poly[0], poly[1]
-        x0, y0 = points[0]
-        x1, y1 = points[-1]
+        x0, y0 = points[0 if indent else -1]
+        x1, y1 = points[-1 if indent else 0]
 
         angle0 = math.atan2(y0-cy, x0-cx) * 180. / math.pi
         angle1 = math.atan2(y1-cy, x1-cx) * 180. / math.pi
@@ -253,9 +288,14 @@ class TabComputer:
         if diff < 0:
             diff += 360.
 
+        print(f"  center={cx:.1f},{cy:.1f} major={poly[2]:.1f} minor={poly[3]:.1f} e={poly[4]:.3f} phi={poly[5]*180/math.pi:.3f}")
         print(f"  angles={angle0:.1f},{angle1:.1f} -> {diff:.1f}")
+
+        if diff < 220:
+            print("  angle for ellipse too small, rejecting")
+            return None
         
-        return {'coeffs': coeffs, 'poly': poly, 'points': points, 'angles': angles}
+        return {'coeffs': coeffs, 'poly': poly, 'indexes': (a,b), 'indent':indent, 'points': points, 'angles': angles}
 
     def compute_convexity_defects(self):
         convex_hull = cv2.convexHull(self.perimeter.points, returnPoints=False)
@@ -265,7 +305,7 @@ class EllipseFitter:
 
     def __init__(self, filename):
         self.perimeter = PerimeterLoader(filename)
-        self.epsilon  = 1.
+        self.epsilon  = 10.
         self.convex_hull = None
         self.approx_pts = None
         self.convexity_defects = None
@@ -328,7 +368,7 @@ class EllipseFitter:
             if self.approx_pts is not None and self.signed_area is not None:
                 for xy, area in zip(self.approx_pts, self.signed_area):
                     color = 'red' if area >= 0 else 'blue'
-                    graph.draw_point(xy, size=5, color=color)
+                    graph.draw_point(xy, size=7, color=color)
 
         if self.window['render_approx_poly_index'].get():
             if self.approx_pts is not None:
@@ -356,17 +396,17 @@ class EllipseFitter:
 
         render_layout = [
             sg.CB('Perimeter',   default=True, enable_events=True, key='render_perimeter'),
-            sg.CB('Convex Hull', default=True, enable_events=True, key='render_convex_hull'),
-            sg.CB('Defects',     default=True, enable_events=True, key='render_convexity_defects')
+            sg.CB('Convex Hull', default=False, enable_events=True, key='render_convex_hull'),
+            sg.CB('Defects',     default=False, enable_events=True, key='render_convexity_defects')
         ]
 
         approx_layout = [
             sg.Button('Approx', key='button_approx'),
             sg.Text('Epsilon'),
-            sg.InputText('1.0', key='epsilon', size=(5,1), enable_events=True),
-            sg.CB('Approx Poly', default=True, enable_events=True, key='render_approx_poly'),
+            sg.InputText(f"{self.epsilon}", key='epsilon', size=(5,1), enable_events=True),
+            sg.CB('Approx Poly', default=False, enable_events=True, key='render_approx_poly'),
             sg.CB('Curvature',   default=True, enable_events=True, key='render_curvature'),
-            sg.CB('Indexes', default=True, enable_events=True, key='render_approx_poly_index')
+            sg.CB('Indexes', default=False, enable_events=True, key='render_approx_poly_index')
         ]
 
         tabs_layout = [
@@ -390,9 +430,7 @@ class EllipseFitter:
                       graph_top_right = (bbox[2],bbox[1]),
                       background_color='black',
                       key='graph',
-                      drag_submits=True,
-                      enable_events=True,
-                      metadata=self)],
+                      enable_events=True)],
             [sg.Frame('Render', [render_layout])],
             [sg.Frame('Approx', [approx_layout])],
             [sg.Frame('Tabs',   [tabs_layout])]
@@ -411,7 +449,10 @@ class EllipseFitter:
             elif event.startswith('render_'):
                 self.render()
             elif event == 'epsilon':
-                self.epsilon = float(self.window['epsilon'].get())
+                try:
+                    self.epsilon = float(self.window['epsilon'].get())
+                except ValueError as err:
+                    print(err)
             else:
                 print(event, values)
 
