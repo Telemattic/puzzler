@@ -143,10 +143,10 @@ class ImageSegmenter:
                 continue
             path = os.path.join(self.pieces_path, f"piece_{l}.jpg")
             rx, ry, rw, rh = self.rects[i]
-            x0 = rx * s - pad
-            y0 = ry * s - pad
-            x1 = (rx + rw) * s + pad
-            y1 = (ry + rh) * s + pad
+            x0 = max(rx * s - pad, 0)
+            y0 = max(ry * s - pad, 0)
+            x1 = min((rx + rw) * s + pad, w)
+            y1 = min((ry + rh) * s + pad, h)
             subimage = img[y0:y1,x0:x1]
 
             print(f"{path}: img[{y0}:{y1},{x0}:{x1}]")
@@ -179,7 +179,7 @@ class ImageSegmenter:
         for r in self.rects:
             tl = (r[0], r[1])
             br = (r[0]+r[2], r[1]+r[3])
-            graph.draw_rectangle(tl, br)
+            graph.draw_rectangle(tl, br, line_color='yellow')
 
         for i, l in enumerate(self.labels):
             if l == '':
@@ -188,7 +188,7 @@ class ImageSegmenter:
             r = self.rects[i]
             x = r[0] + r[2] // 2
             y = r[1] + r[3] // 2
-            graph.draw_text(l, (x,y))
+            graph.draw_text(l, (x,y), color='yellow')
 
     def ui(self):
 
