@@ -46,7 +46,7 @@ class ImageSegmenter:
         
         img      = cv.resize(img, self.image_size, cv.INTER_CUBIC)
         gray     = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        thresh   = 255 - cv.threshold(gray, 200, 255, cv.THRESH_BINARY)[1]
+        thresh   = 255 - cv.threshold(gray, 84, 255, cv.THRESH_BINARY_INV)[1]
         dilate   = cv.dilate(thresh, cv.getStructuringElement(cv.MORPH_RECT, (2,2)))
 
         print(f"temp={self.tempdir.name}")
