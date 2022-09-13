@@ -6,6 +6,29 @@ import os
 import PySimpleGUI as sg
 import tempfile
 
+import scipy
+import scipy.ndimage as ndimage
+
+def get_corners(dst, neighborhood_size=5, score_threshold=0.3, minmax_threshold=100):
+    
+    """
+    Given the input Harris image (where in each pixel the Harris function is computed),
+    extract discrete corners
+    """
+    data = dst.copy()
+    data[data < score_threshold*dst.max()] = 0.
+
+    data_max = ndimage.maximum_filter(data, neighborhood_size)
+    maxima = (data == data_max)
+    data_min = ndimage.minimum_filter(data, neighborhood_size)
+    diff = ((data_max - data_min) > minmax_threshold)
+    maxima[diff == 0] = 0
+
+    labeled, num_objects = ndimage.label(maxima)
+    slices = ndimage.find_objects(labeled)
+    yx = np.array(ndimage.center_of_mass(data, labeled, range(1, num_objects+1)))
+    return yx
+
 class PerimeterComputer:
 
     def __init__(self, image_path, output_path = None):
@@ -25,8 +48,22 @@ class PerimeterComputer:
         
         img      = cv.resize(img, self.image_size, cv.INTER_CUBIC)
         gray     = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        gray     = cv.GaussianBlur(gray, (5,5), 0)
+        gray     = cv.medianBlur(gray, 7)
+        gray     = cv.GaussianBlur(gray, (3,3), 0)
         thresh   = 255 - cv.threshold(gray, 84, 255, cv.THRESH_BINARY_INV)[1]
+        thresh   = cv.medianBlur(thresh, 29)
+
+        harris   = cv.dilate(cv.cornerHarris(np.float32(thresh), 5, 5, .004), None)
+        corners  = np.zeros(img.shape, dtype=np.uint8)
+        corners[harris > .1*harris.max()] = [0,255,0]
+
+        print(f"{harris.min()=} {harris.max()=}")
+
+        xycorners = get_corners(harris)
+        print(f"{xycorners=}")
+
+        harris = np.uint8((harris - harris.min()) * 255 / (harris.max() - harris.min()))
+        print(f"{harris=}")
 
         print(f"temp={self.tempdir.name}")
 
@@ -34,6 +71,8 @@ class PerimeterComputer:
         self._add_image(os.path.join(self.tempdir.name, "color.png"), img, 'Source')
         self._add_image(os.path.join(self.tempdir.name, "gray.png"), gray, 'Gray')
         self._add_image(os.path.join(self.tempdir.name, "thresh.png"), thresh, 'Thresh')
+        self._add_image(os.path.join(self.tempdir.name, "harris.png"), harris, 'Harris')
+        self._add_image(os.path.join(self.tempdir.name, "corners.png"), corners, 'Corners')
         
         contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
 
@@ -121,12 +160,16 @@ class PerimeterComputer:
         path = self.get_image_path()
         graph.draw_image(filename=path, location=(0,0))
 
-        self.draw_traces()
-        self.draw_histogram()
+        if self.window['render_traces'].get():
+            self.draw_traces()
 
-        if self.contour is not None:
-            points = [tuple(xy) for xy in np.squeeze(self.contour)]
-            graph.draw_lines(points, color='red', width=2)
+        if self.window['render_histogram'].get():
+            self.draw_histogram()
+
+        if self.window['render_contour'].get():
+            if self.contour is not None:
+                points = [tuple(xy) for xy in np.squeeze(self.contour)]
+                graph.draw_lines(points, color='red', width=2)
 
     def _init_ui(self):
         
@@ -140,6 +183,10 @@ class PerimeterComputer:
             key = 'radio_image_' + label
             r = sg.Radio(label, 'radio_image', default=is_default, enable_events=True, key=key)
             controls.append(r)
+
+        controls.append(sg.CB('Render Histogram', default=False, enable_events=True, key='render_histogram'))
+        controls.append(sg.CB('Render Traces', default=False, enable_events=True, key='render_traces'))
+        controls.append(sg.CB('Render Contour', default=True, enable_events=True, key='render_contour'))
         
         layout = [
             [sg.Graph(canvas_size=(w, h),
@@ -163,6 +210,8 @@ class PerimeterComputer:
             if event == sg.WIN_CLOSED:
                 break
             elif event.startswith('radio_image_'):
+                self.render()
+            elif event.startswith('render_'):
                 self.render()
             else:
                 print(event, values)
