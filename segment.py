@@ -7,17 +7,6 @@ import PySimpleGUI as sg
 import re
 import tempfile
 
-def describe_type_of(x):
-
-    if isinstance(x, tuple):
-        return 'tuple(' + ',\n'.join(describe_type_of(i) for i in x) + ')'
-    elif isinstance(x, list):
-        return 'list(' + ',\n'.join(describe_type_of(i) for i in x) + ')'
-    elif isinstance(x, np.ndarray):
-        return f"array[{x.shape}]"
-    else:
-        return type(x).__name__
-
 class ImageSegmenter:
 
     def __init__(self, image_path, metadata_path, pieces_path):
@@ -64,8 +53,6 @@ class ImageSegmenter:
         for i, c in enumerate(contours):
             area = cv.contourArea(c)
             print(f"{i}: area={area:.1f}")
-
-        # print(describe_type_of(contours))
 
         self.contours = contours
 
