@@ -8,21 +8,20 @@ import tempfile
 
 class PerimeterComputer:
 
-    def __init__(self, image_path, output_path = None):
+    def __init__(self, image_path, save_images = False):
         
-        self.image_path  = image_path
-        self.output_path = output_path
-        
-        self.tempdir = tempfile.TemporaryDirectory(dir='C:\\Temp')
+        self.tempdir = None
+        if save_images:
+            self.tempdir = tempfile.TemporaryDirectory(dir='C:\\Temp')
 
-        img = cv.imread(self.image_path)
+        img = cv.imread(image_path)
         assert img is not None
         
         w, h = img.shape[1], img.shape[0]
         self.image_size  = (w,h)
         self.images = []
 
-        print(f"image={self.image_path} {w}x{h}")
+        print(f"image={image_path} {w}x{h}")
         
         img      = cv.resize(img, self.image_size, cv.INTER_CUBIC)
         gray     = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
@@ -43,23 +42,33 @@ class PerimeterComputer:
 
         self.contour = max(contours[0], key=cv.contourArea)
 
-        if self.output_path:
-            self._save_json(self.output_path)
+    def write_json(self, path):
 
-    def _save_json(self, path):
-
+        w, h = self.image_size
         data = {
             'bbox': [0, 0, w, h],
             'contour': np.squeeze(self.contour).tolist()
         }
-        with open(self.output_path, 'w') as f:
+        with open(path, 'w') as f:
             json.dump(data, f)
 
     def _add_temp_image(self, filename, img, label):
 
+        if self.tempdir is None:
+            return
+        
         path = os.path.join(self.tempdir.name, filename)
         cv.imwrite(path, img)
         self.images.append((label, path))
+
+class PerimeterUI(PerimeterComputer):
+
+    def __init__(self, image_path, output_path = None):
+
+        super().__init__(image_path, True)
+
+        if output_path:
+            self.write_json(output_path)
 
     def get_image_path(self):
 
@@ -196,7 +205,7 @@ def main():
 
     args = parser.parse_args()
 
-    pc = PerimeterComputer(args.image, args.output)
+    pc = PerimeterUI(args.image, args.output)
     pc.ui()
 
 if __name__ == '__main__':
