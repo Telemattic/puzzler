@@ -61,18 +61,18 @@ class PerimeterComputer:
         cv.imwrite(path, img)
         self.images.append((label, path))
 
-class PerimeterUI(PerimeterComputer):
+class PerimeterUI:
 
     def __init__(self, image_path, output_path = None):
 
-        super().__init__(image_path, True)
+        self.pc = PerimeterComputer(image_path, True)
 
         if output_path:
-            self.write_json(output_path)
+            self.pc.write_json(output_path)
 
     def get_image_path(self):
 
-        for label, path in self.images:
+        for label, path in self.pc.images:
             if self.window['radio_image_' + label].get():
                 return path
         return None
@@ -132,7 +132,7 @@ class PerimeterUI(PerimeterComputer):
     def draw_contour(self):
         graph = self.window['graph']
         
-        points = [tuple(xy) for xy in np.squeeze(self.contour)]
+        points = [tuple(xy) for xy in np.squeeze(self.pc.contour)]
         graph.draw_lines(points, color='red', width=2)
 
     def render(self):
@@ -154,11 +154,11 @@ class PerimeterUI(PerimeterComputer):
 
     def _init_ui(self):
         
-        w, h = self.image_size
+        w, h = self.pc.image_size
 
         controls = []
         
-        for image in self.images:
+        for image in self.pc.images:
             label = image[0]
             is_default = 0 == len(controls)
             key = 'radio_image_' + label
@@ -171,8 +171,8 @@ class PerimeterUI(PerimeterComputer):
         
         layout = [
             [sg.Graph(canvas_size=(w, h),
-                      graph_bottom_left = (0, h-1),
-                      graph_top_right = (w-1, 0),
+                      graph_bottom_left = (0, h),
+                      graph_top_right = (w, 0),
                       background_color='black',
                       key='graph',
                       enable_events=True),
