@@ -7,16 +7,56 @@ import PySimpleGUI as sg
 import re
 import tempfile
 
-class ImageSegmenter:
+class Segmenter:
 
-    def __init__(self, image_path, metadata_path, pieces_path):
+    def __init__(self, input_dir, output_dir, pad = 50):
+        self.input_dir  = input_dir
+        self.output_dir = output_dir
+        self.pad = pad
+
+    def segment_images(self, descriptors):
+
+        for source in descriptors:
+            self.segment_image(source)
+
+    def segment_image(self, descriptor):
+
+        image_path = os.path.join(self.input_dir, descriptor['image_path'])
+        print(f"{image_path}")
+        
+        img = cv.imread(image_path)
+        assert img is not None
+        
+        h, w = img.shape[0], img.shape[1]
+
+        s = descriptor['image_scale']
+        
+        for piece in descriptor['pieces']:
+            label = piece['label']
+            path = os.path.join(self.output_dir, f"piece_{label}.jpg")
+            rx, ry, rw, rh = piece['rect']
+            x0 = max(rx * s - self.pad, 0)
+            y0 = max(ry * s - self.pad, 0)
+            x1 = min((rx + rw) * s + self.pad, w)
+            y1 = min((ry + rh) * s + self.pad, h)
+            subimage = img[y0:y1,x0:x1]
+            subimage = np.rot90(subimage,-1)
+
+            print(f"{path}: {x1-x0} x {y1-y0}")
+            cv.imwrite(path, subimage)
+
+class SegmenterUI:
+
+    def __init__(self, input_dir, output_dir, image_path, metadata_path):
+        
+        self.input_dir     = input_dir
+        self.output_dir    = output_dir
         self.image_path    = image_path
         self.metadata_path = metadata_path
-        self.pieces_path   = pieces_path
         
         self.tempdir  = tempfile.TemporaryDirectory(dir='C:\\Temp')
 
-        img = cv.imread(self.image_path)
+        img = cv.imread(os.path.join(self.input_dir, self.image_path))
         
         w, h = img.shape[1], img.shape[0]
         self.image_raw = (w, h)
@@ -104,40 +144,41 @@ class ImageSegmenter:
         with open(self.metadata_path, 'r') as f:
             return json.load(f)
 
-    def save_json(self):
+    def to_json(self):
+        
+        pieces = [{'rect': r, 'label': l} for r, l in zip(self.rects, self.labels) if l != '']
 
-        pieces = [{'rect': r, 'label': l} for r, l in zip(self.rects, self.labels)]
-
-        data = {
+        return {
             'image_path': self.image_path,
             'image_scale': self.image_scale,
             'image_size': [*self.image_size],
             'pieces':pieces
         }
 
+    def save_json(self):
+
+        data = self.to_json()
+
+        source = self.load_json()
+        if source is None:
+            source = []
+        else:
+            
+            for i, s in enumerate(source):
+                if s['image_path'] == self.image_path:
+                    break
+            if i < len(source):
+                source[i] = data
+            else:
+                source.append(data)
+
         with open(self.metadata_path, 'w') as f:
-            json.dump(data, f, indent=2)
+            json.dump(source, f, indent=2)
 
     def do_segment(self):
 
-        img = cv.imread(self.image_path)
-        s = self.image_scale
-        w, h = img.shape[1], img.shape[0]
-        pad  = 50
-
-        for i, l in enumerate(self.labels):
-            if l == '':
-                continue
-            path = os.path.join(self.pieces_path, f"piece_{l}.jpg")
-            rx, ry, rw, rh = self.rects[i]
-            x0 = max(rx * s - pad, 0)
-            y0 = max(ry * s - pad, 0)
-            x1 = min((rx + rw) * s + pad, w)
-            y1 = min((ry + rh) * s + pad, h)
-            subimage = img[y0:y1,x0:x1]
-
-            print(f"{path}: img[{y0}:{y1},{x0}:{x1}]")
-            cv.imwrite(path, subimage)
+        segmenter = Segmenter(self.input_dir, self.output_dir)
+        segmenter.segment_image(self.to_json())
 
     def curr_label(self):
         return self.window['label'].get()
@@ -207,15 +248,31 @@ class ImageSegmenter:
 
 def main():
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--image")
-    parser.add_argument("-m", "--metadata")
-    parser.add_argument("-p", "--pieces")
+    parser = argparse.ArgumentParser(description="Segment raw piece scans into individual pieces.")
+    parser.add_argument("-r", "--root", default=".", help="root directory (default \".\")")
+    parser.add_argument("-i", "--input", metavar='INPUT_DIR', default="scans", help="input directory containing images to be segmented (default \"scans\")")
+    parser.add_argument("-o", "--output", metavar='OUTPUT_DIR', default="pieces", help="output directory to write segmented pieces (default \"pieces\")" )
+    parser.add_argument("-m", "--metadata", default="segment.json", help="metadata file describing segmentation (default \"segment.json\")")
+    parser.add_argument("-s", "--segment", action='store_true', help="perform segmentation")
+    parser.add_argument("-u", "--ui", action='store_true', help="launch UI")
 
     args = parser.parse_args()
 
-    e = ImageSegmenter(args.image, args.metadata, args.pieces)
-    e.ui()
+    input_dir = os.path.join(args.root, args.input)
+    output_dir = os.path.join(args.root, args.output)
+    metadata_path = os.path.join(args.root, args.metadata)
+
+    if args.segment:
+        
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+            
+        s = Segmenter(input_dir, output_dir)
+        s.segment_images(metadata)
+        
+    else:
+        s = SegmenterUI(input_dir, metadata_path, output_dir)
+        s.ui()
 
 if __name__ == '__main__':
     main()
