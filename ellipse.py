@@ -1,6 +1,6 @@
 import argparse
 import bisect
-import cv2
+import cv2 as cv
 import itertools
 import json
 import math
@@ -137,7 +137,7 @@ class ApproxPolyComputer:
     @staticmethod
     def _compute_poly(perimeter, epsilon):
         
-        approx = cv2.approxPolyDP(perimeter.points, epsilon, True)
+        approx = cv.approxPolyDP(perimeter.points, epsilon, True)
         poly = list(perimeter.index[tuple(xy)] for xy in np.squeeze(approx))
 
         reset = None
@@ -298,8 +298,8 @@ class TabComputer:
         return {'coeffs': coeffs, 'poly': poly, 'indexes': (a,b), 'indent':indent, 'points': points, 'angles': angles}
 
     def compute_convexity_defects(self):
-        convex_hull = cv2.convexHull(self.perimeter.points, returnPoints=False)
-        return np.squeeze(cv2.convexityDefects(self.perimeter.points, convex_hull))
+        convex_hull = cv.convexHull(self.perimeter.points, returnPoints=False)
+        return np.squeeze(cv.convexityDefects(self.perimeter.points, convex_hull))
 
 class EllipseFitter:
 
@@ -317,11 +317,11 @@ class EllipseFitter:
 
         points = self.perimeter.points
 
-        convex_hull = cv2.convexHull(points, returnPoints=False)
+        convex_hull = cv.convexHull(points, returnPoints=False)
         self.convex_hull = np.squeeze(points[convex_hull])
 
         self.convexity_defects = []
-        convexity_defects = cv2.convexityDefects(points, convex_hull)
+        convexity_defects = cv.convexityDefects(points, convex_hull)
         for defect in np.squeeze(convexity_defects):
             p0 = tuple(points[defect[0]])
             p1 = tuple(points[defect[1]])
