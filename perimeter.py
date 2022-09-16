@@ -182,7 +182,7 @@ class PerimeterUI:
         self.window = sg.Window('Perimeter Computer', layout, finalize=True)
         self.render()
 
-    def ui(self):
+    def run(self):
         
         self._init_ui()
 
@@ -205,8 +205,8 @@ def main():
 
     args = parser.parse_args()
 
-    pc = PerimeterUI(args.image, args.output)
-    pc.ui()
+    ui = PerimeterUI(args.image, args.output)
+    ui.run()
 
 if __name__ == '__main__':
     main()
