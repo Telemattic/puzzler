@@ -6,13 +6,24 @@ import scipy
 
 class Piece:
 
-    def __init__(self, path):
+    def __init__(self, path, rotate_degrees=None):
 
         with open(path) as f:
             data = json.load(f)
 
         self.bbox = tuple(data['bbox'])
         self.contour = np.array(data['contour'], dtype=np.float32)
+        
+        if rotate_degrees is not None and rotate_degrees != 0.:
+            print(f"{rotate_degrees=}")
+            print(f"{self.contour=}")
+            rad = np.radians(rotate_degrees)
+            c, s = np.cos(rad), np.sin(rad)
+            rot = np.array(((c, -s), (s, c)))
+            print(f"{rot=}")
+            self.contour = self.contour @ rot
+            print(f"{self.contour=}")
+            
         self.translation = np.float32([0,0])
         self.kdtree = scipy.spatial.KDTree(self.contour)
 
@@ -64,6 +75,90 @@ class AlignUI:
             points = [tuple(xy + p.translation) for xy in np.squeeze(p.contour)]
             graph.draw_lines(points, color=color, width=2)
 
+    @staticmethod
+    def umeyama(P, Q):
+        assert P.shape == Q.shape
+        n, dim = P.shape
+
+        centeredP = P - P.mean(axis=0)
+        centeredQ = Q - Q.mean(axis=0)
+
+        C = np.dot(np.transpose(centeredP), centeredQ) / n
+
+        V, S, W = np.linalg.svd(C)
+        d = (np.linalg.det(V) * np.linalg.det(W)) < 0.0
+
+        if d:
+            S[-1] = -S[-1]
+            V[:, -1] = -V[:, -1]
+
+        R = np.dot(V, W)
+
+        varP = np.var(P, axis=0).sum()
+        c = 1/varP * np.sum(S) # scale factor
+
+        t = Q.mean(axis=0) - P.mean(axis=0).dot(c*R)
+
+        return c, R, t
+
+    @staticmethod
+    def eldridge(P, Q):
+        m = P.shape[0]
+        assert P.shape == Q.shape == (m, 2)
+
+        # want the optimized rotation and translation to map P -> Q
+
+        Px, Py = np.sum(P, axis=0)
+        Qx, Qy = np.sum(Q, axis=0)
+
+        A00 =np.sum(np.square(P))
+        A = np.array([[A00, -Py, Px], 
+                      [-Py,  m , 0.],
+                      [ Px,  0., m ]], dtype=np.float64)
+
+        u0 = np.sum(P[:,0]*Q[:,1]) - np.sum(P[:,1]*Q[:,0])
+        u = np.array([u0, Qx-Px, Qy-Py], dtype=np.float64)
+
+        return np.linalg.lstsq(A, u, rcond=None)
+
+    def do_fit(self):
+        
+        print("Fit!")
+
+        graph = self.window['graph']
+
+        points0 = self.pieces[0].contour
+        kdtree0 = self.pieces[0].kdtree
+        
+        points1 = self.pieces[1].contour + self.pieces[1].translation
+        kdtree1 = scipy.spatial.KDTree(points1)
+
+        print(f"{self.pieces[1].contour=}")
+        print(f"{self.pieces[1].translation=}")
+        print(f"{points1=}")
+ 
+        indexes = kdtree0.query_ball_tree(kdtree1, r=15)
+        matches = [i for i, v in enumerate(indexes) if len(v)]
+
+        print(f"{len(matches)} points in piece0 have a correspondence with piece1")
+
+        keep = [matches[i] for i in range(0, len(matches), (len(matches)-4) // 4)]
+        print(f"{keep=}")
+
+        for i in keep:
+            xy = tuple(points0[i])
+            graph.draw_point(xy, color='purple', size=17)
+
+        data0 = self.pieces[0].contour[keep]
+        d, i = kdtree1.query(data0)
+        data1 = points1[i]
+
+        print(f"{data0=}")
+        print(f"{data1=}")
+
+        print(f"umeyama: {self.umeyama(data0, data1)}")
+        print(f"eldridge: {self.eldridge(data0, data1)}")
+        
     def _init_ui(self):
         
         w, h = 1024, 1024
@@ -76,7 +171,8 @@ class AlignUI:
                       background_color='white',
                       key='graph',
                       drag_submits=True,
-                      enable_events=True)]
+                      enable_events=True)],
+            [sg.Button('Fit', key='button_fit')]
         ]
         
         self.window = sg.Window('Align', layout, finalize=True)
@@ -94,6 +190,8 @@ class AlignUI:
                 self.graph_drag(values['graph'], False)
             elif event == 'graph+UP':
                 self.graph_drag(values['graph'], True)
+            elif event == 'button_fit':
+                self.do_fit()
             else:
                 print(event, values)
 
@@ -104,7 +202,7 @@ def main():
 
     args = parser.parse_args()
 
-    pieces = [Piece(i) for i in args.pieces]
+    pieces = [Piece(p, rotate_degrees=i*5) for i,p in enumerate(args.pieces)]
 
     ui = AlignUI(pieces)
     ui.run()
