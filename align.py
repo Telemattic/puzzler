@@ -1,34 +1,41 @@
 import argparse
 import json
+import math
 import numpy as np
 import PySimpleGUI as sg
 import scipy
 
+class AffineTransform:
+
+    def __init__(self):
+        self.angle = 0.
+        self.dxdy  = np.array((0., 0.))
+
+    def to_global_xy(self, points):
+        return points @ self.rot_matrix() + self.dxdy
+
+    def to_local_xy(self, points):
+        return (points - self.dxdy) @ self.rot_matrix().T
+
+    def rot_matrix(self):
+        c, s = np.cos(self.angle), np.sin(self.angle)
+        return np.array(((c, s),
+                         (-s, c)))
+        
 class Piece:
 
-    def __init__(self, path, rotate_degrees=None):
+    def __init__(self, path):
 
         with open(path) as f:
             data = json.load(f)
 
-        self.bbox = tuple(data['bbox'])
-        self.contour = np.array(data['contour'], dtype=np.float32)
-        
-        if rotate_degrees is not None and rotate_degrees != 0.:
-            print(f"{rotate_degrees=}")
-            print(f"{self.contour=}")
-            rad = np.radians(rotate_degrees)
-            c, s = np.cos(rad), np.sin(rad)
-            rot = np.array(((c, -s), (s, c)))
-            print(f"{rot=}")
-            self.contour = self.contour @ rot
-            print(f"{self.contour=}")
-            
-        self.translation = np.float32([0,0])
-        self.kdtree = scipy.spatial.KDTree(self.contour)
+        contour = np.array(data['contour'], dtype=np.float64)
+        self.points = contour - np.mean(contour, axis=0)
+        self.coords = AffineTransform()
+        self.kdtree = scipy.spatial.KDTree(self.points)
 
     def dist(self, xy):
-        xy = np.float32(xy) - self.translation
+        xy = self.coords.to_local_xy(xy)
         return self.kdtree.query(xy, distance_upper_bound=20)
 
 class AlignUI:
@@ -37,7 +44,12 @@ class AlignUI:
         self.pieces = pieces
 
         self.drag_active = False
-        self.drag_id = None
+        self.drag_id     = None
+        self.drag_start  = None
+        self.drag_curr   = None
+
+        self.keep0 = None
+        self.keep1 = None
 
     def find_nearest_piece(self, xy):
         return min((p.dist(xy)[0], i) for i, p in enumerate(self.pieces))
@@ -45,18 +57,27 @@ class AlignUI:
     def graph_drag(self, xy, end):
 
         if end:
+
+            if self.drag_active and self.drag_id is not None:
+                p = self.pieces[self.drag_id]
+                dxdy = np.array((self.drag_curr[0]-self.drag_start[0],
+                                 self.drag_curr[1]-self.drag_start[1]), dtype=np.float64)
+                p.coords.dxdy += dxdy
+                
             self.drag_active = False
-            self.drag_id = None
-            self.drag_start = None
+            self.drag_id     = None
+            self.drag_start  = None
+            self.drag_curr   = None
+            
         elif self.drag_active:
 
             if self.drag_id is not None:
-                piece = self.pieces[self.drag_id]
-                dx, dy = xy[0] - self.drag_start[0], xy[1] - self.drag_start[1]
-                piece.translation = np.float32((dx,dy))
+                self.drag_curr = xy
+                
         else:
             self.drag_active = True
             self.drag_start  = xy
+            self.drag_curr   = xy
 
             dist, id = self.find_nearest_piece(xy)
             if dist < 20:
@@ -71,8 +92,16 @@ class AlignUI:
 
         colors = ['red', 'green', 'blue']
         for i, p in enumerate(self.pieces):
-            color = 'cyan' if i == self.drag_id else colors[i%len(colors)]
-            points = [tuple(xy + p.translation) for xy in np.squeeze(p.contour)]
+
+            color = colors[i%len(colors)]
+            dxdy  = p.coords.dxdy
+            
+            if self.drag_active and i == self.drag_id:
+                color = 'cyan'
+                dxdy = dxdy + np.array((self.drag_curr[0]-self.drag_start[0],
+                                        self.drag_curr[1]-self.drag_start[1]), dtype=np.float64)
+                
+            points = [tuple(xy + dxdy) for xy in np.squeeze(p.points) @ p.coords.rot_matrix()]
             graph.draw_lines(points, color=color, width=2)
 
     @staticmethod
@@ -127,16 +156,15 @@ class AlignUI:
 
         graph = self.window['graph']
 
-        points0 = self.pieces[0].contour
-        kdtree0 = self.pieces[0].kdtree
+        piece0 = self.pieces[0]
+        piece1 = self.pieces[1]
+
+        points0 = piece0.coords.to_global_xy(piece0.points)
+        kdtree0 = scipy.spatial.KDTree(points0)
         
-        points1 = self.pieces[1].contour + self.pieces[1].translation
+        points1 = piece1.coords.to_global_xy(piece1.points)
         kdtree1 = scipy.spatial.KDTree(points1)
 
-        print(f"{self.pieces[1].contour=}")
-        print(f"{self.pieces[1].translation=}")
-        print(f"{points1=}")
- 
         indexes = kdtree0.query_ball_tree(kdtree1, r=15)
         matches = [i for i, v in enumerate(indexes) if len(v)]
 
@@ -145,13 +173,48 @@ class AlignUI:
         keep = [matches[i] for i in range(0, len(matches), (len(matches)-4) // 4)]
         print(f"{keep=}")
 
-        for i in keep:
-            xy = tuple(points0[i])
-            graph.draw_point(xy, color='purple', size=17)
-
-        data0 = self.pieces[0].contour[keep]
+        data0 = points0[keep]
         d, i = kdtree1.query(data0)
         data1 = points1[i]
+
+        for xy in data0:
+            graph.draw_point(tuple(xy), color='purple', size=17)
+
+        self.keep0 = keep
+        self.keep1 = i
+
+        print(f"{data0=}")
+        print(f"{data1=}")
+
+        print(f"umeyama: {self.umeyama(data0, data1)}")
+        print(f"eldridge: {self.eldridge(data0, data1)}")
+
+    def do_refit(self):
+
+        if self.keep0 is None or self.keep1 is None:
+            return
+        
+        graph = self.window['graph']
+
+        piece0 = self.pieces[0]
+        piece1 = self.pieces[1]
+
+        points0 = piece0.coords.to_global_xy(piece0.points)
+        points1 = piece1.coords.to_global_xy(piece1.points)
+
+        coords1 = AffineTransform()
+        coords1.angle = piece1.coords.angle + 5 * math.pi / 180.
+        coords1.dxdy  = piece1.coords.dxdy
+        points1 = coords1.to_global_xy(piece1.points)
+
+        data0 = points0[self.keep0]
+        data1 = points1[self.keep1]
+        
+        for xy in data0:
+            graph.draw_point(tuple(xy), color='purple', size=17)
+            
+        for xy in data1:
+            graph.draw_point(tuple(xy), color='purple', size=17)
 
         print(f"{data0=}")
         print(f"{data1=}")
@@ -172,10 +235,11 @@ class AlignUI:
                       key='graph',
                       drag_submits=True,
                       enable_events=True)],
-            [sg.Button('Fit', key='button_fit')]
+            [sg.Button('Fit', key='button_fit'),
+             sg.Button('Refit', key='button_refit')]
         ]
         
-        self.window = sg.Window('Align', layout, finalize=True)
+        self.window = sg.Window('Align', layout, finalize=True, return_keyboard_events=True)
         self.render()
 
     def run(self):
@@ -192,6 +256,8 @@ class AlignUI:
                 self.graph_drag(values['graph'], True)
             elif event == 'button_fit':
                 self.do_fit()
+            elif event == 'button_refit':
+                self.do_refit()
             else:
                 print(event, values)
 
@@ -202,7 +268,10 @@ def main():
 
     args = parser.parse_args()
 
-    pieces = [Piece(p, rotate_degrees=i*5) for i,p in enumerate(args.pieces)]
+    pieces = [Piece(p) for p in args.pieces]
+    
+    for i, p in enumerate(pieces):
+        p.coords.angle += i * math.pi / 180.
 
     ui = AlignUI(pieces)
     ui.run()
