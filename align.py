@@ -7,9 +7,9 @@ import scipy
 
 class AffineTransform:
 
-    def __init__(self):
-        self.angle = 0.
-        self.dxdy  = np.array((0., 0.))
+    def __init__(self, angle=0., xy=(0.,0.)):
+        self.angle = angle
+        self.dxdy  = np.array(xy, dtype=np.float64)
 
     def to_global_xy(self, points):
         return points @ self.rot_matrix() + self.dxdy
@@ -21,6 +21,9 @@ class AffineTransform:
         c, s = np.cos(self.angle), np.sin(self.angle)
         return np.array(((c, s),
                          (-s, c)))
+
+    def copy(self):
+        return AffineTransform(self.angle, tuple(self.dxdy))
         
 class Piece:
 
@@ -38,15 +41,77 @@ class Piece:
         xy = self.coords.to_local_xy(xy)
         return self.kdtree.query(xy, distance_upper_bound=20)
 
+class DragHandle:
+
+    def __init__(self, coord):
+        self.coord = coord
+        self.color = 'black'
+        self.drag_radius = 50
+        self.knob_radius = 20
+
+        self.drag_kind = None
+        self.drag_start = None
+
+    def hit_test(self, xy):
+        
+        dragxy = self.coord.dxdy
+        knobxy = np.float64((0.,-self.drag_radius)) @ self.coord.rot_matrix() + dragxy
+
+        if np.linalg.norm(knobxy - xy) <= self.knob_radius:
+            return 'turn'
+
+        if np.linalg.norm(dragxy - xy) <= self.drag_radius:
+            return 'move'
+
+        return None
+
+    def start_drag(self, xy, kind):
+
+        self.drag_kind = kind
+        self.drag_start = xy
+        self.drag_coord = self.coord.copy()
+
+    def drag(self, xy):
+
+        if self.drag_kind == 'move':
+            dx, dy = xy[0] - self.drag_start[0], xy[1] - self.drag_start[1]
+            self.coord.dxdy = self.drag_coord.dxdy + (dx, dy)
+            
+            #newloc = self.drag_coord.dxdy + (dx, dy)
+            #print(f"move: xy={tuple(newloc)}")
+
+        elif self.drag_kind == 'turn':
+            dx, dy = xy[0] - self.drag_coord.dxdy[0], xy[1] - self.drag_coord.dxdy[1]
+            if dx or dy:
+                angle = math.atan2(dy, dx)
+                angle += math.pi / 2
+                self.coord.angle = angle
+                # print(f"turn: angle={angle:.3f} ({angle*180./math.pi:.3f} deg)")
+
+    def end_drag(self):
+
+        self.drag_kind = None
+        self.drag_start = None
+        self.drag_coord = None
+
+    def render(self, graph):
+
+        dragxy = self.coord.dxdy
+        graph.draw_circle(tuple(dragxy), self.drag_radius, line_color=self.color, line_width=3)
+
+        knobxy = np.float64((0.,-self.drag_radius)) @ self.coord.rot_matrix() + dragxy
+        graph.draw_circle(tuple(knobxy), self.knob_radius,
+                          fill_color=self.color, line_color='white', line_width=2)
+
+        # graph.draw_line(tuple(dragxy), tuple(knobxy), color=self.color, width=2)
+
 class AlignUI:
 
     def __init__(self, pieces):
         self.pieces = pieces
 
-        self.drag_active = False
+        self.drag_handle = None
         self.drag_id     = None
-        self.drag_start  = None
-        self.drag_curr   = None
 
         self.keep0 = None
         self.keep1 = None
@@ -58,30 +123,32 @@ class AlignUI:
 
         if end:
 
-            if self.drag_active and self.drag_id is not None:
-                p = self.pieces[self.drag_id]
-                dxdy = np.array((self.drag_curr[0]-self.drag_start[0],
-                                 self.drag_curr[1]-self.drag_start[1]), dtype=np.float64)
-                p.coords.dxdy += dxdy
+            if self.drag_handle:
+                self.drag_handle.end_drag()
                 
-            self.drag_active = False
+            self.drag_handle = None
             self.drag_id     = None
-            self.drag_start  = None
-            self.drag_curr   = None
             
-        elif self.drag_active:
+        elif self.drag_handle:
 
-            if self.drag_id is not None:
-                self.drag_curr = xy
+            self.drag_handle.drag(xy)
                 
         else:
-            self.drag_active = True
-            self.drag_start  = xy
-            self.drag_curr   = xy
 
             dist, id = self.find_nearest_piece(xy)
             if dist < 20:
                 self.drag_id = id
+                self.drag_handle = DragHandle(self.pieces[id].coords)
+                self.drag_handle.start_drag(xy, 'move')
+            else:
+                for i, p in enumerate(self.pieces):
+                    h = DragHandle(p.coords)
+                    t = h.hit_test(xy)
+                    if t:
+                        self.drag_id = i
+                        self.drag_handle = h
+                        h.start_drag(xy, t)
+                        break
 
         self.render()
 
@@ -96,13 +163,11 @@ class AlignUI:
             color = colors[i%len(colors)]
             dxdy  = p.coords.dxdy
             
-            if self.drag_active and i == self.drag_id:
-                color = 'cyan'
-                dxdy = dxdy + np.array((self.drag_curr[0]-self.drag_start[0],
-                                        self.drag_curr[1]-self.drag_start[1]), dtype=np.float64)
-                
             points = [tuple(xy + dxdy) for xy in np.squeeze(p.points) @ p.coords.rot_matrix()]
             graph.draw_lines(points, color=color, width=2)
+
+            h = DragHandle(p.coords)
+            h.render(graph)
 
     @staticmethod
     def umeyama(P, Q):
@@ -202,11 +267,6 @@ class AlignUI:
         points0 = piece0.coords.to_global_xy(piece0.points)
         points1 = piece1.coords.to_global_xy(piece1.points)
 
-        coords1 = AffineTransform()
-        coords1.angle = piece1.coords.angle + 5 * math.pi / 180.
-        coords1.dxdy  = piece1.coords.dxdy
-        points1 = coords1.to_global_xy(piece1.points)
-
         data0 = points0[self.keep0]
         data1 = points1[self.keep1]
         
@@ -271,7 +331,7 @@ def main():
     pieces = [Piece(p) for p in args.pieces]
     
     for i, p in enumerate(pieces):
-        p.coords.angle += i * math.pi / 180.
+        p.coords.angle += i * 45 * math.pi / 180.
 
     ui = AlignUI(pieces)
     ui.run()
