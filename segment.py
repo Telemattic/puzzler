@@ -16,8 +16,11 @@ class Segmenter:
 
     def segment_images(self, descriptors):
 
+        retval = []
         for source in descriptors:
-            self.segment_image(source)
+            retval += self.segment_image(source)
+
+        return retval
 
     def segment_image(self, descriptor):
 
@@ -30,7 +33,8 @@ class Segmenter:
         h, w = img.shape[0], img.shape[1]
 
         s = descriptor['image_scale']
-        
+
+        retval = []
         for piece in descriptor['pieces']:
             label = piece['label']
             path = os.path.join(self.output_dir, f"piece_{label}.jpg")
@@ -44,6 +48,10 @@ class Segmenter:
 
             print(f"{path}: {x1-x0} x {y1-y0}")
             cv.imwrite(path, subimage)
+
+            retval.append({'label': label, 'image_path':path})
+
+        return retval
 
 class SegmenterUI:
 
@@ -249,26 +257,45 @@ class SegmenterUI:
 def main():
 
     parser = argparse.ArgumentParser(description="Segment raw piece scans into individual pieces.")
-    parser.add_argument("-r", "--root", default=".", help="root directory (default \".\")")
-    parser.add_argument("-i", "--input", metavar='INPUT_DIR', default="scans", help="input directory containing images to be segmented (default \"scans\")")
-    parser.add_argument("-o", "--output", metavar='OUTPUT_DIR', default="pieces", help="output directory to write segmented pieces (default \"pieces\")" )
-    parser.add_argument("-m", "--metadata", default="segment.json", help="metadata file describing segmentation (default \"segment.json\")")
-    parser.add_argument("-s", "--segment", action='store_true', help="perform segmentation")
-    parser.add_argument("-u", "--ui", action='store_true', help="launch UI")
+
+    parser.add_argument("-r", "--root", metavar='ROOT_DIR', default=".",
+                        help="root directory (default \".\")")
+
+    parser.add_argument("-s", "--scans", metavar='SCAN_DIR', default="scans",
+                        help="input directory containing images to be segmented (default \"scans\")")
+
+    parser.add_argument("-p", "--pieces", metavar='PIECE_DIR', default="pieces",
+                        help="output directory to write segmented pieces (default \"pieces\")" )
+
+    parser.add_argument("-i", "--input", default="segment.json",
+                        help="json describing segmentation (default \"segment.json\")")
+
+    parser.add_argument("-o", "--output", default="pieces.json",
+                        help="json describing pieces (default \"pieces.json\")")
+
+    parser.add_argument("-b", "--batch", action='store_true',
+                        help="perform batch segmentation")
+    
+    parser.add_argument("-u", "--ui", action='store_true',
+                        help="launch UI")
 
     args = parser.parse_args()
 
-    input_dir = os.path.join(args.root, args.input)
-    output_dir = os.path.join(args.root, args.output)
-    metadata_path = os.path.join(args.root, args.metadata)
+    scans_dir   = os.path.join(args.root, args.scans)
+    pieces_dir  = os.path.join(args.root, args.pieces)
+    input_path  = os.path.join(args.root, args.input)
+    output_path = os.path.join(args.root, args.output)
 
-    if args.segment:
+    if args.batch:
         
-        with open(metadata_path) as f:
-            metadata = json.load(f)
+        with open(input_path) as f:
+            segments = json.load(f)
             
-        s = Segmenter(input_dir, output_dir)
-        s.segment_images(metadata)
+        s = Segmenter(scans_dir, pieces_dir)
+        pieces = s.segment_images(segments)
+        
+        with open(output_path, 'w') as f:
+            json.dump(pieces, f, indent=2)
         
     else:
         s = SegmenterUI(input_dir, metadata_path, output_dir)

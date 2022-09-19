@@ -1,10 +1,35 @@
 import argparse
+import base64
 import cv2 as cv
 import json
 import numpy as np
 import os
 import PySimpleGUI as sg
 import tempfile
+import zlib
+
+class ChainCode:
+
+    def encode(self, contour):
+
+        code = {(1,0): '0', (1,1): '1', (0,1): '2', (-1,1): '3',
+                (-1,0): '4', (-1,-1): '5', (0,-1): '6', (1,-1): '7'}
+
+        path = []
+        prev = contour[0]
+        for xy in contour[1:]:
+            dxdy = (xy[0]-prev[0], xy[1]-prev[1])
+            path.append(code[dxdy])
+            prev = xy
+
+        raw_data = bytes(''.join(path), 'utf-8')
+        cmp_data = zlib.compress(raw_data)
+        b64_data = base64.standard_b64encode(cmp_data)
+
+        start = contour[0].tolist()
+        chain = str(b64_data, encoding='utf-8')
+
+        return (start, chain)
 
 class PerimeterComputer:
 
@@ -42,13 +67,13 @@ class PerimeterComputer:
 
         self.contour = max(contours[0], key=cv.contourArea)
 
+    def to_json(self):
+        start, chain = ChainCode().encode(np.squeeze(self.contour))
+        return {'start':start, 'chain':chain}
+
     def write_json(self, path):
 
-        w, h = self.image_size
-        data = {
-            'bbox': [0, 0, w, h],
-            'contour': np.squeeze(self.contour).tolist()
-        }
+        data = self.to_json()
         with open(path, 'w') as f:
             json.dump(data, f)
 
@@ -200,13 +225,33 @@ class PerimeterUI:
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--image")
+    parser.add_argument("--label")
+    parser.add_argument("--image")
     parser.add_argument("-o", "--output")
+    parser.add_argument("-b", "--batch")
 
     args = parser.parse_args()
 
-    ui = PerimeterUI(args.image, args.output)
-    ui.run()
+    if args.batch:
+
+        with open(args.batch) as f:
+            data = json.load(f)
+
+        out = []
+        for piece in data:
+
+            pc = PerimeterComputer(piece['image_path'])
+            ret = pc.to_json()
+            ret['label'] = piece['label']
+
+            out.append(ret)
+
+        with open(args.output, 'w') as f:
+            json.dump(out, f, indent=2)
+
+    else:
+        ui = PerimeterUI(args.image, args.output)
+        ui.run()
 
 if __name__ == '__main__':
     main()
