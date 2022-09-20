@@ -28,7 +28,7 @@ class Piece:
 
     def __init__(self, data):
 
-        contour = ChainCode().decode(data['chain'])
+        contour = puzzler.chain.ChainCode().decode(data['points'])
         contour = np.array(contour, dtype=np.float64)
         self.points = contour - np.mean(contour, axis=0)
         self.coords = AffineTransform()
