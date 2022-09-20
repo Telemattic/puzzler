@@ -16,6 +16,7 @@ def main():
     puzzler.commands.init.add_parser(commands)
     puzzler.commands.scan.add_parser(commands)
     puzzler.commands.points.add_parser(commands)
+    puzzler.commands.ellipse.add_parser(commands)
     puzzler.commands.align.add_parser(commands)
 
     args = parser.parse_args()
