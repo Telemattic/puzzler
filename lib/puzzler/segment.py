@@ -1,4 +1,3 @@
-import argparse
 import cv2 as cv
 import json
 import numpy as np
@@ -9,6 +8,26 @@ import tempfile
 
 class Segmenter:
 
+    class Scan:
+        
+        def __init__(self, path, scale):
+            self.path  = path
+            self.scale = scale
+            self.image = cv.imread(self.path)
+            assert(self.image is not None)
+
+        def get_subimage(self, rect, pad=50):
+
+            h, w = self.image.shape[0], self.image.shape[1]
+            s = self.scale
+            rx, ry, rw, rh = rect
+            x0 = max(rx * s - pad, 0)
+            y0 = max(ry * s - pad, 0)
+            x1 = min((rx + rw) * s + pad, w)
+            y1 = min((ry + rh) * s + pad, h)
+            subimage = self.image[y0:y1,x0:x1]
+            return np.rot90(subimage,-1)
+
     def __init__(self, output_dir, pad = 50):
         self.output_dir = output_dir
         self.pad = pad
@@ -16,68 +35,31 @@ class Segmenter:
     def segment_images(self, puzzle):
 
         updated_pieces = []
-        for i, source in enumerate(puzzle['sources']):
-            pieces = Segmenter.find_pieces_for_source(puzzle, i)
+        for i, s in enumerate(puzzle['sources']):
+            pieces = [p for p in puzzle['pieces'] if p['source']['id'] == i]
             updated_pieces += self.segment_image(source, pieces)
 
         return {'sources': puzzle['sources'], 'pieces': updated_pieces}
 
-    @staticmethod
-    def find_pieces_for_source(puzzle, source_id):
-
-        rects = puzzle['sources'][source_id]['rects']
-        pieces = [None] * len(rects)
-
-        for piece in puzzle['pieces']:
-
-            i, x, y = piece['source']
-            if i != source_id:
-                continue
-
-            for j, rect in enumerate(rects):
-                rx, ry, rw, rh = rect
-                if rx < x < rx+rw and ry < y < ry+rh:
-                    x, y = rx + rw//2, ry + rh//2
-                    pieces[j] = {'label': piece['label'], 'source':[i, x, y]}
-                    break
-
-        return pieces
-
     def segment_image(self, source, pieces):
 
-        image_path = os.path.join(source['path'])
-        print(f"{image_path}")
-        
-        img = cv.imread(image_path)
-        assert img is not None
-        
-        h, w = img.shape[0], img.shape[1]
-
-        s = source['scale']
+        scan = Scan(source['path'], source['scale'])
+        print(f"{scan.path}")
 
         retval = []
-        for rect, piece in zip(source['rects'], pieces):
+        for piece in pieces:
 
             if piece is None:
                 continue
 
             label = piece['label']
             path = os.path.join(self.output_dir, f"piece_{label}.jpg")
-            rx, ry, rw, rh = rect
-            x0 = max(rx * s - self.pad, 0)
-            y0 = max(ry * s - self.pad, 0)
-            x1 = min((rx + rw) * s + self.pad, w)
-            y1 = min((ry + rh) * s + self.pad, h)
-            subimage = img[y0:y1,x0:x1]
-            subimage = np.rot90(subimage,-1)
+            img = scan.get_subimage(piece['source']['rect'])
 
-            print(f"{path}: {x1-x0} x {y1-y0}")
-            cv.imwrite(path, subimage)
+            print(f"{path}: {img.shape[1]} x {img.shape[0]}")
+            cv.imwrite(path, img)
 
-            i, x, y = piece['source']
-            x = rx + rw // 2
-            y = ry + rh // 2
-            retval.append({'label': label, 'source': [i, x, y]})
+            retval.append({'label': label, 'source': piece['source']})
 
         return retval
 
@@ -140,11 +122,18 @@ class SegmenterUI:
 
         self.labels  = [''] * len(self.rects)
 
-        pieces = Segmenter.find_pieces_for_source(self.puzzle, self.source_id)
-        for i, p in enumerate(pieces):
-            if p is not None:
-                self.labels[i] = p['label']
+        for p in self.puzzle['pieces']:
 
+            if p['source']['id'] != self.source_id:
+                continue
+
+            rx, ry, rw, rh = p['source']['rect']
+            x, y = rx + rw // 2, ry + rh // 2
+
+            for i, (rx, ry, rw, rh) in enumerate(self.rects):
+                if rx < x < rx+rw and ry < y < ry+rh:
+                    self.labels[i] = p['label']
+            
     def do_label(self, xy):
 
         piece = None
@@ -168,21 +157,14 @@ class SegmenterUI:
 
     def to_json(self):
 
-        pieces = [p for p in self.puzzle['pieces'] if p['source'][0] != self.source_id]
+        pieces = [p for p in self.puzzle['pieces'] if p['source']['id'] != self.source_id]
         for rect, label in zip(self.rects, self.labels):
             if label != '':
-                rx, ry, rw, rh = rect
-                x, y = rx + rw // 2, ry + rh // 2
-                pieces.append({'label': label, 'source': [self.source_id, x, y]})
+                source = {'id': self.source_id, 'rect':rect}
+                pieces.append({'label': label, 'source': source})
 
         sources = self.puzzle['sources']
-        sources[self.source_id]['rects'] = self.rects
-        return {'sources': sources, 'pieces':pieces}
-
-    def do_segment(self):
-
-        segmenter = Segmenter(self.input_dir, self.output_dir)
-        segmenter.segment_image(self.to_json())
+        return {'sources': sources, 'pieces': pieces}
 
     def curr_label(self):
         return self.window['label'].get()
@@ -232,8 +214,7 @@ class SegmenterUI:
                       key='graph',
                       enable_events=True,
                       metadata=self)],
-            [sg.Text("Label"), sg.InputText("A1", key='label', size=(5,1))],
-            [sg.Button('Segment', key='button_segment')]
+            [sg.Text("Label"), sg.InputText("A1", key='label', size=(5,1))]
         ]
         self.window = sg.Window('Image Segmenter', layout, finalize=True)
         self.render()
@@ -244,7 +225,5 @@ class SegmenterUI:
                 break
             elif event == 'graph':
                 self.do_label(values['graph'])
-            elif event == 'button_segment':
-                self.do_segment()
             else:
                 print(event, values)

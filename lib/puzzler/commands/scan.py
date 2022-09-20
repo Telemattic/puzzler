@@ -5,13 +5,13 @@ def scan_add(args):
     puzzle = puzzler.file.load(args.puzzle)
 
     id = len(puzzle['sources'])
-    source = {'path': args.image, 'rects':[]}
+    source = {'path': args.image}
     puzzle['sources'].append(source)
 
     s = puzzler.segment.SegmenterUI(puzzle, id)
     s.ui()
 
-    puzzler.file.save(args.puzzle, puzzle)
+    puzzler.file.save(args.puzzle, s.to_json())
 
 def scan_edit(args):
 
@@ -20,7 +20,7 @@ def scan_edit(args):
     s = puzzler.segment.SegmenterUI(puzzle, args.id)
     s.ui()
 
-    puzzler.file.save(args.puzzle, puzzle)
+    puzzler.file.save(args.puzzle, s.to_json())
         
 def scan_list(args):
 

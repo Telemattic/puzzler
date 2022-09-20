@@ -1,9 +1,8 @@
-import argparse
-import json
 import math
 import numpy as np
 import PySimpleGUI as sg
 import scipy
+import puzzler
 
 class AffineTransform:
 
@@ -319,21 +318,16 @@ class AlignUI:
             else:
                 print(event, values)
 
-def main():
+def align_ui(args):
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--pieces")
-    parser.add_argument("labels", nargs='+')
-
-    args = parser.parse_args()
-
-    with open(args.pieces) as f:
-        data = json.load(f)
-
-    pieces = [Piece(p) for p in data if p['label'] in args.labels]
+    puzzle = puzzler.file.load(args.puzzle)
+    pieces = [Piece(p) for p in puzzle['pieces'] if p['label'] in args.labels]
     
     ui = AlignUI(pieces)
     ui.run()
 
-if __name__ == '__main__':
-    main()
+def add_parser(commands):
+
+    parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
+    parser_align.add_argument("labels", nargs='+')
+    parser_align.set_defaults(func=align_ui)
