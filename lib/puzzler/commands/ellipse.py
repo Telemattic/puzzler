@@ -178,6 +178,8 @@ class TabComputer:
         
         self.ellipses = []
 
+        runs = self.curvature_runs()
+
         for defect in self.compute_convexity_defects():
 
             if defect[3] < 8000:
@@ -185,26 +187,37 @@ class TabComputer:
             
             l, r, c = defect[0], defect[1], defect[2]
             ellipse = self.fit_ellipse_to_convexity_defect(l, r, c)
-            if ellipse is not None:
-                self.ellipses.append(ellipse)
+            if ellipse is None:
+                continue
+            
+            self.ellipses.append(ellipse)
 
-        for in_out, indices in self.curvature_runs():
+        for in_out, indices in runs:
             if in_out:
                 continue
+            
             ellipse = self.fit_ellipse_to_outdent(indices[0], indices[-1])
-            if ellipse is not None:
-                self.ellipses.append(ellipse)
+            if ellipse is None:
+                continue
+
+            overlaps = False
+            a0, b0 = ellipse['indexes']
+            for e in self.ellipses:
+                a1, b1 = e['indexes']
+                if a1 < b0 and a0 < b1:
+                    overlaps = True
+                    print("outdent ellipse overlaps previously found ellipse")
+
+            if overlaps:
+                continue
+            
+            self.ellipses.append(ellipse)
             
     def curvature_runs(self):
 
         indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
         signs = [(area > 0, i) for i, area in zip(indexes, signed_area)]
-        print(f"{signs=}")
-
-        signs = [(k,list(i for _, i in g)) for k, g in itertools.groupby(signs,key=operator.itemgetter(0))]
-        print(f"{signs=}")
-
-        return signs
+        return [(k,list(i for _, i in g)) for k, g in itertools.groupby(signs,key=operator.itemgetter(0))]
 
     def fit_ellipse_to_outdent(self, l, r):
         
@@ -396,7 +409,7 @@ class EllipseFitter:
                 for i, ellipse in enumerate(self.ellipses):
                     poly = ellipse['poly']
                     angles = ellipse['angles']
-                    print(f"{i}: x,y={poly[0]:.1f},{poly[1]:.1f} angles={angles[0]:.1f},{angles[1]:.1f}")
+                    print(f"{i}: x,y={poly[0]:5.1f},{poly[1]:5.1f} angles={angles[0]:5.1f},{angles[1]:5.1f} indexes={ellipse['indexes']}")
                     pts = get_ellipse_pts(poly, npts=20)
                     pts = list(zip(pts[0], pts[1]))
                     # print(f"  {pts=}")
@@ -426,9 +439,13 @@ class EllipseFitter:
             sg.CB('Ellipses', default=True, enable_events=True, key='render_ellipses')
         ]
 
-        bbox = tuple(int(i * 1.2) for i in self.perimeter.bbox)
+        bbox = list(self.perimeter.bbox)
         w = bbox[2] - bbox[0]
         h = bbox[3] - bbox[1]
+        bbox[0] -= w // 5
+        bbox[2] += w // 5
+        bbox[1] -= h // 5
+        bbox[3] += h // 5
         s = 1
         if max(w,h) > 800:
             s = 800 / max(w,h)
