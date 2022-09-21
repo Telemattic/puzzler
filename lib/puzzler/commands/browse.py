@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 import PySimpleGUI as sg
 import puzzler
+import re
 
 class Browser:
 
@@ -19,34 +20,42 @@ class Browser:
             self.bbox   = tuple(ll.tolist() + ur.tolist())
             self.label  = piece['label']
 
-            # print(f"{self.poly=} {self.bbox=} {self.label=}")
-            # print(f"{self.poly[:1,:]=}")
-
     def __init__(self, puzzle):
 
-        outlines = [Browser.Outline(p) for p in puzzle['pieces']]
+        pieces = []
+        for p in puzzle['pieces']:
+            label = p['label']
+            m = re.fullmatch("^(\w+)(\d+)", label)
+            if m:
+                pieces.append((m[1], int(m[2]), p))
+            else:
+                pieces.append((label, None, p))
+            pieces.sort()
 
-        cols = 1
-        while cols * cols < len(outlines):
-            cols += 1
-
-        rows = 1
-        while cols * rows < len(outlines):
-            rows += 1
-
-        self.outlines = outlines
-        self.cols = cols
-        self.rows = rows
-
-        max_w = 1400
-        max_h = 800
+        self.outlines = [Browser.Outline(p[2]) for p in pieces]
 
         bbox_w = max(o.bbox[2] - o.bbox[0] for o in self.outlines)
         bbox_h = max(o.bbox[3] - o.bbox[1] for o in self.outlines)
 
-        self.scale = min(max_w / (cols * bbox_w), max_h / (rows * bbox_h))
+        max_w = 1400
+        max_h = 800
+
+        def compute_rows(cols):
+            tile_w = max_w // cols
+            tile_h = tile_w * bbox_h // bbox_w
+            rows   = max_h // tile_h
+            print(f"{cols=} {tile_w=} {tile_h=} {rows=}")
+            return rows
+            
+        cols = 1
+        while cols * compute_rows(cols) < len(self.outlines):
+            cols += 1
+
+        self.cols = cols
+
         self.tile_w = max_w // cols
-        self.tile_h = max_h // cols
+        self.tile_h = self.tile_w * bbox_h // bbox_w
+        self.scale  = min(self.tile_w / bbox_w, self.tile_h / bbox_h)
         self.width  = self.tile_w * self.cols
         self.height = self.tile_h * self.cols
 
@@ -61,6 +70,7 @@ class Browser:
             points = (o.poly - bbox_center) * self.scale + np.array((x, y))
 
             graph.draw_lines(points, color='black')
+            graph.draw_text(o.label, (x,y), font=('Courier', 12), color='black')
 
 class BrowseUI:
 
