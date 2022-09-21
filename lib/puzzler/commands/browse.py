@@ -12,6 +12,7 @@ class Browser:
             points = np.array(puzzler.chain.ChainCode().decode(piece['points']))
             approx  = cv.approxPolyDP(points, epsilon, True)
             self.poly = np.squeeze(approx)
+            self.poly = np.concatenate((self.poly, self.poly[:1,:]))
 
             ll = np.min(self.poly, 0)
             ur = np.max(self.poly, 0)
@@ -19,6 +20,7 @@ class Browser:
             self.label  = piece['label']
 
             # print(f"{self.poly=} {self.bbox=} {self.label=}")
+            # print(f"{self.poly[:1,:]=}")
 
     def __init__(self, puzzle):
 
