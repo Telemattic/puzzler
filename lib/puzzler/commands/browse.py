@@ -51,8 +51,8 @@ class Browser:
     def render(self, graph):
 
         for i, o in enumerate(self.outlines):
-            x = (i %  self.cols) * self.tile_w
-            y = (i // self.cols) * self.tile_h
+            x = (i %  self.cols) * self.tile_w + self.tile_w // 2
+            y = (i // self.cols) * self.tile_h + self.tile_h // 2
 
             # want the corners of the outline bbox centered within the tile
             bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
