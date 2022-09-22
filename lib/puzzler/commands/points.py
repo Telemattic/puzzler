@@ -209,11 +209,10 @@ def points_update(args):
 
         print(source['path'])
 
-        scan = puzzler.segment.Segmenter.Scan(source['path'], source['scale'])
+        scan = puzzler.segment.Segmenter.Scan(source['path'])
         for piece in pieces:
             image = scan.get_subimage(piece['source']['rect'])
             pc = PerimeterComputer(image)
-            print(f"{pc.contour=}")
             piece['points'] = puzzler.chain.ChainCode().encode(np.squeeze(pc.contour))
     
     puzzler.file.save(args.puzzle, puzzle)

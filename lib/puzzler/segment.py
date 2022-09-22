@@ -1,5 +1,4 @@
 import cv2 as cv
-import json
 import numpy as np
 import os
 import PySimpleGUI as sg
