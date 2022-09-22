@@ -201,9 +201,18 @@ class TabComputer:
                 continue
 
             overlaps = False
+
+            n = len(self.perimeter.points)
             a0, b0 = ellipse['indexes']
+            if b0 < a0:
+                b0 += n
+                
             for e in self.ellipses:
+                
                 a1, b1 = e['indexes']
+                if b1 < a1:
+                    b1 += n
+                    
                 if a1 < b0 and a0 < b1:
                     overlaps = True
                     print("outdent ellipse overlaps previously found ellipse")
@@ -409,7 +418,7 @@ class EllipseFitter:
                 for i, ellipse in enumerate(self.ellipses):
                     poly = ellipse['poly']
                     angles = ellipse['angles']
-                    print(f"{i}: x,y={poly[0]:5.1f},{poly[1]:5.1f} angles={angles[0]:5.1f},{angles[1]:5.1f} indexes={ellipse['indexes']}")
+                    print(f"{i}: x,y={poly[0]:7.1f},{poly[1]:7.1f} angles={angles[0]:6.1f},{angles[1]:6.1f} indexes={ellipse['indexes']}")
                     pts = get_ellipse_pts(poly, npts=20)
                     pts = list(zip(pts[0], pts[1]))
                     # print(f"  {pts=}")

@@ -10,21 +10,19 @@ class Segmenter:
 
     class Scan:
         
-        def __init__(self, path, scale):
+        def __init__(self, path):
             self.path  = path
-            self.scale = scale
             self.image = cv.imread(self.path)
             assert(self.image is not None)
 
         def get_subimage(self, rect, pad=50):
 
             h, w = self.image.shape[0], self.image.shape[1]
-            s = self.scale
             rx, ry, rw, rh = rect
-            x0 = max(rx * s - pad, 0)
-            y0 = max(ry * s - pad, 0)
-            x1 = min((rx + rw) * s + pad, w)
-            y1 = min((ry + rh) * s + pad, h)
+            x0 = max(rx - pad, 0)
+            y0 = max(ry - pad, 0)
+            x1 = min(rx + rw + pad, w)
+            y1 = min(ry + rh + pad, h)
             subimage = self.image[y0:y1,x0:x1]
             return np.rot90(subimage,-1)
 
@@ -35,7 +33,7 @@ class Segmenter:
     def segment_images(self, puzzle):
 
         updated_pieces = []
-        for i, s in enumerate(puzzle['sources']):
+        for i, s in puzzle['sources'].items():
             pieces = [p for p in puzzle['pieces'] if p['source']['id'] == i]
             updated_pieces += self.segment_image(source, pieces)
 
@@ -43,7 +41,7 @@ class Segmenter:
 
     def segment_image(self, source, pieces):
 
-        scan = Scan(source['path'], source['scale'])
+        scan = Scan(source['path'])
         print(f"{scan.path}")
 
         retval = []
@@ -79,17 +77,21 @@ class SegmenterUI:
         w, h = img.shape[1], img.shape[0]
         self.image_raw = (w, h)
 
+        self.max_w = 1200
+        self.max_h = 800
+
         s = 1
-        if w > 1024 or h > 1024:
-            s = (max(w,h) + 1023) // 1024
+        if w > self.max_w or h > self.max_h:
+            s = max((w + self.max_w - 1)//self.max_w,
+                    (h + self.max_h - 1)//self.max_h)
             w //= s
             h //= s
 
         self.image_size  = (w,h)
         self.image_scale = s
 
-        source['scale'] = s
-        source['size'] = [w, h]
+        # source['scale'] = s
+        # source['size'] = [w, h]
 
         print(f"image={self.image_raw}")
         print(f"scale={self.image_scale} -> {self.image_size}")
@@ -117,7 +119,12 @@ class SegmenterUI:
 
         self.contours = contours
 
-        self.rects   = [cv.boundingRect(c) for c in contours]
+        self.rects = []
+        for c in contours:
+            s = self.image_scale
+            rx, ry, rw, rh = cv.boundingRect(c)
+            self.rects.append((rx*s, ry*s, rw*s, rh*s))
+            
         print(f"{self.rects=}")
 
         self.labels  = [''] * len(self.rects)
@@ -139,6 +146,9 @@ class SegmenterUI:
         piece = None
 
         x, y = xy
+        s = self.image_scale
+        x *= s
+        y *= s
 
         for i, rect in enumerate(self.rects):
 
@@ -190,26 +200,28 @@ class SegmenterUI:
             points = [tuple(xy) for xy in np.squeeze(contour)]
             graph.draw_lines(points, color='red', width=2)
 
-        for r in self.rects:
-            tl = (r[0], r[1])
-            br = (r[0]+r[2], r[1]+r[3])
+        s = self.image_scale
+        for rect in self.rects:
+            rx, ry, rw, rh = rect
+            tl = (rx / s, ry /s)
+            br = ((rx + rw)/s, (ry+rh)/s)
             graph.draw_rectangle(tl, br, line_color='yellow')
 
         for i, l in enumerate(self.labels):
             if l == '':
                 continue
 
-            r = self.rects[i]
-            x = r[0] + r[2] // 2
-            y = r[1] + r[3] // 2
-            graph.draw_text(l, (x,y), color='yellow')
+            rx, ry, rw, rh = self.rects[i]
+            x = (rx + rw // 2) // s
+            y = (ry + rh // 2) // s
+            graph.draw_text(l, (x,y), font=('Courier', 16, 'bold'), color='yellow')
 
     def ui(self):
 
         layout = [
-            [sg.Graph(canvas_size=(1024,1024),
-                      graph_bottom_left = (0,1023),
-                      graph_top_right = (1023,0),
+            [sg.Graph(canvas_size=(self.max_w,self.max_h),
+                      graph_bottom_left = (0, self.max_h),
+                      graph_top_right = (self.max_w, 0),
                       background_color='black',
                       key='graph',
                       enable_events=True,

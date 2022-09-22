@@ -4,9 +4,9 @@ def scan_add(args):
 
     puzzle = puzzler.file.load(args.puzzle)
 
-    id = len(puzzle['sources'])
+    id = puzzler.file.path_to_id(args.image)
     source = {'path': args.image}
-    puzzle['sources'].append(source)
+    puzzle['sources'][id] = source
 
     s = puzzler.segment.SegmenterUI(puzzle, id)
     s.ui()
@@ -26,7 +26,7 @@ def scan_list(args):
 
     puzzle = puzzler.file.load(args.puzzle)
 
-    for i, s in enumerate(puzzle['sources']):
+    for i, s in puzzle['sources'].items():
         print(f"{i}: {s['path']}")
 
 def scan_output(args):
@@ -46,7 +46,7 @@ def add_parser(commands):
     parser_add.set_defaults(func=scan_add)
 
     parser_edit = commands.add_parser("edit", help="edit an image")
-    parser_edit.add_argument("id", help="id of image to edit", type=int)
+    parser_edit.add_argument("id", help="id of image to edit")
     parser_edit.set_defaults(func=scan_edit)
 
     parser_list = commands.add_parser("list", help="list images")
