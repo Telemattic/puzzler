@@ -52,12 +52,13 @@ class Browser:
             cols += 1
 
         self.cols = cols
+        self.rows = compute_rows(cols)
 
         self.tile_w = max_w // cols
         self.tile_h = self.tile_w * bbox_h // bbox_w
         self.scale  = min(self.tile_w / bbox_w, self.tile_h / bbox_h)
         self.width  = self.tile_w * self.cols
-        self.height = self.tile_h * self.cols
+        self.height = self.tile_h * self.rows
 
     def render(self, graph):
 
