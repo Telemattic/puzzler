@@ -1,3 +1,5 @@
+import bisect
+import cv2 as cv
 import math
 import numpy as np
 import PySimpleGUI as sg
@@ -23,20 +25,85 @@ class AffineTransform:
 
     def copy(self):
         return AffineTransform(self.angle, tuple(self.dxdy))
+
+class Perimeter:
+
+    def __init__(self, points):
+        self.points = points
+        self.index = dict((tuple(xy), i) for i, xy in enumerate(points))
+
+class ApproxPoly:
+
+    def __init__(self, perimeter, epsilon):
+        approx = cv.approxPolyDP(perimeter.points, epsilon, True)
+        poly = list(perimeter.index[tuple(xy)] for xy in np.squeeze(approx))
+
+        reset = None
+        for i in range(1,len(poly)):
+            if poly[i-1] > poly[i]:
+                assert reset is None
+                reset = i
+            else:
+                assert poly[i-1] < poly[i]
+                
+        if reset:
+            poly = poly[reset:] + poly[:reset]
+
+        self.perimeter = perimeter
+        self.indexes = poly
+
+    def normal_at_index(self, perimeter_index):
+
+        j = bisect.bisect_left(self.indexes, perimeter_index)
+
+        n = len(self.indexes)
+        a = self.indexes[j-1]
+        b = self.indexes[j%n]
+
+        # print(f"normal_at_index: {perimeter_index=} -> {j=} {n=} {a=} {b=}")
+        
+        p1 = self.perimeter.points[a]
+        p2 = self.perimeter.points[b]
+        uv = p2 - p1
+        # print(f"{p1=} {p2=} {uv=} {np.linalg.norm(uv)=} {uv / np.linalg.norm(uv)=}")
+        uv = uv / np.linalg.norm(uv)
+        return uv @ np.array(((0., 1.), (-1., 0.)))
+
+    def distance_to_line_equation(self, perimeter_index):
+
+        j = bisect.bisect_left(self.indexes, i)
+        
+        x1, y1 = self.perimeter.points[j]
+        x2, y2 = self.perimeter.points[(j+1) % len(self.indexes)]
+
+        a = y1 - y2
+        b = x2 - x1
+        c = x1 * y2 - x2 * y1
+        inv_l = 1. / math.hypot(a, b)
+
+        assert a * x1 + b * y1 + c == 0
+        assert a * x2 + b * y2 + c == 0
+
+        return (a * inv_l, b * inv_l, c * inv_l)
         
 class Piece:
 
     def __init__(self, data):
 
-        contour = puzzler.chain.ChainCode().decode(data['points'])
-        contour = np.array(contour, dtype=np.float64)
-        self.points = contour - np.mean(contour, axis=0)
+        points = np.array(puzzler.chain.ChainCode().decode(data['points']), dtype=np.int32)
+        self.points = points - np.array(np.mean(points, axis=0), dtype=np.int32)
+        self.perimeter = Perimeter(self.points)
+        self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
         self.kdtree = scipy.spatial.KDTree(self.points)
 
     def dist(self, xy):
         xy = self.coords.to_local_xy(xy)
         return self.kdtree.query(xy, distance_upper_bound=20)
+
+    def normal_at_index(self, i):
+        uv = self.approx.normal_at_index(i)
+        return uv @ self.coords.rot_matrix()
 
 class DragHandle:
 
@@ -267,11 +334,25 @@ class AlignUI:
         data0 = points0[self.keep0]
         data1 = points1[self.keep1]
         
-        for xy in data0:
+        normal0 = [piece0.normal_at_index(i) for i in self.keep0]
+        normal1 = [piece1.normal_at_index(i) for i in self.keep1]
+
+        for i, xy in enumerate(data0):
             graph.draw_point(tuple(xy), color='purple', size=17)
+            graph.draw_text(f"{i}", tuple(xy), color='purple')
+            uv = np.array(normal0[i])
+            graph.draw_line(tuple(xy), tuple(xy + uv*50), color='black')
             
-        for xy in data1:
+        for i, xy in enumerate(data1):
             graph.draw_point(tuple(xy), color='purple', size=17)
+            graph.draw_text(f"{i}", tuple(xy), color='purple')
+            uv = np.array(normal1[i])
+            graph.draw_line(tuple(xy), tuple(xy + uv*50), color='black')
+
+        for i in range(len(data0)):
+            uv0 = normal0[i]
+            uv1 = normal1[i]
+            print(f"{i}: p0_xy={data0[i]} p0_uv={uv0[0]:+6.3f},{uv0[1]:+6.3f} p1_xy={data1[i]} p1_uv={uv1[0]:+6.3f},{uv1[1]:+6.3f}")
 
         print(f"{data0=}")
         print(f"{data1=}")
