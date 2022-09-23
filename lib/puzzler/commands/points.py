@@ -24,10 +24,10 @@ class PerimeterComputer:
         
         gray     = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-        gray     = cv.medianBlur(gray, 7)
-        gray     = cv.GaussianBlur(gray, (3,3), 0)
+        # gray     = cv.medianBlur(gray, 7)
+        # gray     = cv.GaussianBlur(gray, (3,3), 0)
         
-        thresh   = 255 - cv.threshold(gray, 60, 255, cv.THRESH_BINARY_INV)[1]
+        thresh   = 255 - cv.threshold(gray, 107, 255, cv.THRESH_BINARY_INV)[1]
         # thresh   = cv.medianBlur(thresh, 29)
 
         self._add_temp_image("color.png", img, 'Source')
@@ -61,7 +61,7 @@ class PerimeterUI:
         source_id = piece['source']['id']
         source = puzzle['sources'][source_id]
 
-        scan = puzzler.segment.Segmenter.Scan(source['path'], source['scale'])
+        scan = puzzler.segment.Segmenter.Scan(source['path'])
         image = scan.get_subimage(piece['source']['rect'])
 
         self.pc = PerimeterComputer(image, True)
