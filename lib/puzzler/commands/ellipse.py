@@ -117,7 +117,6 @@ class PerimeterLoader:
 
     def __init__(self, piece):
         points = np.array(puzzler.chain.ChainCode().decode(piece['points']))
-        # dtype=np.float32)
         ll = np.min(points, 0)
         ur = np.max(points, 0)
         print(f"{points=} {ll=} {ur=}")
@@ -133,6 +132,12 @@ class ApproxPolyComputer:
         self.indexes = self._compute_poly(perimeter, epsilon)
         self.signed_area = self._compute_signed_areas(perimeter, self.indexes)
 
+    def curvature_runs(self):
+
+        indexes, signed_area = self.indexes, self.signed_area
+        signs = [(area > 0, i) for i, area in zip(indexes, signed_area)]
+        return [(k,list(i for _, i in g)) for k, g in itertools.groupby(signs, key=operator.itemgetter(0))]
+    
     @staticmethod
     def _compute_poly(perimeter, epsilon):
         
@@ -174,11 +179,7 @@ class TabComputer:
         self.perimeter = perimeter
         self.approx_poly = ApproxPolyComputer(self.perimeter, epsilon)
 
-        self.curvature_runs()
-        
         self.ellipses = []
-
-        runs = self.curvature_runs()
 
         for defect in self.compute_convexity_defects():
 
@@ -192,7 +193,8 @@ class TabComputer:
             
             self.ellipses.append(ellipse)
 
-        for in_out, indices in runs:
+        for in_out, indices in self.approx_poly.curvature_runs():
+
             if in_out:
                 continue
             
@@ -222,12 +224,6 @@ class TabComputer:
             
             self.ellipses.append(ellipse)
             
-    def curvature_runs(self):
-
-        indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
-        signs = [(area > 0, i) for i, area in zip(indexes, signed_area)]
-        return [(k,list(i for _, i in g)) for k, g in itertools.groupby(signs,key=operator.itemgetter(0))]
-
     def fit_ellipse_to_outdent(self, l, r):
         
         print(f"fit_ellipse_to_outdent: {l=} {r=}")
@@ -322,6 +318,61 @@ class TabComputer:
         convex_hull = cv.convexHull(self.perimeter.points, returnPoints=False)
         return np.squeeze(cv.convexityDefects(self.perimeter.points, convex_hull))
 
+class LineComputerRubbish:
+
+    def __init__(self, perimeter):
+        
+        bbox = perimeter.bbox
+        points = perimeter.points - np.array((bbox[0], bbox[1]))
+        x0, y0 = bbox[0], bbox[1]
+        w, h = bbox[2]+1-x0, bbox[3]+1-y0
+        print(f"LineComputer: {w=} {h=}")
+        img = np.zeros((h,w), dtype=np.uint8)
+        x, y = points[:,0], points[:,1]
+        img[y,x] = 255
+
+        lines = cv.HoughLinesP(img, 1, math.pi/180, 25, 250, 10)
+        print(f"  {np.squeeze(lines)=}")
+
+        self.lines = [(a+x0, b+y0, c+x0, d+y0) for a, b, c, d in np.squeeze(lines)]
+        print(f"  {self.lines=}")
+
+class LineComputer:
+
+    def __init__(self, perimeter, approx_poly):
+
+        self.perimeter = perimeter
+
+        longest = (0, None, None)
+        for in_out, indices in approx_poly.curvature_runs():
+
+            if in_out:
+                continue
+
+            for a, b in zip(indices, indices[1:]):
+                l = self.length(a, b)
+                if longest[0] < l:
+                    longest = (l, a, b)
+
+        print(f"{longest=}")
+
+        points = self.perimeter.points[longest[1]:longest[2]]
+
+        line = cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01)
+
+        print(f"{line=}")
+
+        l = longest[0] * .5
+        vx, vy, x0, y0 = np.squeeze(line)
+
+        self.lines = [(x0-l*vx, y0-l*vy, x0+l*vx, y0+l*vy)]
+
+    def length(self, a, b):
+
+        p0 = self.perimeter.points[a]
+        p1 = self.perimeter.points[b]
+        return np.linalg.norm(p0 - p1)
+        
 class EllipseFitter:
 
     def __init__(self, puzzle, label):
@@ -332,12 +383,14 @@ class EllipseFitter:
                 piece = p
         assert piece is not None
 
+        self.label = label
         self.perimeter = PerimeterLoader(piece)
         self.epsilon  = 10.
         self.convex_hull = None
         self.approx_pts = None
         self.convexity_defects = None
         self.ellipses = None
+        self.lines = None
 
     def approx_poly(self):
 
@@ -369,6 +422,9 @@ class EllipseFitter:
     def ellipsify(self):
         tab_computer = TabComputer(self.perimeter, self.epsilon)
         self.ellipses = tab_computer.ellipses
+
+        line_computer = LineComputer(self.perimeter, tab_computer.approx_poly)
+        self.lines = line_computer.lines
         
         self.render()
 
@@ -425,6 +481,12 @@ class EllipseFitter:
                     graph.draw_lines(pts, color='blue', width=2)
                     graph.draw_text(f"{i}", (poly[0], poly[1]), color='red')
 
+        if self.lines is not None:
+            for line in self.lines:
+                pt1 = (line[0], line[1])
+                pt2 = (line[2], line[3])
+                graph.draw_line(pt1, pt2, color='red', width='1')
+
     def run(self):
 
         render_layout = [
@@ -472,7 +534,7 @@ class EllipseFitter:
             [sg.Frame('Approx', [approx_layout])],
             [sg.Frame('Tabs',   [tabs_layout])]
         ]
-        self.window = sg.Window('Ellipse Fitter', layout, finalize=True)
+        self.window = sg.Window(f"Ellipse Fitter ({self.label})", layout, finalize=True)
         self.render()
 
         while True:
