@@ -343,20 +343,42 @@ class LineComputer:
 
         self.perimeter = perimeter
 
+        for i, (j, k) in enumerate(zip(approx_poly.indexes, approx_poly.signed_area)):
+            print(f"{i:2d}: {j:4d} {'in' if k > 0 else 'out'}")
+
+        runs = approx_poly.curvature_runs()
+
         longest = (0, None, None)
-        for in_out, indices in approx_poly.curvature_runs():
+        if not runs[0][0] and not runs[-1][0]:
+            a = runs[-1][1][-1]
+            b = runs[0][1][0]
+            l = self.length(a, b)
+            print(f"{a=} {b=} {l=:.1f}")
+            if longest[0] < l:
+                longest = (l, a, b)
+        
+        for in_out, indices in runs:
 
             if in_out:
                 continue
 
+            # n = len(indices)
+            # for i in range(n):
+            #   a = indices[i]
+            #   b = indices[(i+1)%n]
             for a, b in zip(indices, indices[1:]):
                 l = self.length(a, b)
+                print(f"{a=} {b=} {l=:.1f}")
                 if longest[0] < l:
                     longest = (l, a, b)
 
         print(f"{longest=}")
 
-        points = self.perimeter.points[longest[1]:longest[2]]
+        if longest[1] < longest[2]:
+            points = self.perimeter.points[longest[1]:longest[2]]
+        else:
+            points = np.vstack((self.perimeter.points[longest[1]:],self.perimeter.points[:longest[2]]))
+            print(f"{points=}")
 
         line = cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01)
 
@@ -435,13 +457,13 @@ class EllipseFitter:
 
         if self.window['render_perimeter'].get():
                 for xy in self.perimeter.points:
-                    graph.draw_point(tuple(xy), size=1, color='yellow')
+                    graph.draw_point(tuple(xy), size=1, color='black')
 
         if self.window['render_convex_hull'].get():
             if self.convex_hull is not None:
                 xy_tuples = list(tuple(i) for i in self.convex_hull)
                 xy_tuples.append(xy_tuples[0])
-                graph.draw_lines(xy_tuples, color='yellow', width=1)
+                graph.draw_lines(xy_tuples, color='black', width=1)
 
         if self.window['render_ellipse_points'].get():
             if self.ellipses is not None:
@@ -485,7 +507,7 @@ class EllipseFitter:
             for line in self.lines:
                 pt1 = (line[0], line[1])
                 pt2 = (line[2], line[3])
-                graph.draw_line(pt1, pt2, color='red', width='1')
+                graph.draw_line(pt1, pt2, color='blue', width='2')
 
     def run(self):
 
@@ -527,7 +549,7 @@ class EllipseFitter:
             [sg.Graph(canvas_size=(int(w * s), int(h * s)),
                       graph_bottom_left = (bbox[0],bbox[3]),
                       graph_top_right = (bbox[2],bbox[1]),
-                      background_color='black',
+                      background_color='white',
                       key='graph',
                       enable_events=True)],
             [sg.Frame('Render', [render_layout])],
