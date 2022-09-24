@@ -180,6 +180,23 @@ class PerimeterComputer:
         maxdist = np.max(dist)
         plot_points = [(i,v) for i, v in enumerate(dist * (100 / maxdist))]
         trace.draw_lines(plot_points, color='purple')
+
+    def draw_trace3(self):
+
+        trace = self.window['trace']
+
+        points = self.perimeter_points
+        slopes = np.diff(points, axis=0)
+        kernel = np.ones(20)
+        kernel = scipy.signal.firwin(63, .025)
+        print(f"{slopes=} {kernel=}")
+        x_avg  = np.convolve(slopes[:,0], kernel, mode='same')
+        y_avg  = np.convolve(slopes[:,1], kernel, mode='same')
+        print(f"{x_avg=} {y_avg=}")
+        slopes = np.arctan2(y_avg, x_avg)
+
+        plot_points = [(i, v) for i, v in enumerate(slopes * (40 / math.pi) + 50)]
+        trace.draw_lines(plot_points, color='red')
         
     def render(self):
 
@@ -192,6 +209,8 @@ class PerimeterComputer:
         graph.draw_image(filename=path, location=(0,0))
 
         self.draw_trace2()
+        
+        self.draw_trace3()
 
         if self.window['render_histogram'].get():
             self.draw_histogram()
