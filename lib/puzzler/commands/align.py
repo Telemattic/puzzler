@@ -279,6 +279,24 @@ class AlignUI:
 
         return np.linalg.lstsq(A, u, rcond=None)
 
+    @staticmethod
+    def icp(d, n, s):
+        m = d.shape[0]
+        assert d.shape == n.shape == s.shape == (m, 2)
+
+        a = s[:,0]*n[:,1] - s[:,1]*n[:,0]
+        a = a.reshape((m,1))
+        A = np.hstack((a, n))
+
+        # n dot (d-s)
+        v = np.sum(n * (d-s), axis=1)
+
+        # print(f"icp: {d=} {n=} {s=}")
+        # print(f"  {A=}")
+        # print(f"  {v=}")
+
+        return np.linalg.lstsq(A, v, rcond=None)
+
     def do_fit(self):
         
         print("Fit!")
@@ -334,8 +352,8 @@ class AlignUI:
         data0 = points0[self.keep0]
         data1 = points1[self.keep1]
         
-        normal0 = [piece0.normal_at_index(i) for i in self.keep0]
-        normal1 = [piece1.normal_at_index(i) for i in self.keep1]
+        normal0 = np.array([piece0.normal_at_index(i) for i in self.keep0])
+        normal1 = np.array([piece1.normal_at_index(i) for i in self.keep1])
 
         for i, xy in enumerate(data0):
             graph.draw_point(tuple(xy), color='purple', size=17)
@@ -349,16 +367,33 @@ class AlignUI:
             uv = np.array(normal1[i])
             graph.draw_line(tuple(xy), tuple(xy + uv*50), color='black')
 
-        for i in range(len(data0)):
-            uv0 = normal0[i]
-            uv1 = normal1[i]
-            print(f"{i}: p0_xy={data0[i]} p0_uv={uv0[0]:+6.3f},{uv0[1]:+6.3f} p1_xy={data1[i]} p1_uv={uv1[0]:+6.3f},{uv1[1]:+6.3f}")
+        if False:
+            for i in range(len(data0)):
+                uv0 = normal0[i]
+                uv1 = normal1[i]
+                print(f"{i}: p0_xy={data0[i]} p0_uv={uv0[0]:+6.3f},{uv0[1]:+6.3f} p1_xy={data1[i]} p1_uv={uv1[0]:+6.3f},{uv1[1]:+6.3f}")
 
-        print(f"{data0=}")
-        print(f"{data1=}")
+        # print(f"{data0=}")
+        # print(f"{data1=}")
 
-        print(f"umeyama: {self.umeyama(data0, data1)}")
-        print(f"eldridge: {self.eldridge(data0, data1)}")
+        # print(f"umeyama: {self.umeyama(data0, data1)}")
+        # print(f"eldridge: {self.eldridge(data0, data1)}")
+
+        data1 = data1 - piece1.coords.dxdy
+
+        theta, tx, ty = self.icp(data0, normal0, data1)[0]
+        dxdy = np.array((tx,ty))
+        print(f"icp: theta={theta*180/math.pi:.3f} degrees, {dxdy=}")
+
+        c = piece1.coords
+        print(f"  before: {c.angle=} {c.dxdy=}")
+
+        c.angle += theta
+        c.dxdy   = dxdy
+
+        print(f"  after:  {c.angle=} {c.dxdy=}")
+        
+        self.render()
         
     def _init_ui(self):
         
@@ -402,7 +437,13 @@ class AlignUI:
 def align_ui(args):
 
     puzzle = puzzler.file.load(args.puzzle)
-    pieces = [Piece(p) for p in puzzle['pieces'] if p['label'] in args.labels]
+
+    by_label = dict()
+    for p in puzzle['pieces']:
+        l = p['label']
+        by_label[l] = p
+
+    pieces = [Piece(by_label[l]) for l in args.labels]
     
     ui = AlignUI(pieces)
     ui.run()
