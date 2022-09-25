@@ -45,6 +45,8 @@ class PerimeterComputer:
         
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         
+        gray = cv.medianBlur(gray, 7)
+
         self.images.add('gray.png', gray, 'Gray')
 
         thresh = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
@@ -188,14 +190,24 @@ class PerimeterComputer:
         points = self.perimeter_points
         slopes = np.diff(points, axis=0)
         kernel = np.ones(20)
-        kernel = scipy.signal.firwin(63, .025)
+        kernel = scipy.signal.firwin(21, .025)
         print(f"{slopes=} {kernel=}")
         x_avg  = np.convolve(slopes[:,0], kernel, mode='same')
         y_avg  = np.convolve(slopes[:,1], kernel, mode='same')
         print(f"{x_avg=} {y_avg=}")
         slopes = np.arctan2(y_avg, x_avg)
 
-        plot_points = [(i, v) for i, v in enumerate(slopes * (40 / math.pi) + 50)]
+        for i, curr in enumerate(slopes):
+            prev = slopes[i-1]
+            if curr - prev > math.pi:
+                slopes[i] -= 2 * math.pi
+            elif prev - curr > math.pi:
+                slopes[i] += 2 * math.pi
+
+        min_slope = np.min(slopes)
+        max_slope = np.max(slopes)
+            
+        plot_points = [(i, v) for i, v in enumerate((slopes - min_slope)*90/(max_slope-min_slope) + 5)]
         trace.draw_lines(plot_points, color='red')
         
     def render(self):
