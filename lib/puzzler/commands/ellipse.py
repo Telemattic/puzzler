@@ -342,53 +342,52 @@ class LineComputer:
     def __init__(self, perimeter, approx_poly):
 
         self.perimeter = perimeter
+        self.lines = []
 
-        for i, (j, k) in enumerate(zip(approx_poly.indexes, approx_poly.signed_area)):
-            print(f"{i:2d}: {j:4d} {'in' if k > 0 else 'out'}")
+        candidates = []
+        for a, b in self.enumerate_candidates(approx_poly):
+            l = self.length(a, b)
+            candidates.append((l, a, b))
 
+        candidates.sort(reverse=True)
+
+        longest = candidates[0][0]
+        for l, a, b in candidates:
+            if l < longest * 0.5:
+                break
+
+            points = self.points_for_line(a, b)
+            line = cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01)
+            vx, vy, x0, y0 = np.squeeze(line)
+            print(np.squeeze(line))
+            l *= .5
+            self.lines.append((x0-l*vx, y0-l*vy, x0+l*vx, y0+l*vy))
+
+    def points_for_line(self, a, b):
+
+        points = self.perimeter.points
+        if a < b:
+            return points[a:b+1]
+        
+        return np.vstack((points[a:], points[:b+1]))
+            
+    def enumerate_candidates(self, approx_poly):
+        
         runs = approx_poly.curvature_runs()
 
-        longest = (0, None, None)
         if not runs[0][0] and not runs[-1][0]:
             a = runs[-1][1][-1]
             b = runs[0][1][0]
-            l = self.length(a, b)
-            print(f"{a=} {b=} {l=:.1f}")
-            if longest[0] < l:
-                longest = (l, a, b)
+            yield (a,b)
         
         for in_out, indices in runs:
 
             if in_out:
                 continue
 
-            # n = len(indices)
-            # for i in range(n):
-            #   a = indices[i]
-            #   b = indices[(i+1)%n]
             for a, b in zip(indices, indices[1:]):
-                l = self.length(a, b)
-                print(f"{a=} {b=} {l=:.1f}")
-                if longest[0] < l:
-                    longest = (l, a, b)
-
-        print(f"{longest=}")
-
-        if longest[1] < longest[2]:
-            points = self.perimeter.points[longest[1]:longest[2]]
-        else:
-            points = np.vstack((self.perimeter.points[longest[1]:],self.perimeter.points[:longest[2]]))
-            print(f"{points=}")
-
-        line = cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01)
-
-        print(f"{line=}")
-
-        l = longest[0] * .5
-        vx, vy, x0, y0 = np.squeeze(line)
-
-        self.lines = [(x0-l*vx, y0-l*vy, x0+l*vx, y0+l*vy)]
-
+                yield (a,b)
+        
     def length(self, a, b):
 
         p0 = self.perimeter.points[a]
