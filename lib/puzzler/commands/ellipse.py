@@ -427,94 +427,6 @@ class LineComputer:
         p1 = self.perimeter.points[b]
         return np.linalg.norm(p0 - p1)
 
-class SplineComputer:
-
-    def __init__(self, perimeter, approx):
-
-        points = perimeter.points[approx.indexes]
-        t = np.array(approx.indexes, dtype=np.float32)
-        x, y = np.array(points[:,0], dtype=np.float32), np.array(points[:,1], dtype=np.float32)
-
-        print(f"{t=}\n{x=}\n{y=}")
-
-        if False:
-            x_tck, x_u = scipy.interpolate.splprep([t, x], per=True)
-            y_tck, y_u = scipy.interpolate.splprep([t, y], per=True)
-            print(f"{x_tck=}\n{x_u=}\n{y_tck=}\n{y_u=}")
-        else:
-            x_tck = scipy.interpolate.splrep(t, x, w=np.ones(len(x)), per=False)
-            y_tck = scipy.interpolate.splrep(t, y, w=np.ones(len(x)), per=False)
-            print(f"{x_tck=}\n{y_tck=}")
-
-        xnew = scipy.interpolate.splev(t, x_tck)
-        ynew = scipy.interpolate.splev(t, y_tck)
-
-        print(f"{xnew=}\n{ynew=}")
-        
-        self.points = np.vstack((xnew, ynew)).transpose()
-
-        print(f"{self.points=}")
-
-class CatmullRomComputer:
-
-    def __init__(self, perimeter, approx_poly):
-        points = perimeter.points[approx_poly.indexes]
-        self.points = CatmullRomComputer.catmull_rom_chain(points, 10)
-
-    @staticmethod
-    def num_segments(points):
-        return len(points) - 3
-
-    @staticmethod
-    def catmull_rom_spline(P0, P1, P2, P3, num_points, alpha = 0.5):
-        """
-        Compute the points in the spline segment
-        :param P0, P1, P2, and P3: The (x,y) point pairs that define the Catmull-Rom spline
-        :param num_points: The number of points to include in the resulting curve segment
-        :param alpha: 0.5 for the centripetal spline, 0.0 for the uniform spline, 1.0 for the chordal spline.
-        :return: The points
-        """
-
-        # Calculate t0 to t4. Then only calculate points between P1 and P2.
-        # Reshape linspace so that we can multiply by the points P0 to P3
-        # and get a point for each value of t.
-        def tj(ti: float, pi: tuple, pj: tuple) -> float:
-            xi, yi = pi
-            xj, yj = pj
-            dx, dy = xj - xi, yj - yi
-            l = (dx ** 2 + dy ** 2) ** 0.5
-            return ti + l ** alpha
-
-        t0 = 0.0
-        t1 = tj(t0, P0, P1)
-        t2 = tj(t1, P1, P2)
-        t3 = tj(t2, P2, P3)
-        t = np.linspace(t1, t2, num_points).reshape(num_points, 1)
-
-        A1 = (t1 - t) / (t1 - t0) * P0 + (t - t0) / (t1 - t0) * P1
-        A2 = (t2 - t) / (t2 - t1) * P1 + (t - t1) / (t2 - t1) * P2
-        A3 = (t3 - t) / (t3 - t2) * P2 + (t - t2) / (t3 - t2) * P3
-        B1 = (t2 - t) / (t2 - t0) * A1 + (t - t0) / (t2 - t0) * A2
-        B2 = (t3 - t) / (t3 - t1) * A2 + (t - t1) / (t3 - t1) * A3
-        return (t2 - t) / (t2 - t1) * B1 + (t - t1) / (t2 - t1) * B2
-    
-    @staticmethod
-    def catmull_rom_chain(points, num_points):
-        """
-        Calculate Catmull-Rom for a sequence of initial points and return the combined curve.
-        :param points: Base points from which the quadruples for the algorithm are taken
-        :param num_points: The number of points to include in each curve segment
-        :return: The chain of all points (points of all segments)
-        """
-        point_quadruples = (
-            (points[idx_segment_start + d] for d in range(4))
-            for idx_segment_start in range(CatmullRomComputer.num_segments(points))
-        )
-        all_splines = (CatmullRomComputer.catmull_rom_spline(*q, num_points) for q in point_quadruples)
-
-        return [chain_point for spline in all_splines for chain_point in spline]  # flatten
-
-        
 class EllipseFitter:
 
     def __init__(self, puzzle, label):
@@ -533,7 +445,6 @@ class EllipseFitter:
         self.convexity_defects = None
         self.ellipses = None
         self.lines = None
-        self.spline_points = None
 
     def approx_poly(self):
 
@@ -569,11 +480,6 @@ class EllipseFitter:
         line_computer = LineComputer(self.perimeter, tab_computer.approx_poly)
         self.lines = line_computer.lines
 
-        # spline_computer = SplineComputer(self.perimeter, tab_computer.approx_poly)
-        # self.spline_points = spline_computer.points
-        crc = CatmullRomComputer(self.perimeter, tab_computer.approx_poly)
-        self.spline_points = crc.points
-        
         self.render()
 
     def render(self):
@@ -642,10 +548,6 @@ class EllipseFitter:
                     pt2 = (line[2], line[3])
                     graph.draw_line(pt1, pt2, color='blue', width='2')
 
-        if self.window['render_splines'].get():
-            if self.spline_points is not None:
-                graph.draw_lines(self.spline_points, color='green', width='2')
-
     def run(self):
 
         render_layout = [
@@ -668,7 +570,6 @@ class EllipseFitter:
             sg.CB('Points', default=True, enable_events=True, key='render_ellipse_points'),
             sg.CB('Ellipses', default=True, enable_events=True, key='render_ellipses'),
             sg.CB('Lines', default=True, enable_events=True, key='render_lines'),
-            sg.CB('Splines', default=True, enable_events=True, key='render_splines')
         ]
 
         bbox = list(self.perimeter.bbox)
@@ -720,10 +621,12 @@ def ellipse_ui(args):
 
     puzzle = puzzler.file.load(args.puzzle)
     ui = EllipseFitter(puzzle, args.label)
+    ui.epsilon = args.epsilon
     ui.run()
 
 def add_parser(commands):
     
     parser_ellipse = commands.add_parser("ellipse", help="ellipsify pieces")
     parser_ellipse.add_argument("label")
+    parser_ellipse.add_argument("-e", "--epsilon", default=10.0, type=float, help="epsilon for approximating polygon")
     parser_ellipse.set_defaults(func=ellipse_ui)
