@@ -119,10 +119,10 @@ class PerimeterLoader:
         points = np.array(puzzler.chain.ChainCode().decode(piece['points']))
         ll = np.min(points, 0)
         ur = np.max(points, 0)
-        print(f"{points=} {ll=} {ur=}")
+        # print(f"{points=} {ll=} {ur=}")
         self.bbox   = tuple(ll.tolist() + ur.tolist())
         self.points = points
-        print(f"{self.bbox=} {self.points.shape=}")
+        # print(f"{self.bbox=} {self.points.shape=}")
         self.index = dict((tuple(xy), i) for i, xy in enumerate(points))
 
 class ApproxPolyComputer:
@@ -318,25 +318,6 @@ class TabComputer:
         convex_hull = cv.convexHull(self.perimeter.points, returnPoints=False)
         return np.squeeze(cv.convexityDefects(self.perimeter.points, convex_hull))
 
-class LineComputerRubbish:
-
-    def __init__(self, perimeter):
-        
-        bbox = perimeter.bbox
-        points = perimeter.points - np.array((bbox[0], bbox[1]))
-        x0, y0 = bbox[0], bbox[1]
-        w, h = bbox[2]+1-x0, bbox[3]+1-y0
-        print(f"LineComputer: {w=} {h=}")
-        img = np.zeros((h,w), dtype=np.uint8)
-        x, y = points[:,0], points[:,1]
-        img[y,x] = 255
-
-        lines = cv.HoughLinesP(img, 1, math.pi/180, 25, 250, 10)
-        print(f"  {np.squeeze(lines)=}")
-
-        self.lines = [(a+x0, b+y0, c+x0, d+y0) for a, b, c, d in np.squeeze(lines)]
-        print(f"  {self.lines=}")
-
 class LineComputer:
 
     def __init__(self, perimeter, approx_poly):
@@ -359,7 +340,6 @@ class LineComputer:
             points = self.points_for_line(a, b)
             line = cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01)
             vx, vy, x0, y0 = np.squeeze(line)
-            print(np.squeeze(line))
             l *= .5
             self.lines.append((x0-l*vx, y0-l*vy, x0+l*vx, y0+l*vy))
 
@@ -422,13 +402,13 @@ class EllipseFitter:
         convex_hull = cv.convexHull(points, returnPoints=False)
         self.convex_hull = np.squeeze(points[convex_hull])
 
-        print(f"{points=}")
-        print(f"{convex_hull=}")
+        # print(f"{points=}")
+        # print(f"{convex_hull=}")
 
         self.convexity_defects = []
         convexity_defects = cv.convexityDefects(points, convex_hull)
 
-        print(f"{convexity_defects=}")
+        # print(f"{convexity_defects=}")
         for defect in np.squeeze(convexity_defects):
             p0 = tuple(points[defect[0]])
             p1 = tuple(points[defect[1]])
@@ -542,7 +522,7 @@ class EllipseFitter:
         if max(w,h) > 800:
             s = 800 / max(w,h)
 
-        print(f"{w=} {h=} {s=}")
+        # print(f"{w=} {h=} {s=}")
         
         layout = [
             [sg.Graph(canvas_size=(int(w * s), int(h * s)),
