@@ -336,12 +336,12 @@ class TabComputer:
         convex_hull = cv.convexHull(self.perimeter.points, returnPoints=False)
         return np.squeeze(cv.convexityDefects(self.perimeter.points, convex_hull))
 
-class LineComputer:
+class EdgeComputer:
 
     def __init__(self, perimeter, approx_poly):
 
         self.perimeter = perimeter
-        self.lines = []
+        self.edges = []
 
         candidates = []
         for a, b in self.enumerate_candidates(approx_poly):
@@ -356,10 +356,10 @@ class LineComputer:
                 break
 
             points = self.points_for_line(a, b)
-            line = cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01)
-            vx, vy, x0, y0 = np.squeeze(line)
+            line = np.squeeze(cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01))
+            v, c = line[:2], line[2:]
             l *= .5
-            self.lines.append((x0-l*vx, y0-l*vy, x0+l*vx, y0+l*vy))
+            self.edges.append({'fit_indexes':(a,b), 'line':puzzler.geometry.Line(c-v*l, c+v*l)})
 
     def points_for_line(self, a, b):
 
@@ -409,7 +409,7 @@ class EllipseFitter:
         self.approx_pts = None
         self.convexity_defects = None
         self.tabs = None
-        self.lines = None
+        self.edges = None
 
     def approx_poly(self):
 
@@ -442,10 +442,12 @@ class EllipseFitter:
         tab_computer = TabComputer(self.perimeter, self.epsilon)
         self.tabs = tab_computer.tabs
 
-        line_computer = LineComputer(self.perimeter, tab_computer.approx_poly)
-        self.lines = line_computer.lines
+        edge_computer = EdgeComputer(self.perimeter, tab_computer.approx_poly)
+        self.edges = edge_computer.edges
 
         self.render()
+
+        print(f"tabs={self.tabs}\nedges={self.edges}")
 
     def render(self):
 
@@ -504,11 +506,10 @@ class EllipseFitter:
                         graph.draw_point(p, size=10, color='cyan')
 
         if self.window['render_lines'].get():
-            if self.lines is not None:
-                for line in self.lines:
-                    pt1 = (line[0], line[1])
-                    pt2 = (line[2], line[3])
-                    graph.draw_line(pt1, pt2, color='blue', width='2')
+            if self.edges is not None:
+                for edge in self.edges:
+                    line = edge['line']
+                    graph.draw_line(line.pt0.tolist(), line.pt1.tolist(), color='blue', width='2')
 
     def run(self):
 
