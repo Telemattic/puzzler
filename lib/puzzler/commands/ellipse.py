@@ -6,120 +6,6 @@ import numpy as np
 import operator
 import PySimpleGUI as sg
 import puzzler
-import scipy
-import statistics
-
-# https://scipython.com/blog/direct-linear-least-squares-fitting-of-an-ellipse/
-
-def fit_ellipse(pts):
-    """
-
-    Fit the coefficients a,b,c,d,e,f, representing an ellipse described by
-    the formula F(x,y) = ax^2 + bxy + cy^2 + dx + ey + f = 0 to the provided
-    arrays of data points x=[x1, x2, ..., xn] and y=[y1, y2, ..., yn].
-
-    Based on the algorithm of Halir and Flusser, "Numerically stable direct
-    least squares fitting of ellipses'.
-
-
-    """
-
-    x = pts[:,0]
-    y = pts[:,1]
-    if pts.dtype.kind != 'f':
-        x = np.asarray(x, dtype=np.float32)
-        y = np.asarray(y, dtype=np.float32)
-
-    D1 = np.vstack([x**2, x*y, y**2]).T
-    D2 = np.vstack([x, y, np.ones(len(x))]).T
-    S1 = D1.T @ D1
-    S2 = D1.T @ D2
-    S3 = D2.T @ D2
-    T = -np.linalg.inv(S3) @ S2.T
-    M = S1 + S2 @ T
-    C = np.array(((0, 0, 2), (0, -1, 0), (2, 0, 0)), dtype=float)
-    M = np.linalg.inv(C) @ M
-    eigval, eigvec = np.linalg.eig(M)
-    con = 4 * eigvec[0]* eigvec[2] - eigvec[1]**2
-    ak = eigvec[:, np.nonzero(con > 0)[0]]
-    return np.concatenate((ak, T @ ak)).ravel()
-
-def cart_to_pol(coeffs):
-    """
-
-    Convert the cartesian conic coefficients, (a, b, c, d, e, f), to the
-    ellipse parameters, where F(x, y) = ax^2 + bxy + cy^2 + dx + ey + f = 0.
-    The returned parameters are x0, y0, ap, bp, e, phi, where (x0, y0) is the
-    ellipse centre; (ap, bp) are the semi-major and semi-minor axes,
-    respectively; e is the eccentricity; and phi is the rotation of the semi-
-    major axis from the x-axis.
-
-    """
-
-    # We use the formulas from https://mathworld.wolfram.com/Ellipse.html
-    # which assumes a cartesian form ax^2 + 2bxy + cy^2 + 2dx + 2fy + g = 0.
-    # Therefore, rename and scale b, d and f appropriately.
-    a = coeffs[0]
-    b = coeffs[1] / 2
-    c = coeffs[2]
-    d = coeffs[3] / 2
-    f = coeffs[4] / 2
-    g = coeffs[5]
-
-    den = b**2 - a*c
-    if den > 0:
-        raise ValueError('coeffs do not represent an ellipse: b^2 - 4ac must'
-                         ' be negative!')
-
-    # The location of the ellipse centre.
-    x0, y0 = (c*d - b*f) / den, (a*f - b*d) / den
-
-    num = 2 * (a*f**2 + c*d**2 + g*b**2 - 2*b*d*f - a*c*g)
-    fac = np.sqrt((a - c)**2 + 4*b**2)
-    # The semi-major and semi-minor axis lengths (these are not sorted).
-    ap = np.sqrt(num / den / (fac - a - c))
-    bp = np.sqrt(num / den / (-fac - a - c))
-
-    # Sort the semi-major and semi-minor axis lengths but keep track of
-    # the original relative magnitudes of width and height.
-    width_gt_height = True
-    if ap < bp:
-        width_gt_height = False
-        ap, bp = bp, ap
-
-    # The eccentricity.
-    r = (bp/ap)**2
-    if r > 1:
-        r = 1/r
-    e = np.sqrt(1 - r)
-
-    # The angle of anticlockwise rotation of the major-axis from x-axis.
-    if b == 0:
-        phi = 0 if a < c else np.pi/2
-    else:
-        phi = np.arctan((2.*b) / (a - c)) / 2
-        if a > c:
-            phi += np.pi/2
-    if not width_gt_height:
-        # Ensure that phi is the angle to rotate to the semi-major axis.
-        phi += np.pi/2
-    phi = phi % np.pi
-
-    return x0, y0, ap, bp, e, phi
-
-def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi):
-    """
-    Return npts points on the ellipse described by the params = x0, y0, ap,
-    bp, e, phi for values of the parametric variable t between tmin and tmax.
-
-    """
-
-    x0, y0, ap, bp, e, phi = params
-    # A grid of the parametric variable, t.
-    t = np.linspace(tmin, tmax, npts)
-    x = x0 + ap * np.cos(t) * np.cos(phi) - bp * np.sin(t) * np.sin(phi)
-    y = y0 + ap * np.cos(t) * np.sin(phi) + bp * np.sin(t) * np.cos(phi)
-    return np.vstack((x,y)).transpose()
 
 class PerimeterLoader:
 
@@ -288,46 +174,38 @@ class TabComputer:
 
         print(f"fit_ellipse: {a=} {b=} {indent=}")
 
-        coeffs = None
-        try:
-            coeffs = fit_ellipse(self.perimeter.slice(a, b))
-        except np.linalg.LinAlgError as err:
-            print("  LinAlgError: {0}".format(err))
+        ellipse = puzzler.geometry.fit_ellipse_to_points(self.perimeter.slice(a, b))
+        if ellipse is None:
             return None
 
-        # throw away complex results, wtf is going on here anyway?
-        if coeffs.dtype.kind == 'c':
-            print("  complex result?")
-            return None
-
-        poly = cart_to_pol(coeffs)
+        poly = [ellipse.center[0], ellipse.center[1], ellipse.semi_major, ellipse.semi_minor, None, ellipse.phi]
 
         center = np.array(poly[:2])
         cx, cy = center[0], center[1]
 
         if indent:
-            ab = self.angle_between(center, b, a)
+            angle = self.angle_between(center, b, a)
         else:
-            ab = self.angle_between(center, a, b)
+            angle = self.angle_between(center, a, b)
 
-        print(f"  center={cx:.1f},{cy:.1f} major={poly[2]:.1f} minor={poly[3]:.1f} e={poly[4]:.3f} phi={math.degrees(poly[5]):.3f}")
-        print(f"  angle={math.degrees(ab):.1f}")
+        print(f"  center={cx:.1f},{cy:.1f} major={ellipse.semi_major:.1f} minor={ellipse.semi_minor:.1f} phi={math.degrees(ellipse.phi):.1f}")
+        print(f"  angle={math.degrees(angle):.1f}")
 
-        if ab < math.radians(220):
+        if angle < math.radians(220):
             print("  angle for ellipse too small, rejecting")
             return None
 
-        ellipse = {'coeffs': coeffs, 'poly': poly, 'indexes': (a,b), 'indent':indent, 'angle': ab}
+        tab = {'ellipse': ellipse, 'indexes': (a,b), 'indent':indent, 'angle': ab}
 
         # indices of last two points that are "close enough" to the ellipse
         ## aa, bb = self.find_fit_range(ellipse)
 
         # indices of tangent points
-        self.find_tangent_points(ellipse)
+        self.find_tangent_points(tab)
 
-        self.trim_indexes(ellipse)
+        self.trim_indexes(tab)
 
-        return ellipse
+        return tab
 
     def angle_between(self, center, a, b):
 
@@ -616,7 +494,7 @@ class EllipseFitter:
                     poly = ellipse['poly']
                     angle = ellipse['angle']
                     print(f"{i}: x,y={poly[0]:7.1f},{poly[1]:7.1f} angle{math.degrees(angle):6.1f} indexes={ellipse['indexes']}")
-                    pts = get_ellipse_pts(poly, npts=40)
+                    pts = puzzler.geometry.get_ellipse_points(ellipse['ellipse'], npts=40)
                     # pts = list(zip(pts[0], pts[1]))
                     # print(f"  {pts=}")
                     graph.draw_lines(pts, color='blue', width=2)
