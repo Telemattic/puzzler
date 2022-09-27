@@ -225,6 +225,12 @@ class TabComputer:
                 continue
             
             self.ellipses.append(ellipse)
+
+        for _ in range(3):
+            for i, ellipse in enumerate(self.ellipses):
+                a, b = ellipse['trimmed_indexes']
+                ellipse2 = self.fit_ellipse(a, b, ellipse['indent'])
+                self.ellipses[i] = ellipse2
             
     def fit_ellipse_to_outdent(self, l, r):
         
@@ -322,14 +328,86 @@ class TabComputer:
         # indices of tangent points
         self.find_tangent_points(ellipse)
 
+        self.trim_indexes(ellipse)
+
         return ellipse
+
+    @staticmethod
+    def distance_to_ellipse(semi_major, semi_minor, p):
+        px = abs(p[0])
+        py = abs(p[1])
+
+        tx = 0.707
+        ty = 0.707
+
+        a = semi_major
+        b = semi_minor
+
+        for x in range(0, 3):
+            x = a * tx
+            y = b * ty
+
+            ex = (a*a - b*b) * tx**3 / a
+            ey = (b*b - a*a) * ty**3 / b
+
+            rx = x - ex
+            ry = y - ey
+
+            qx = px - ex
+            qy = py - ey
+
+            r = math.hypot(rx, ry)
+            q = math.hypot(qx, qy)
+
+            tx = min(1, max(0, (qx * r / q + ex) / a))
+            ty = min(1, max(0, (qy * r / q + ey) / b))
+            t = math.hypot(tx, ty)
+            tx /= t 
+            ty /= t 
+
+        # return (math.copysign(a * tx, p[0]), math.copysign(b * ty, p[1])
+        return math.hypot(a * tx - px, b * ty - py)
+
+    def trim_indexes(self, ellipse):
+
+        poly = ellipse['poly']
+        center = np.array((poly[:2]))
+        semi_major, semi_minor = poly[2], poly[3]
+        angle = poly[5]
+        c, s = math.cos(angle), math.sin(angle)
+
+        global_to_local = np.array((( c, s),
+                                    (-s, c)))
+
+        # print(f"trim_indexes: center=({center[0]=:.1f},{center[1]=:.1f}) {semi_major=:.1f} {semi_minor=:.1f} {angle=:.3f}")
+        # print(f"  {global_to_local=}")
+
+        a, b = ellipse['indexes']
+        
+        for aa in range(a,a+50):
+            ptg = self.perimeter.points[aa]
+            ptl = (ptg - center) @ global_to_local
+            d = self.distance_to_ellipse(semi_major, semi_minor, ptl)
+            # print(f"   {aa=} {ptg=} {ptl=} {d=:.1f}")
+            if d < 5:
+                break
+
+        for bb in range(b,b-50,-1):
+            ptg = self.perimeter.points[bb]
+            ptl = (ptg - center) @ global_to_local
+            d = self.distance_to_ellipse(semi_major, semi_minor, ptl)
+            # print(f"   {bb=} {ptg=} {ptl=} {d=:.1f}")
+            if d < 5:
+                break
+
+        ellipse['trimmed_indexes'] = (aa, bb)
 
     def find_tangent_points(self, ellipse):
 
         center = np.array(ellipse['poly'][0:2])
 
         a, b = ellipse['indexes']
-        print(f"find_tangent_points: center=({center[0]:.1f},{center[1]:.1f}) {a=} {b=}")
+        # print(f"find_tangent_points: center=({center[0]:.1f},{center[1]:.1f}) {a=} {b=}")
 
         points = self.perimeter.points
         n = len(points)
@@ -363,7 +441,7 @@ class TabComputer:
         aa = closest_point_to_axis(make_unit_vector(b), a)
         bb = closest_point_to_axis(make_unit_vector(a), b)
         
-        print(f"  {aa=} {bb=}")
+        # print(f"  {aa=} {bb=}")
 
         ellipse['tangents'] = (aa, bb)
 
@@ -540,6 +618,9 @@ class EllipseFitter:
                         c = poly[0:2]
                         print(f"{c=} {p=}")
                         graph.draw_line(c, p, color='green')
+                    for j in ellipse['trimmed_indexes']:
+                        p = self.perimeter.points[j].tolist()
+                        graph.draw_point(p, size=10, color='cyan')
 
         if self.window['render_lines'].get():
             if self.lines is not None:
