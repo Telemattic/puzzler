@@ -309,7 +309,7 @@ class TabComputer:
             closest_idx = None
             closest_dot = 0
             
-            for j in range(50):
+            for j in range(100):
                 
                 vec = make_unit_vector(i+j)
                 dot = np.sum(vec * axis)

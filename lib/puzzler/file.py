@@ -3,61 +3,6 @@ import numpy as np
 import os
 import puzzler
 from dataclasses import dataclass
-
-@dataclass
-class Puzzle:
-
-    @dataclass
-    class Scan:
-
-        path: str
-
-    @dataclass
-    class Piece:
-
-        @dataclass
-        class Source:
-            id: str
-            rect: tuple[int, int, int, int]
-            
-        label: str
-        source: Source
-        points: np.array
-
-    scans: dict[str, Scan]
-    pieces: list[Piece]
-
-    @staticmethod
-    def from_json(data):
-
-        scans = dict()
-        for k, v in data['sources'].items():
-            scans[k] = Puzzle.Scan(v['path'])
-
-        pieces = list()
-        for p in data['pieces']:
-
-            label = p['label']
-            source = Puzzle.Piece.Source(p['source']['id'], tuple(p['source']['rect']))
-            points = puzzler.chain.ChainCode().decode(p['points'])
-
-            pieces.append(Puzzle.Piece(label, source, points))
-
-        return Puzzle(scans, pieces)
-
-    def to_json(puzzle) -> dict:
-
-        scans = dict()
-        for k, v in puzzle.scans.items():
-            scans[k] = {'path': v.path}
-
-        pieces = list()
-        for p in puzzle.pieces:
-            source = {'id': p.source.id, 'rect': list(p.source.rect)}
-            points = puzzler.chain.ChainCode().encode(p.points)
-            pieces.append({'label': p.label, 'source': source, 'points': points})
-
-        return {'sources': scans, 'pieces': pieces}
     
 def path_to_id(path):
     id = os.path.splitext(os.path.basename(path))[0]

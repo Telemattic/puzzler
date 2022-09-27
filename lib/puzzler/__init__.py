@@ -3,4 +3,5 @@ from . import commands
 from . import feature
 from . import file
 from . import geometry
+from . import puzzle
 from . import segment
