@@ -127,6 +127,9 @@ class PerimeterLoader:
         # print(f"{self.bbox=} {self.points.shape=}")
         self.index = dict((tuple(xy), i) for i, xy in enumerate(points))
 
+    def slice(self, a, b):
+        return np.vstack((self.points[a:] , self.points[:b])) if a > b else self.points[a:b]
+
 class ApproxPolyComputer:
 
     def __init__(self, perimeter, epsilon):
@@ -204,24 +207,8 @@ class TabComputer:
             if ellipse is None:
                 continue
 
-            overlaps = False
-
-            n = len(self.perimeter.points)
-            a0, b0 = ellipse['indexes']
-            if b0 < a0:
-                b0 += n
-                
-            for e in self.ellipses:
-                
-                a1, b1 = e['indexes']
-                if b1 < a1:
-                    b1 += n
-                    
-                if a1 < b0 and a0 < b1:
-                    overlaps = True
-                    print("outdent ellipse overlaps previously found ellipse")
-
-            if overlaps:
+            if self.indexes_overlap(ellipse):
+                print("outdent ellipse overlaps previously found ellipse")
                 continue
             
             self.ellipses.append(ellipse)
@@ -231,6 +218,24 @@ class TabComputer:
                 a, b = ellipse['trimmed_indexes']
                 ellipse2 = self.fit_ellipse(a, b, ellipse['indent'])
                 self.ellipses[i] = ellipse2
+
+    def indexes_overlap(self, ellipse):
+        
+        n = len(self.perimeter.points)
+        a0, b0 = ellipse['indexes']
+        if b0 < a0:
+            b0 += n
+                
+        for e in self.ellipses:
+                
+            a1, b1 = e['indexes']
+            if b1 < a1:
+                b1 += n
+                    
+            if a1 < b0 and a0 < b1:
+                return True
+
+        return False
             
     def fit_ellipse_to_outdent(self, l, r):
         
@@ -277,13 +282,9 @@ class TabComputer:
 
         print(f"fit_ellipse: {a=} {b=} {indent=}")
 
-        if a > b:
-            pp = self.perimeter.points
-            x = np.hstack((np.asarray(pp[a:,0], dtype=np.float32), np.asarray(pp[:b,0], dtype=np.float32)))
-            y = np.hstack((np.asarray(pp[a:,1], dtype=np.float32), np.asarray(pp[:b,1], dtype=np.float32)))
-        else:
-            x = np.asarray(self.perimeter.points[a:b,0], dtype=np.float32)
-            y = np.asarray(self.perimeter.points[a:b,1], dtype=np.float32)
+        pp = self.perimeter.slice(a, b)
+        x = np.asarray(pp[:,0], dtype=np.float32)
+        y = np.asarray(pp[:,1], dtype=np.float32)
 
         coeffs = None
         try:
@@ -301,31 +302,22 @@ class TabComputer:
 
         points = list(zip(x,y))
 
-        cx, cy = poly[0], poly[1]
-        x0, y0 = points[0 if indent else -1]
-        x1, y1 = points[-1 if indent else 0]
-
-        angle0 = math.atan2(y0-cy, x0-cx) * 180. / math.pi
-        angle1 = math.atan2(y1-cy, x1-cx) * 180. / math.pi
-        angles = [angle0, angle1]
-
-        diff = angle1 - angle0
-        if diff < 0:
-            diff += 360.
+        center = np.array(poly[:2])
+        cx, cy = center[0], center[1]
 
         if indent:
-            ab = math.degrees(self.angle_between(np.array((cx,cy)), b, a))
+            ab = self.angle_between(center, b, a)
         else:
-            ab = math.degrees(self.angle_between(np.array((cx,cy)), a, b))
+            ab = self.angle_between(center, a, b)
 
-        print(f"  center={cx:.1f},{cy:.1f} major={poly[2]:.1f} minor={poly[3]:.1f} e={poly[4]:.3f} phi={poly[5]*180/math.pi:.3f}")
-        print(f"  angles={angle0:.1f},{angle1:.1f} -> {diff:.1f} ({ab:.1f}")
+        print(f"  center={cx:.1f},{cy:.1f} major={poly[2]:.1f} minor={poly[3]:.1f} e={poly[4]:.3f} phi={math.degrees(poly[5]):.3f}")
+        print(f"  angle={math.degrees(ab):.1f}")
 
-        if diff < 220:
+        if ab < math.radians(220):
             print("  angle for ellipse too small, rejecting")
             return None
 
-        ellipse = {'coeffs': coeffs, 'poly': poly, 'indexes': (a,b), 'indent':indent, 'points': points, 'angles': angles}
+        ellipse = {'coeffs': coeffs, 'poly': poly, 'indexes': (a,b), 'indent':indent, 'angle': ab}
 
         # indices of last two points that are "close enough" to the ellipse
         ## aa, bb = self.find_fit_range(ellipse)
@@ -595,8 +587,8 @@ class EllipseFitter:
         if self.window['render_ellipse_points'].get():
             if self.ellipses is not None:
                 for i, ellipse in enumerate(self.ellipses):
-                    for p in ellipse['points']:
-                        graph.draw_point(p, size=8, color='purple')
+                    for p in self.perimeter.slice(*ellipse['indexes']):
+                        graph.draw_point(p.tolist(), size=8, color='purple')
 
         if self.window['render_approx_poly'].get():
             if self.approx_pts is not None:
@@ -622,8 +614,8 @@ class EllipseFitter:
             if self.ellipses is not None:
                 for i, ellipse in enumerate(self.ellipses):
                     poly = ellipse['poly']
-                    angles = ellipse['angles']
-                    print(f"{i}: x,y={poly[0]:7.1f},{poly[1]:7.1f} angles={angles[0]:6.1f},{angles[1]:6.1f} indexes={ellipse['indexes']}")
+                    angle = ellipse['angle']
+                    print(f"{i}: x,y={poly[0]:7.1f},{poly[1]:7.1f} angle{math.degrees(angle):6.1f} indexes={ellipse['indexes']}")
                     pts = get_ellipse_pts(poly, npts=40)
                     pts = list(zip(pts[0], pts[1]))
                     # print(f"  {pts=}")
