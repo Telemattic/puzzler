@@ -11,7 +11,7 @@ import statistics
 
 # https://scipython.com/blog/direct-linear-least-squares-fitting-of-an-ellipse/
 
-def fit_ellipse(x, y):
+def fit_ellipse(pts):
     """
 
     Fit the coefficients a,b,c,d,e,f, representing an ellipse described by
@@ -23,6 +23,12 @@ def fit_ellipse(x, y):
 
 
     """
+
+    x = pts[:,0]
+    y = pts[:,1]
+    if pts.dtype.kind != 'f':
+        x = np.asarray(x, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32)
 
     D1 = np.vstack([x**2, x*y, y**2]).T
     D2 = np.vstack([x, y, np.ones(len(x))]).T
@@ -113,7 +119,7 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi):
     t = np.linspace(tmin, tmax, npts)
     x = x0 + ap * np.cos(t) * np.cos(phi) - bp * np.sin(t) * np.sin(phi)
     y = y0 + ap * np.cos(t) * np.sin(phi) + bp * np.sin(t) * np.cos(phi)
-    return x, y
+    return np.vstack((x,y)).transpose()
 
 class PerimeterLoader:
 
@@ -282,13 +288,9 @@ class TabComputer:
 
         print(f"fit_ellipse: {a=} {b=} {indent=}")
 
-        pp = self.perimeter.slice(a, b)
-        x = np.asarray(pp[:,0], dtype=np.float32)
-        y = np.asarray(pp[:,1], dtype=np.float32)
-
         coeffs = None
         try:
-            coeffs = fit_ellipse(x, y)
+            coeffs = fit_ellipse(self.perimeter.slice(a, b))
         except np.linalg.LinAlgError as err:
             print("  LinAlgError: {0}".format(err))
             return None
@@ -299,8 +301,6 @@ class TabComputer:
             return None
 
         poly = cart_to_pol(coeffs)
-
-        points = list(zip(x,y))
 
         center = np.array(poly[:2])
         cx, cy = center[0], center[1]
@@ -617,7 +617,7 @@ class EllipseFitter:
                     angle = ellipse['angle']
                     print(f"{i}: x,y={poly[0]:7.1f},{poly[1]:7.1f} angle{math.degrees(angle):6.1f} indexes={ellipse['indexes']}")
                     pts = get_ellipse_pts(poly, npts=40)
-                    pts = list(zip(pts[0], pts[1]))
+                    # pts = list(zip(pts[0], pts[1]))
                     # print(f"  {pts=}")
                     graph.draw_lines(pts, color='blue', width=2)
                     graph.draw_text(f"{i}", (poly[0], poly[1]), color='red', font=('Courier', 12))
