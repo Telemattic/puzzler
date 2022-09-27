@@ -195,7 +195,7 @@ class TabComputer:
             print("  angle for ellipse too small, rejecting")
             return None
 
-        tab = {'ellipse': ellipse, 'indexes': (a,b), 'indent':indent, 'angle': ab}
+        tab = {'ellipse': ellipse, 'indexes': (a,b), 'indent':indent, 'angle': angle}
 
         # indices of last two points that are "close enough" to the ellipse
         ## aa, bb = self.find_fit_range(ellipse)
@@ -255,12 +255,12 @@ class TabComputer:
         # return (math.copysign(a * tx, p[0]), math.copysign(b * ty, p[1])
         return math.hypot(a * tx - px, b * ty - py)
 
-    def trim_indexes(self, ellipse):
+    def trim_indexes(self, tab):
 
-        poly = ellipse['poly']
-        center = np.array((poly[:2]))
-        semi_major, semi_minor = poly[2], poly[3]
-        angle = poly[5]
+        ellipse = tab['ellipse']
+        center = ellipse.center
+        semi_major, semi_minor = ellipse.semi_major, ellipse.semi_minor
+        angle = ellipse.phi
         c, s = math.cos(angle), math.sin(angle)
 
         global_to_local = np.array((( c, s),
@@ -269,7 +269,7 @@ class TabComputer:
         # print(f"trim_indexes: center=({center[0]=:.1f},{center[1]=:.1f}) {semi_major=:.1f} {semi_minor=:.1f} {angle=:.3f}")
         # print(f"  {global_to_local=}")
 
-        a, b = ellipse['indexes']
+        a, b = tab['indexes']
         
         for aa in range(a,a+50):
             ptg = self.perimeter.points[aa]
@@ -287,13 +287,13 @@ class TabComputer:
             if d < 5:
                 break
 
-        ellipse['trimmed_indexes'] = (aa, bb)
+        tab['trimmed_indexes'] = (aa, bb)
 
-    def find_tangent_points(self, ellipse):
+    def find_tangent_points(self, tab):
 
-        center = np.array(ellipse['poly'][0:2])
+        center = tab['ellipse'].center
 
-        a, b = ellipse['indexes']
+        a, b = tab['indexes']
         # print(f"find_tangent_points: center=({center[0]:.1f},{center[1]:.1f}) {a=} {b=}")
 
         points = self.perimeter.points
@@ -330,7 +330,7 @@ class TabComputer:
         
         # print(f"  {aa=} {bb=}")
 
-        ellipse['tangents'] = (aa, bb)
+        tab['tangents'] = (aa, bb)
 
     def compute_convexity_defects(self):
         convex_hull = cv.convexHull(self.perimeter.points, returnPoints=False)
@@ -491,19 +491,14 @@ class EllipseFitter:
         if self.window['render_ellipses'].get():
             if self.ellipses is not None:
                 for i, ellipse in enumerate(self.ellipses):
-                    poly = ellipse['poly']
-                    angle = ellipse['angle']
-                    print(f"{i}: x,y={poly[0]:7.1f},{poly[1]:7.1f} angle{math.degrees(angle):6.1f} indexes={ellipse['indexes']}")
                     pts = puzzler.geometry.get_ellipse_points(ellipse['ellipse'], npts=40)
-                    # pts = list(zip(pts[0], pts[1]))
-                    # print(f"  {pts=}")
                     graph.draw_lines(pts, color='blue', width=2)
-                    graph.draw_text(f"{i}", (poly[0], poly[1]), color='red', font=('Courier', 12))
+                    center = ellipse['ellipse'].center
+                    graph.draw_text(f"{i}", center.tolist(), color='red', font=('Courier', 12))
                     for j in ellipse['tangents']:
                         p = self.perimeter.points[j].tolist()
                         graph.draw_point(p, size=10, color='green')
-                        c = poly[0:2]
-                        graph.draw_line(c, p, color='green')
+                        graph.draw_line(center.tolist(), p, color='green')
                     for j in ellipse['trimmed_indexes']:
                         p = self.perimeter.points[j].tolist()
                         graph.draw_point(p, size=10, color='cyan')
