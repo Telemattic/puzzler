@@ -76,7 +76,7 @@ class TabComputer:
         self.perimeter = perimeter
         self.approx_poly = ApproxPolyComputer(self.perimeter, epsilon)
 
-        self.ellipses = []
+        self.tabs = []
 
         for defect in self.compute_convexity_defects():
 
@@ -84,43 +84,43 @@ class TabComputer:
                 continue
             
             l, r, c = defect[0], defect[1], defect[2]
-            ellipse = self.fit_ellipse_to_convexity_defect(l, r, c)
-            if ellipse is None:
+            tab = self.fit_ellipse_to_convexity_defect(l, r, c)
+            if tab is None:
                 continue
             
-            self.ellipses.append(ellipse)
+            self.tabs.append(tab)
 
         for in_out, indices in self.approx_poly.curvature_runs():
 
             if in_out:
                 continue
             
-            ellipse = self.fit_ellipse_to_outdent(indices[0], indices[-1])
-            if ellipse is None:
+            tab = self.fit_ellipse_to_outdent(indices[0], indices[-1])
+            if tab is None:
                 continue
 
-            if self.indexes_overlap(ellipse):
-                print("outdent ellipse overlaps previously found ellipse")
+            if self.indexes_overlap(tab):
+                print("outdent tab overlaps previously found tab")
                 continue
             
-            self.ellipses.append(ellipse)
+            self.tabs.append(tab)
 
         for _ in range(3):
-            for i, ellipse in enumerate(self.ellipses):
-                a, b = ellipse['trimmed_indexes']
-                ellipse2 = self.fit_ellipse(a, b, ellipse['indent'])
-                self.ellipses[i] = ellipse2
+            for i, tab in enumerate(self.tabs):
+                a, b = tab['trimmed_indexes']
+                tab2 = self.fit_ellipse(a, b, tab['indent'])
+                self.tabs[i] = tab2
 
-    def indexes_overlap(self, ellipse):
+    def indexes_overlap(self, tab):
         
         n = len(self.perimeter.points)
-        a0, b0 = ellipse['indexes']
+        a0, b0 = tab['indexes']
         if b0 < a0:
             b0 += n
                 
-        for e in self.ellipses:
+        for t in self.tabs:
                 
-            a1, b1 = e['indexes']
+            a1, b1 = t['indexes']
             if b1 < a1:
                 b1 += n
                     
@@ -408,7 +408,7 @@ class EllipseFitter:
         self.convex_hull = None
         self.approx_pts = None
         self.convexity_defects = None
-        self.ellipses = None
+        self.tabs = None
         self.lines = None
 
     def approx_poly(self):
@@ -440,7 +440,7 @@ class EllipseFitter:
 
     def ellipsify(self):
         tab_computer = TabComputer(self.perimeter, self.epsilon)
-        self.ellipses = tab_computer.ellipses
+        self.tabs = tab_computer.tabs
 
         line_computer = LineComputer(self.perimeter, tab_computer.approx_poly)
         self.lines = line_computer.lines
@@ -463,9 +463,9 @@ class EllipseFitter:
                 graph.draw_lines(xy_tuples, color='black', width=1)
 
         if self.window['render_ellipse_points'].get():
-            if self.ellipses is not None:
-                for i, ellipse in enumerate(self.ellipses):
-                    for p in self.perimeter.slice(*ellipse['indexes']):
+            if self.tabs is not None:
+                for i, tab in enumerate(self.tabs):
+                    for p in self.perimeter.slice(*tab['indexes']):
                         graph.draw_point(p.tolist(), size=8, color='purple')
 
         if self.window['render_approx_poly'].get():
@@ -489,17 +489,17 @@ class EllipseFitter:
                     graph.draw_lines(defect, color='lightblue', width=1)
 
         if self.window['render_ellipses'].get():
-            if self.ellipses is not None:
-                for i, ellipse in enumerate(self.ellipses):
-                    pts = puzzler.geometry.get_ellipse_points(ellipse['ellipse'], npts=40)
+            if self.tabs is not None:
+                for i, tab in enumerate(self.tabs):
+                    pts = puzzler.geometry.get_ellipse_points(tab['ellipse'], npts=40)
                     graph.draw_lines(pts, color='blue', width=2)
-                    center = ellipse['ellipse'].center
+                    center = tab['ellipse'].center
                     graph.draw_text(f"{i}", center.tolist(), color='red', font=('Courier', 12))
-                    for j in ellipse['tangents']:
+                    for j in tab['tangents']:
                         p = self.perimeter.points[j].tolist()
                         graph.draw_point(p, size=10, color='green')
                         graph.draw_line(center.tolist(), p, color='green')
-                    for j in ellipse['trimmed_indexes']:
+                    for j in tab['trimmed_indexes']:
                         p = self.perimeter.points[j].tolist()
                         graph.draw_point(p, size=10, color='cyan')
 
