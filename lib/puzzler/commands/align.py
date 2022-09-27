@@ -119,7 +119,7 @@ class DragHandle:
     def hit_test(self, xy):
         
         dragxy = self.coord.dxdy
-        knobxy = np.float64((0.,-self.drag_radius)) @ self.coord.rot_matrix() + dragxy
+        knobxy = np.float64((0.,self.drag_radius)) @ self.coord.rot_matrix() + dragxy
 
         if np.linalg.norm(knobxy - xy) <= self.knob_radius:
             return 'turn'
@@ -148,7 +148,7 @@ class DragHandle:
             dx, dy = xy[0] - self.drag_coord.dxdy[0], xy[1] - self.drag_coord.dxdy[1]
             if dx or dy:
                 angle = math.atan2(dy, dx)
-                angle += math.pi / 2
+                angle -= math.pi / 2
                 self.coord.angle = angle
                 # print(f"turn: angle={angle:.3f} ({angle*180./math.pi:.3f} deg)")
 
@@ -163,7 +163,7 @@ class DragHandle:
         dragxy = self.coord.dxdy
         graph.draw_circle(tuple(dragxy), self.drag_radius, line_color=self.color, line_width=3)
 
-        knobxy = np.float64((0.,-self.drag_radius)) @ self.coord.rot_matrix() + dragxy
+        knobxy = np.float64((0.,self.drag_radius)) @ self.coord.rot_matrix() + dragxy
         graph.draw_circle(tuple(knobxy), self.knob_radius,
                           fill_color=self.color, line_color='white', line_width=2)
 
@@ -402,8 +402,8 @@ class AlignUI:
 
         layout = [
             [sg.Graph(canvas_size=(w, h),
-                      graph_bottom_left = (0, h * s),
-                      graph_top_right = (w * s, 0),
+                      graph_bottom_left = (0, 0),
+                      graph_top_right = (w * s, h * s),
                       background_color='white',
                       key='graph',
                       drag_submits=True,

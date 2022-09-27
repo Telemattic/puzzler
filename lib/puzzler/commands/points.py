@@ -34,7 +34,7 @@ class PerimeterComputer:
         self._add_temp_image("gray.png", gray, 'Gray')
         self._add_temp_image("thresh.png", thresh, 'Thresh')
         
-        contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
+        contours = cv.findContours(np.flip(thresh, axis=0), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
 
         assert isinstance(contours, tuple) and 2 == len(contours)
 
@@ -84,46 +84,13 @@ class PerimeterUI:
             for i, color in enumerate(['blue', 'green', 'red']):
                 hist = cv.calcHist([img], [i], None, [256], [0, 256])
                 scale = 100. / np.max(hist)
-                points = [(10+i, 110-scale*v) for i, v in enumerate(np.squeeze(hist))]
+                points = [(10+i, 10+scale*v) for i, v in enumerate(np.squeeze(hist))]
                 graph.draw_lines(points, color=color)
         else:
             hist = cv.calcHist([img], [0], None, [256], [0, 256])
             scale = 100. / np.max(hist)
-            points = [(10+i, 110-scale*v) for i, v in enumerate(np.squeeze(hist))]
+            points = [(10+i, 10+scale*v) for i, v in enumerate(np.squeeze(hist))]
             graph.draw_lines(points, color='black')
-
-    def draw_traces(self):
-        
-        graph = self.window['graph']
-        
-        img = cv.imread(self.get_image_path())
-        bgr = len(img.shape) == 3 and img.shape[2]==3
-
-        w, h = img.shape[1], img.shape[0]
-        cx, cy = w // 2, h // 2
-
-        if bgr:
-            img = cv.cvtColor(img, cv.COLOR_BGR2HSV)
-
-        if bgr:
-            for i, color in enumerate(['blue', 'green', 'red']):
-                horiz = [(x,cy-v) for x, v in enumerate(img[cy,:,i])]
-                graph.draw_lines(horiz, color=color)
-        else:
-            horiz = [(x,cy-v) for x, v in enumerate(img[cy,:])]
-            graph.draw_lines(horiz, color='black')
-            
-        graph.draw_line((0,cy), (w-1,cy))
-        
-        if bgr:
-            for i, color in enumerate(['blue', 'green', 'red']):
-                vert = [(cx+v,y) for y, v in enumerate(img[:,cx,i])]
-                graph.draw_lines(vert, color=color)
-        else:
-            vert = [(cx+v,y) for y, v in enumerate(img[:,cx])]
-            graph.draw_lines(vert, color='black')
-            
-        graph.draw_line((cx,0), (cx,h-1))
 
     def draw_contour(self):
         graph = self.window['graph']
@@ -137,10 +104,7 @@ class PerimeterUI:
         graph.erase()
 
         path = self.get_image_path()
-        graph.draw_image(filename=path, location=(0,0))
-
-        if self.window['render_traces'].get():
-            self.draw_traces()
+        graph.draw_image(filename=path, location=(0,self.pc.image_size[1]))
 
         if self.window['render_histogram'].get():
             self.draw_histogram()
@@ -162,13 +126,12 @@ class PerimeterUI:
             controls.append(r)
 
         controls.append(sg.CB('Render Histogram', default=False, enable_events=True, key='render_histogram'))
-        controls.append(sg.CB('Render Traces', default=False, enable_events=True, key='render_traces'))
         controls.append(sg.CB('Render Contour', default=True, enable_events=True, key='render_contour'))
         
         layout = [
             [sg.Graph(canvas_size=(w, h),
-                      graph_bottom_left = (0, h),
-                      graph_top_right = (w, 0),
+                      graph_bottom_left = (0, 0),
+                      graph_top_right = (w, h),
                       background_color='black',
                       key='graph',
                       enable_events=True),

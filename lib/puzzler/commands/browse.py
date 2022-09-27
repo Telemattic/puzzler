@@ -64,7 +64,7 @@ class Browser:
 
         for i, o in enumerate(self.outlines):
             x = (i %  self.cols) * self.tile_w + self.tile_w // 2
-            y = (i // self.cols) * self.tile_h + self.tile_h // 2
+            y = (self.rows - 1 - (i // self.cols)) * self.tile_h + self.tile_h // 2
 
             # want the corners of the outline bbox centered within the tile
             bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
@@ -92,8 +92,8 @@ class BrowseUI:
 
         layout = [
             [sg.Graph(canvas_size=(w, h),
-                      graph_bottom_left = (0, h),
-                      graph_top_right = (w, 0),
+                      graph_bottom_left = (0, 0),
+                      graph_top_right = (w, h),
                       background_color='white',
                       key='graph',
                       enable_events=True)]

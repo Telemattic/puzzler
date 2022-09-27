@@ -616,7 +616,6 @@ class EllipseFitter:
                         p = self.perimeter.points[j].tolist()
                         graph.draw_point(p, size=10, color='green')
                         c = poly[0:2]
-                        print(f"{c=} {p=}")
                         graph.draw_line(c, p, color='green')
                     for j in ellipse['trimmed_indexes']:
                         p = self.perimeter.points[j].tolist()
@@ -668,8 +667,8 @@ class EllipseFitter:
         
         layout = [
             [sg.Graph(canvas_size=(int(w * s), int(h * s)),
-                      graph_bottom_left = (bbox[0],bbox[3]),
-                      graph_top_right = (bbox[2],bbox[1]),
+                      graph_bottom_left = (bbox[0],bbox[1]),
+                      graph_top_right = (bbox[2],bbox[3]),
                       background_color='white',
                       key='graph',
                       enable_events=True)],
