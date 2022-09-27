@@ -313,8 +313,13 @@ class TabComputer:
         if diff < 0:
             diff += 360.
 
+        if indent:
+            ab = math.degrees(self.angle_between(np.array((cx,cy)), b, a))
+        else:
+            ab = math.degrees(self.angle_between(np.array((cx,cy)), a, b))
+
         print(f"  center={cx:.1f},{cy:.1f} major={poly[2]:.1f} minor={poly[3]:.1f} e={poly[4]:.3f} phi={poly[5]*180/math.pi:.3f}")
-        print(f"  angles={angle0:.1f},{angle1:.1f} -> {diff:.1f}")
+        print(f"  angles={angle0:.1f},{angle1:.1f} -> {diff:.1f} ({ab:.1f}")
 
         if diff < 220:
             print("  angle for ellipse too small, rejecting")
@@ -331,6 +336,18 @@ class TabComputer:
         self.trim_indexes(ellipse)
 
         return ellipse
+
+    def angle_between(self, center, a, b):
+
+        pa = self.perimeter.points[a] - center
+        pb = self.perimeter.points[b] - center
+        pa = pa / np.linalg.norm(pa)
+        pb = pb / np.linalg.norm(pb)
+        dot = np.sum(pa * pb)
+        angle = np.arccos(dot)
+        if np.cross(pa, pb) > 0:
+            angle = math.pi * 2 - angle
+        return angle
 
     @staticmethod
     def distance_to_ellipse(semi_major, semi_minor, p):
@@ -594,7 +611,7 @@ class EllipseFitter:
         if self.window['render_approx_poly_index'].get():
             if self.approx_pts is not None:
                 for i, xy in enumerate(self.approx_pts):
-                    graph.draw_text(f"{i}", xy, color='green')
+                    graph.draw_text(f"{i}", xy, color='green', font=(16))
 
         if self.window['render_convexity_defects'].get():
             if self.convexity_defects is not None:
