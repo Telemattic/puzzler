@@ -17,7 +17,7 @@ class Browser:
             ll = np.min(self.poly, 0)
             ur = np.max(self.poly, 0)
             self.bbox   = tuple(ll.tolist() + ur.tolist())
-            self.label  = piece.label
+            self.piece  = piece
 
     def __init__(self, puzzle):
 
@@ -64,13 +64,32 @@ class Browser:
         for i, o in enumerate(self.outlines):
             x = (i %  self.cols) * self.tile_w + self.tile_w // 2
             y = (self.rows - 1 - (i // self.cols)) * self.tile_h + self.tile_h // 2
+            self.render_outline(graph, o, x, y)
 
-            # want the corners of the outline bbox centered within the tile
-            bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
-            points = (o.poly - bbox_center) * self.scale + np.array((x, y))
+    def render_outline(self, graph, o, x, y):
 
-            graph.draw_lines(points, color='black')
-            graph.draw_text(o.label, (x,y), font=('Courier', 12), color='black')
+        p = o.piece
+
+        # want the corners of the outline bbox centered within the tile
+        bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
+        dxdy = np.array((x, y)) - bbox_center * self.scale
+        
+        if p.tabs is not None:
+            for tab in p.tabs:
+                pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
+                pts = (pts - bbox_center) * self.scale + np.array((x, y))
+                graph.draw_lines(pts, width=4, color='cyan')
+
+        if p.edges is not None:
+            for edge in p.edges:
+                pts = np.vstack((edge.line.pt0, edge.line.pt1))
+                pts = (pts - bbox_center) * self.scale + np.array((x, y))
+                graph.draw_lines(pts, width=4, color='cyan')
+        
+        poly = (o.poly - bbox_center) * self.scale + np.array((x, y))
+        graph.draw_lines(poly, color='black', width=2)
+
+        graph.draw_text(p.label, (x,y), font=('Courier', 12), color='black')
 
 class BrowseUI:
 
