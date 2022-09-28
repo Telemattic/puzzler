@@ -345,10 +345,12 @@ class TabComputer:
 
 class EdgeComputer:
 
-    def __init__(self, perimeter, approx_poly):
+    def __init__(self, perimeter, approx_poly, tabs):
 
         self.perimeter = perimeter
         self.edges = []
+
+        len_hull = self.length_convex_hull(approx_poly)
 
         candidates = []
         for a, b in self.enumerate_candidates(approx_poly):
@@ -362,11 +364,40 @@ class EdgeComputer:
             if l < longest * 0.5:
                 break
 
+            if l < len_hull * .15:
+                break
+
+            if self.overlaps_tab(tabs, a, b):
+                continue
+
             points = self.points_for_line(a, b)
             line = np.squeeze(cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01))
             v, c = line[:2], line[2:]
             l *= .5
             self.edges.append({'fit_indexes':(a,b), 'line':puzzler.geometry.Line(c-v*l, c+v*l)})
+
+    def overlaps_tab(self, tabs, a, b):
+        
+        n = len(self.perimeter.points)
+
+        def overlaps(i, j):
+
+            a0, b0 = i
+            if b0 < a0:
+                return overlaps((a0, n), j) or overlaps((0, b0), j)
+            
+            a1, b1 = j
+            if b1 < a1:
+                return overlaps(i, (a1, n)) or overlaps(i, (0, b1))
+
+            return a1 < b0 and a0 < b1
+        
+        for tab in tabs:
+
+            if overlaps((a, b), tab['indexes']):
+                return True
+
+        return False
 
     def points_for_line(self, a, b):
 
@@ -398,6 +429,12 @@ class EdgeComputer:
         p0 = self.perimeter.points[a]
         p1 = self.perimeter.points[b]
         return np.linalg.norm(p0 - p1)
+
+    def length_convex_hull(self, approx_poly):
+        points  = self.perimeter.points[approx_poly.indexes]
+        convex_hull = np.squeeze(cv.convexHull(points, returnPoints=True))
+        diff = np.diff(convex_hull, axis=0, append=convex_hull[0:1])
+        return np.sum(np.linalg.norm(diff, axis=1))
 
 class EllipseFitter:
 
@@ -447,11 +484,11 @@ class EllipseFitter:
         self.render()
 
     def ellipsify(self):
-        tab_computer = TabComputer(self.perimeter, self.epsilon)
-        self.tabs = tab_computer.tabs
+        tc = TabComputer(self.perimeter, self.epsilon)
+        self.tabs = tc.tabs
 
-        edge_computer = EdgeComputer(self.perimeter, tab_computer.approx_poly)
-        self.edges = edge_computer.edges
+        ec = EdgeComputer(self.perimeter, tc.approx_poly, tc.tabs)
+        self.edges = ec.edges
 
         self.render()
 
@@ -610,7 +647,7 @@ def feature_update(args):
         perimeter = PerimeterLoader(piece)
 
         tc = TabComputer(perimeter, args.epsilon, False)
-        ec = EdgeComputer(perimeter, tc.approx_poly)
+        ec = EdgeComputer(perimeter, tc.approx_poly, tc.tabs)
 
         piece.tabs = []
         for tab in tc.tabs:
