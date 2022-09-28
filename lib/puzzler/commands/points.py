@@ -1,5 +1,6 @@
 import collections
 import cv2 as cv
+import math
 import numpy as np
 import os
 import PySimpleGUI as sg
@@ -24,14 +25,25 @@ class PerimeterComputer:
         
         gray     = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-        # gray     = cv.medianBlur(gray, 7)
-        # gray     = cv.GaussianBlur(gray, (3,3), 0)
+        blur0    = cv.medianBlur(gray, 7)
+        blur1    = cv.medianBlur(gray, 31)
+
+        xweight  = np.sin(np.linspace(0, math.pi, num=w))
+        yweight  = np.sin(np.linspace(0, math.pi, num=h))
+        weight   = yweight[:,np.newaxis] @ xweight[np.newaxis,:]
+
+        blur     = np.uint8(blur0 * (1. - weight) + blur1 * weight)
+
+        weight   = np.uint8(weight * 255 / np.max(weight))
+        self._add_temp_image("weight.png", weight, "Weight")
         
-        thresh   = 255 - cv.threshold(gray, 107, 255, cv.THRESH_BINARY_INV)[1]
-        # thresh   = cv.medianBlur(thresh, 29)
+        thresh   = cv.threshold(blur, 107, 255, cv.THRESH_BINARY)[1]
 
         self._add_temp_image("color.png", img, 'Source')
         self._add_temp_image("gray.png", gray, 'Gray')
+        self._add_temp_image("blur0.png", blur0, 'Blur 0')
+        self._add_temp_image("blur1.png", blur1, 'Blur 1')
+        self._add_temp_image("blur.png", blur, 'Blur')
         self._add_temp_image("thresh.png", thresh, 'Thresh')
         
         contours = cv.findContours(np.flip(thresh, axis=0), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
