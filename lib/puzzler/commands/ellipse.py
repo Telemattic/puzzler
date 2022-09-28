@@ -94,6 +94,13 @@ class TabComputer:
                 if self.verbose:
                     print("  angle for ellipse too small, rejecting")
                 continue
+
+            e = tab['ellipse']
+
+            if e.semi_major / e.semi_minor > 1.8:
+                if self.verbose:
+                    print("  ellipse too eccentric, rejecting")
+                continue
             
             self.tabs.append(tab)
 
@@ -109,6 +116,13 @@ class TabComputer:
             if tab['angle'] < math.radians(220):
                 if self.verbose:
                     print("  angle for ellipse too small, rejecting")
+                continue
+            
+            e = tab['ellipse']
+
+            if e.semi_major / e.semi_minor > 1.8:
+                if self.verbose:
+                    print("  ellipse too eccentric, rejecting")
                 continue
             
             if self.indexes_overlap(tab):
@@ -212,10 +226,11 @@ class TabComputer:
         if ellipse is None:
             return None
 
-        dist = puzzler.geometry.DistanceToEllipseComputer(ellipse)(points)
-        sse  = np.sum(dist ** 2)
-        mse  = sse / len(points)
-        print(f"  fit: SSE={sse:.1f} MSE={mse:.1f}")
+        if self.verbose:
+            dist = puzzler.geometry.DistanceToEllipseComputer(ellipse)(points)
+            sse  = np.sum(dist ** 2)
+            mse  = sse / len(points)
+            print(f"  fit: SSE={sse:.1f} MSE={mse:.1f}")
 
         poly = [ellipse.center[0], ellipse.center[1], ellipse.semi_major, ellipse.semi_minor, None, ellipse.phi]
 
@@ -600,6 +615,8 @@ def feature_update(args):
         piece.tabs = []
         for tab in tc.tabs:
             piece.tabs.append(puzzler.feature.Tab(tab['indexes'], tab['ellipse'], tab['indent'], tab['tangents']))
+
+        # print(" tabs:", ', '.join(f"{t.ellipse.semi_major/t.ellipse.semi_minor:.3f}" for t in piece.tabs))
                 
         piece.edges = []
         for edge in ec.edges:
