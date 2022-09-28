@@ -8,6 +8,11 @@ class Line:
     pt0: np.array
     pt1: np.array
 
+    def __repr__(self):
+        x0, y0 = self.pt0
+        x1, y1 = self.pt1
+        return f"Line(({x0:.1f},{y0:.1f}),({x1:.1f},{y1:.1f}))"
+
 @dataclass
 class Ellipse:
 
@@ -15,6 +20,12 @@ class Ellipse:
     semi_major: float
     semi_minor: float
     phi: float
+
+    def __repr__(self):
+        cx, cy = self.center
+        maj, min = self.semi_major, self.semi_minor
+        phi = self.phi
+        return f"Ellipse(x,y={cx:.1f},{cy:.1f} {maj=:.1f} {min=:.1f} {phi=:.3f})"
 
 def fit_ellipse_to_points(points):
     

@@ -90,7 +90,7 @@ class Piece:
 
     def __init__(self, data):
 
-        points = np.array(puzzler.chain.ChainCode().decode(data['points']), dtype=np.int32)
+        points = data.points
         self.points = points - np.array(np.mean(points, axis=0), dtype=np.int32)
         self.perimeter = Perimeter(self.points)
         self.approx = ApproxPoly(self.perimeter, 10)
@@ -439,9 +439,8 @@ def align_ui(args):
     puzzle = puzzler.file.load(args.puzzle)
 
     by_label = dict()
-    for p in puzzle['pieces']:
-        l = p['label']
-        by_label[l] = p
+    for p in puzzle.pieces:
+        by_label[p.label] = p
 
     pieces = [Piece(by_label[l]) for l in args.labels]
     

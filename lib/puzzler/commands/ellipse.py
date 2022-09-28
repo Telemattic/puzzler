@@ -10,7 +10,8 @@ import puzzler
 class PerimeterLoader:
 
     def __init__(self, piece):
-        points = np.array(puzzler.chain.ChainCode().decode(piece['points']))
+        points = piece.points
+        assert points.ndim == 2 and points.shape[1] == 2
         ll = np.min(points, 0)
         ur = np.max(points, 0)
         # print(f"{points=} {ll=} {ur=}")
@@ -71,14 +72,15 @@ class ApproxPolyComputer:
 
 class TabComputer:
 
-    def __init__(self, perimeter, epsilon):
+    def __init__(self, perimeter, epsilon, verbose=True):
         
         self.perimeter = perimeter
+        self.verbose   = verbose
         self.approx_poly = ApproxPolyComputer(self.perimeter, epsilon)
 
         self.tabs = []
 
-        for defect in self.compute_convexity_defects():
+        for defect in self.compute_convexity_defects(self.perimeter, self.approx_poly):
 
             if defect[3] < 8000:
                 continue
@@ -86,6 +88,11 @@ class TabComputer:
             l, r, c = defect[0], defect[1], defect[2]
             tab = self.fit_ellipse_to_convexity_defect(l, r, c)
             if tab is None:
+                continue
+
+            if tab['angle'] < math.radians(220):
+                if self.verbose:
+                    print("  angle for ellipse too small, rejecting")
                 continue
             
             self.tabs.append(tab)
@@ -99,8 +106,14 @@ class TabComputer:
             if tab is None:
                 continue
 
+            if tab['angle'] < math.radians(220):
+                if self.verbose:
+                    print("  angle for ellipse too small, rejecting")
+                continue
+            
             if self.indexes_overlap(tab):
-                print("outdent tab overlaps previously found tab")
+                if self.verbose:
+                    print("outdent tab overlaps previously found tab")
                 continue
             
             self.tabs.append(tab)
@@ -108,71 +121,91 @@ class TabComputer:
         for _ in range(3):
             for i, tab in enumerate(self.tabs):
                 a, b = tab['trimmed_indexes']
+                if self.verbose:
+                    print(f"{i=}: indexes={tab['indexes']} trimmed={tab['trimmed_indexes']}")
                 tab2 = self.fit_ellipse(a, b, tab['indent'])
-                self.tabs[i] = tab2
+                if tab2 is None:
+                    print("FNORD!")
+                else:
+                    self.tabs[i] = tab2
 
     def indexes_overlap(self, tab):
         
         n = len(self.perimeter.points)
-        a0, b0 = tab['indexes']
-        if b0 < a0:
-            b0 += n
-                
-        for t in self.tabs:
-                
-            a1, b1 = t['indexes']
+
+        def overlaps(i, j):
+
+            a0, b0 = i
+            if b0 < a0:
+                return overlaps((a0, n), j) or overlaps((0, b0), j)
+            
+            a1, b1 = j
             if b1 < a1:
-                b1 += n
-                    
-            if a1 < b0 and a0 < b1:
+                return overlaps(i, (a1, n)) or overlaps(i, (0, b1))
+
+            return a1 < b0 and a0 < b1
+        
+        for other in self.tabs:
+
+            if overlaps(tab['indexes'], other['indexes']):
                 return True
 
         return False
             
     def fit_ellipse_to_outdent(self, l, r):
-        
-        print(f"fit_ellipse_to_outdent: {l=} {r=}")
+
+        if self.verbose:
+            print(f"fit_ellipse_to_outdent: {l=} {r=}")
 
         indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
 
-        a = bisect.bisect_left(indexes, l)
+        aa = a = bisect.bisect_left(indexes, l)
         while signed_area[a] < 0:
             a -= 1
 
-        b = bisect.bisect_left(indexes, r)
+        bb = b = bisect.bisect_left(indexes, r)
         n = len(signed_area)
         while signed_area[b] < 0:
             b += 1
             if b == n:
                 return None
 
-        print(f"  approx: {a=} {b=}")
+        if self.verbose:
+            print(f"  approx: {aa=} {a=} {bb=} {b=} {indexes[a]=} {indexes[b]=}")
 
         return self.fit_ellipse(indexes[a], indexes[b], False)
 
     def fit_ellipse_to_convexity_defect(self, l, r, c):
-    
-        print(f"fit_ellipse_to_convexity_defect: {l=} {r=} {c=}")
+
+        if self.verbose:
+            print(f"fit_ellipse_to_convexity_defect: {l=} {r=} {c=}")
 
         indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
+        n = len(indexes)
 
-        i = bisect.bisect_left(indexes, c)
+        assert 0 <= l < n and 0 <= r < n
 
-        a = i
-        while l < indexes[a] and signed_area[a] > 0:
+        a = c
+        while a != l and signed_area[a] > 0:
             a -= 1
+            if a < 0:
+                a = n-1
 
-        b = i
-        while indexes[b] < r and signed_area[b] > 0:
+        b = c
+        while b != r and signed_area[b] > 0:
             b += 1
+            if b == n:
+                b = 0
 
-        print(f"  approx: {i=} {a=} {b=}")
+        if self.verbose:
+            print(f"  approx: {a=} {b=}")
 
         return self.fit_ellipse(indexes[a], indexes[b], True)
 
     def fit_ellipse(self, a, b, indent):
 
-        print(f"fit_ellipse: {a=} {b=} {indent=}")
+        if self.verbose:
+            print(f"fit_ellipse: {a=} {b=} {indent=}")
 
         ellipse = puzzler.geometry.fit_ellipse_to_points(self.perimeter.slice(a, b))
         if ellipse is None:
@@ -188,12 +221,9 @@ class TabComputer:
         else:
             angle = self.angle_between(center, a, b)
 
-        print(f"  center={cx:.1f},{cy:.1f} major={ellipse.semi_major:.1f} minor={ellipse.semi_minor:.1f} phi={math.degrees(ellipse.phi):.1f}")
-        print(f"  angle={math.degrees(angle):.1f}")
-
-        if angle < math.radians(220):
-            print("  angle for ellipse too small, rejecting")
-            return None
+        if self.verbose:
+            print(f"  center={cx:.1f},{cy:.1f} major={ellipse.semi_major:.1f} minor={ellipse.semi_minor:.1f} phi={math.degrees(ellipse.phi):.1f}")
+            print(f"  angle={math.degrees(angle):.1f}")
 
         tab = {'ellipse': ellipse, 'indexes': (a,b), 'indent':indent, 'angle': angle}
 
@@ -209,8 +239,9 @@ class TabComputer:
 
     def angle_between(self, center, a, b):
 
-        pa = self.perimeter.points[a] - center
-        pb = self.perimeter.points[b] - center
+        n = len(self.perimeter.points)
+        pa = self.perimeter.points[a%n] - center
+        pb = self.perimeter.points[b%n] - center
         pa = pa / np.linalg.norm(pa)
         pb = pb / np.linalg.norm(pb)
         dot = np.sum(pa * pb)
@@ -270,9 +301,10 @@ class TabComputer:
         # print(f"  {global_to_local=}")
 
         a, b = tab['indexes']
+        n = len(self.perimeter.points)
         
         for aa in range(a,a+50):
-            ptg = self.perimeter.points[aa]
+            ptg = self.perimeter.points[aa % n]
             ptl = (ptg - center) @ global_to_local
             d = self.distance_to_ellipse(semi_major, semi_minor, ptl)
             # print(f"   {aa=} {ptg=} {ptl=} {d=:.1f}")
@@ -309,7 +341,7 @@ class TabComputer:
             closest_idx = None
             closest_dot = 0
             
-            for j in range(100):
+            for j in range(150):
                 
                 vec = make_unit_vector(i+j)
                 dot = np.sum(vec * axis)
@@ -325,16 +357,21 @@ class TabComputer:
 
             return closest_idx
 
-        aa = closest_point_to_axis(make_unit_vector(b), a)
-        bb = closest_point_to_axis(make_unit_vector(a), b)
+        avg = make_unit_vector(b) + make_unit_vector(a)
+        avg = avg / np.linalg.norm(avg)
+
+        aa = closest_point_to_axis(avg, a)
+        bb = closest_point_to_axis(avg, b)
         
         # print(f"  {aa=} {bb=}")
 
         tab['tangents'] = (aa, bb)
 
-    def compute_convexity_defects(self):
-        convex_hull = cv.convexHull(self.perimeter.points, returnPoints=False)
-        return np.squeeze(cv.convexityDefects(self.perimeter.points, convex_hull))
+    @staticmethod
+    def compute_convexity_defects(perimeter, approx_poly):
+        points  = perimeter.points[approx_poly.indexes]
+        convex_hull = cv.convexHull(points, returnPoints=False)
+        return np.squeeze(cv.convexityDefects(points, convex_hull))
 
 class EdgeComputer:
 
@@ -397,8 +434,8 @@ class EllipseFitter:
     def __init__(self, puzzle, label):
         
         piece = None
-        for p in puzzle['pieces']:
-            if p['label'] == label:
+        for p in puzzle.pieces:
+            if p.label == label:
                 piece = p
         assert piece is not None
 
@@ -424,13 +461,14 @@ class EllipseFitter:
         # print(f"{convex_hull=}")
 
         self.convexity_defects = []
-        convexity_defects = cv.convexityDefects(points, convex_hull)
+        convexity_defects = TabComputer.compute_convexity_defects(self.perimeter, apc)
 
         # print(f"{convexity_defects=}")
-        for defect in np.squeeze(convexity_defects):
-            p0 = tuple(points[defect[0]])
-            p1 = tuple(points[defect[1]])
-            p2 = tuple(points[defect[2]])
+        for defect in convexity_defects:
+            indexes = apc.indexes
+            p0 = tuple(points[indexes[defect[0]]])
+            p1 = tuple(points[indexes[defect[1]]])
+            p2 = tuple(points[indexes[defect[2]]])
             self.convexity_defects.append([p0, p2, p1])
 
         self.approx_pts = [tuple(points[i]) for i in apc.indexes]
@@ -478,7 +516,7 @@ class EllipseFitter:
             if self.approx_pts is not None and self.signed_area is not None:
                 for xy, area in zip(self.approx_pts, self.signed_area):
                     color = 'red' if area >= 0 else 'blue'
-                    graph.draw_point(xy, size=7, color=color)
+                    graph.draw_point(xy, size=12, color=color)
 
         if self.window['render_approx_poly_index'].get():
             if self.approx_pts is not None:
@@ -498,6 +536,9 @@ class EllipseFitter:
                     center = tab['ellipse'].center
                     graph.draw_text(f"{i}", center.tolist(), color='red', font=('Courier', 12))
                     for j in tab['tangents']:
+                        if j is None:
+                            # print("FNORD!")
+                            continue
                         p = self.perimeter.points[j].tolist()
                         graph.draw_point(p, size=10, color='green')
                         graph.draw_line(center.tolist(), p, color='green')
@@ -580,16 +621,47 @@ class EllipseFitter:
             else:
                 print(event, values)
 
-def ellipse_ui(args):
+def feature_view(args):
 
     puzzle = puzzler.file.load(args.puzzle)
     ui = EllipseFitter(puzzle, args.label)
     ui.epsilon = args.epsilon
     ui.run()
 
+def feature_update(args):
+
+    puzzle = puzzler.file.load(args.puzzle)
+    for piece in puzzle.pieces:
+        if piece.points is None:
+            continue
+
+        print(piece.label)
+
+        perimeter = PerimeterLoader(piece)
+
+        tc = TabComputer(perimeter, args.epsilon, False)
+        ec = EdgeComputer(perimeter, tc.approx_poly)
+
+        piece.tabs = []
+        for tab in tc.tabs:
+            piece.tabs.append(puzzler.feature.Tab(tab['indexes'], tab['ellipse'], tab['indent'], tab['tangents']))
+                
+        piece.edges = []
+        for edge in ec.edges:
+            piece.edges.append(puzzler.feature.Edge(edge['fit_indexes'], edge['line']))
+
+    puzzler.file.save(args.puzzle, puzzle)
+
 def add_parser(commands):
     
-    parser_ellipse = commands.add_parser("ellipse", help="ellipsify pieces")
-    parser_ellipse.add_argument("label")
-    parser_ellipse.add_argument("-e", "--epsilon", default=10.0, type=float, help="epsilon for approximating polygon")
-    parser_ellipse.set_defaults(func=ellipse_ui)
+    parser_features = commands.add_parser("features", help="featurify pieces")
+    parser_features.add_argument("-e", "--epsilon", default=10.0, type=float, help="epsilon for approximating polygon")
+
+    commands = parser_features.add_subparsers()
+
+    parser_update = commands.add_parser("update", help="update the feature computation")
+    parser_update.set_defaults(func=feature_update)
+    
+    parser_view = commands.add_parser("view", help="view the feature computation")
+    parser_view.add_argument("label")
+    parser_view.set_defaults(func=feature_view)

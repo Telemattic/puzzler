@@ -54,15 +54,16 @@ class PerimeterUI:
     def __init__(self, puzzle, label):
 
         piece = None
-        for p in puzzle['pieces']:
-            if p['label'] == label:
+        for p in puzzle.pieces:
+            if p.label == label:
                 piece = p
+                
+        assert piece is not None
 
-        source_id = piece['source']['id']
-        source = puzzle['sources'][source_id]
+        scan = puzzle.scans[piece.source.id]
 
-        scan = puzzler.segment.Segmenter.Scan(source['path'])
-        image = scan.get_subimage(piece['source']['rect'])
+        scan = puzzler.segment.Segmenter.Scan(scan.path)
+        image = scan.get_subimage(piece.source.rect)
 
         self.pc = PerimeterComputer(image, True)
 
@@ -162,21 +163,23 @@ def points_update(args):
     puzzle = puzzler.file.load(args.puzzle)
 
     pieces_by_source = collections.defaultdict(list)
-    for p in puzzle['pieces']:
-        s = p['source']['id']
+    for p in puzzle.pieces:
+        s = p.source.id
         pieces_by_source[s].append(p)
 
     for source_id, pieces in pieces_by_source.items():
 
-        source = puzzle['sources'][source_id]
+        scan = puzzle.scans[source_id]
 
-        print(source['path'])
+        print(scan.path)
 
-        scan = puzzler.segment.Segmenter.Scan(source['path'])
+        scan = puzzler.segment.Segmenter.Scan(scan.path)
         for piece in pieces:
-            image = scan.get_subimage(piece['source']['rect'])
+            image = scan.get_subimage(piece.source.rect)
             pc = PerimeterComputer(image)
-            piece['points'] = puzzler.chain.ChainCode().encode(np.squeeze(pc.contour))
+            piece.points = np.squeeze(pc.contour)
+            piece.tabs = None
+            piece.edges = None
     
     puzzler.file.save(args.puzzle, puzzle)
 

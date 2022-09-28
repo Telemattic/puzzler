@@ -10,21 +10,20 @@ class Browser:
 
         def __init__(self, piece, epsilon=10):
 
-            points = np.array(puzzler.chain.ChainCode().decode(piece['points']))
-            approx  = cv.approxPolyDP(points, epsilon, True)
+            approx  = cv.approxPolyDP(piece.points, epsilon, True)
             self.poly = np.squeeze(approx)
             self.poly = np.concatenate((self.poly, self.poly[:1,:]))
 
             ll = np.min(self.poly, 0)
             ur = np.max(self.poly, 0)
             self.bbox   = tuple(ll.tolist() + ur.tolist())
-            self.label  = piece['label']
+            self.label  = piece.label
 
     def __init__(self, puzzle):
 
         pieces = []
-        for p in puzzle['pieces']:
-            label = p['label']
+        for p in puzzle.pieces:
+            label = p.label
             m = re.fullmatch("^(\w+)(\d+)", label)
             if m:
                 pieces.append((m[1], int(m[2]), p))

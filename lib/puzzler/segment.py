@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 import os
+import puzzler
 import PySimpleGUI as sg
 import re
 import tempfile
@@ -69,9 +70,9 @@ class SegmenterUI:
 
         self.tempdir = tempfile.TemporaryDirectory(dir='C:\\Temp')
 
-        source = self.puzzle['sources'][source_id]
+        scan = self.puzzle.scans[source_id]
         
-        img = cv.imread(source['path'])
+        img = cv.imread(scan.path)
         
         w, h = img.shape[1], img.shape[0]
         self.image_raw = (w, h)
@@ -128,17 +129,17 @@ class SegmenterUI:
 
         self.labels  = [''] * len(self.rects)
 
-        for p in self.puzzle['pieces']:
+        for p in self.puzzle.pieces:
 
-            if p['source']['id'] != self.source_id:
+            if p.source.id != self.source_id:
                 continue
 
-            rx, ry, rw, rh = p['source']['rect']
+            rx, ry, rw, rh = p.source.rect
             x, y = rx + rw // 2, ry + rh // 2
 
             for i, (rx, ry, rw, rh) in enumerate(self.rects):
                 if rx < x < rx+rw and ry < y < ry+rh:
-                    self.labels[i] = p['label']
+                    self.labels[i] = p.label
             
     def do_label(self, xy):
 
@@ -166,14 +167,13 @@ class SegmenterUI:
 
     def to_json(self):
 
-        pieces = [p for p in self.puzzle['pieces'] if p['source']['id'] != self.source_id]
+        pieces = [p for p in self.puzzle.pieces if p.source.id != self.source_id]
         for rect, label in zip(self.rects, self.labels):
             if label != '':
-                source = {'id': self.source_id, 'rect':rect}
-                pieces.append({'label': label, 'source': source})
+                source = puzzler.puzzle.Puzzle.Piece.Source(self.source_id, rect)
+                pieces.append(puzzler.puzzle.Puzzle.Piece(label, source, None, None, None))
 
-        sources = self.puzzle['sources']
-        return {'sources': sources, 'pieces': pieces}
+        return puzzler.puzzle.Puzzle(self.puzzle.scans, pieces)
 
     def curr_label(self):
         return self.window['label'].get()

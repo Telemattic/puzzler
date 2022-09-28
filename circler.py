@@ -24,7 +24,7 @@ class TempImages:
         
 class PerimeterComputer:
 
-    def __init__(self, image_path, output_path = None):
+    def __init__(self, image_path):
         
         self.image_path = image_path
         self.images     = TempImages()
@@ -190,7 +190,7 @@ class PerimeterComputer:
         points = self.perimeter_points
         slopes = np.diff(points, axis=0)
         kernel = np.ones(20)
-        kernel = scipy.signal.firwin(21, .025)
+        kernel = scipy.signal.firwin(47, .003, pass_zero='lowpass')
         print(f"{slopes=} {kernel=}")
         x_avg  = np.convolve(slopes[:,0], kernel, mode='same')
         y_avg  = np.convolve(slopes[:,1], kernel, mode='same')
@@ -359,11 +359,10 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--image")
-    parser.add_argument("-o", "--output")
 
     args = parser.parse_args()
 
-    pc = PerimeterComputer(args.image, args.output)
+    pc = PerimeterComputer(args.image)
     pc.ui()
 
 if __name__ == '__main__':
