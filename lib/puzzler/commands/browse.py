@@ -77,17 +77,17 @@ class Browser:
         if p.tabs is not None:
             for tab in p.tabs:
                 pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
-                pts = (pts - bbox_center) * self.scale + np.array((x, y))
-                graph.draw_lines(pts, width=4, color='cyan')
+                pts = pts * self.scale + dxdy
+                graph.draw_polygon(pts, fill_color='cyan')
 
         if p.edges is not None:
             for edge in p.edges:
                 pts = np.vstack((edge.line.pt0, edge.line.pt1))
-                pts = (pts - bbox_center) * self.scale + np.array((x, y))
-                graph.draw_lines(pts, width=4, color='cyan')
+                pts = pts * self.scale + dxdy
+                graph.draw_lines(pts, width=4, color='pink')
         
-        poly = (o.poly - bbox_center) * self.scale + np.array((x, y))
-        graph.draw_lines(poly, color='black', width=2)
+        poly = o.poly * self.scale + dxdy
+        graph.draw_lines(poly, color='black', width=1)
 
         graph.draw_text(p.label, (x,y), font=('Courier', 12), color='black')
 
