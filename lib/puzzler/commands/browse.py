@@ -29,7 +29,7 @@ class Browser:
                 pieces.append((m[1], int(m[2]), p))
             else:
                 pieces.append((label, None, p))
-            pieces.sort()
+        pieces.sort()
 
         self.outlines = [Browser.Outline(p[2]) for p in pieces]
 

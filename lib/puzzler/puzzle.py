@@ -1,6 +1,7 @@
 import puzzler
 
 import numpy as np
+import re
 from dataclasses import dataclass
 
 @dataclass
@@ -98,9 +99,19 @@ class Formatter:
     def to_json(self, puzzle):
 
         scans = dict((k, self.format_scan(v)) for k, v in puzzle.scans.items())
-        pieces = [self.format_piece(p) for p in puzzle.pieces]
-
+        pieces = [self.format_piece(p) for p in self.sort_by_label(puzzle.pieces)]
+        
         return {'scans': scans, 'pieces': pieces}
+
+    def sort_by_label(self, pieces):
+        
+        vec = []
+        for p in pieces:
+            m = re.fullmatch("^(\w+)(\d+)", p.label)
+            k = (m[1], int(m[2])) if m else (p.label, 0)
+            vec.append((k, p))
+                
+        return [p for _, p in sorted(vec)]
 
     def format_scan(self, s):
         return {'path': s.path}
