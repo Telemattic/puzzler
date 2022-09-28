@@ -1,5 +1,7 @@
-import numpy as np
 import puzzler
+
+import math
+import numpy as np
 from dataclasses import dataclass
 
 @dataclass
@@ -156,3 +158,67 @@ def get_ellipse_points(ellipse, npts=100, tmin=0, tmax=2*np.pi):
     y = y0 + ap * np.cos(t) * np.sin(phi) + bp * np.sin(t) * np.cos(phi)
     return np.vstack((x,y)).transpose()
 
+def nearest_point_to_axis_aligned_ellipse_at_origin(semi_major, semi_minor, p):
+    
+    px = abs(p[0])
+    py = abs(p[1])
+
+    tx = 0.707
+    ty = 0.707
+
+    a = semi_major
+    b = semi_minor
+
+    for x in range(0, 3):
+        x = a * tx
+        y = b * ty
+
+        ex = (a*a - b*b) * tx**3 / a
+        ey = (b*b - a*a) * ty**3 / b
+
+        rx = x - ex
+        ry = y - ey
+
+        qx = px - ex
+        qy = py - ey
+
+        r = math.hypot(rx, ry)
+        q = math.hypot(qx, qy)
+
+        tx = min(1, max(0, (qx * r / q + ex) / a))
+        ty = min(1, max(0, (qy * r / q + ey) / b))
+        t = math.hypot(tx, ty)
+        tx /= t 
+        ty /= t 
+
+    return (math.copysign(a * tx, p[0]), math.copysign(b * ty, p[1]))
+
+def nearest_point_to_axis_aligned_ellipse_at_origin_2(semi_major, semi_minor, p):
+
+    assert arg.shape[-1] == 2
+    
+    pxy = np.absolute(p)
+
+    txy = np.full(arg.shape, 0.707)
+
+    a = semi_major
+    b = semi_minor
+    ab = np.array((a, b))
+
+    for _ in range(0, 3):
+
+        xy = txy * ab
+
+        exy = np.array(((a*a - b*b) / a, (b*b - a*a) / b)) * (txy ** 3)
+
+        rxy = xy - exy
+        qxy = pxy - exy
+
+        r = np.linalg.norm(rxy, axis=1)
+        q = np.linalg.norm(qxy, axis=1)
+
+        txy = np.clip((qxy * (r / q) + exy) / ab, 0., 1.)
+        txy = txy / np.linalg.norm(txy, axis=1)
+
+    return np.copysign(txy * ab, p)
+            

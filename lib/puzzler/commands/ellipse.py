@@ -286,7 +286,7 @@ class TabComputer:
         # return (math.copysign(a * tx, p[0]), math.copysign(b * ty, p[1])
         return math.hypot(a * tx - px, b * ty - py)
 
-    def trim_indexes(self, tab):
+    def trim_indexes2(self, tab):
 
         ellipse = tab['ellipse']
         center = ellipse.center
@@ -316,6 +316,41 @@ class TabComputer:
             ptl = (ptg - center) @ global_to_local
             d = self.distance_to_ellipse(semi_major, semi_minor, ptl)
             # print(f"   {bb=} {ptg=} {ptl=} {d=:.1f}")
+            if d < 5:
+                break
+
+        tab['trimmed_indexes'] = (aa, bb)
+
+    def trim_indexes(self, tab):
+
+        ellipse = tab['ellipse']
+        center = ellipse.center
+        semi_major, semi_minor = ellipse.semi_major, ellipse.semi_minor
+        angle = ellipse.phi
+        c, s = math.cos(angle), math.sin(angle)
+
+        global_to_local = np.array((( c, s),
+                                    (-s, c)))
+
+        # print(f"trim_indexes: center=({center[0]=:.1f},{center[1]=:.1f}) {semi_major=:.1f} {semi_minor=:.1f} {angle=:.3f}")
+        # print(f"  {global_to_local=}")
+
+        a, b = tab['indexes']
+        n = len(self.perimeter.points)
+
+        def dist(i):
+            ptg = self.perimeter.points[i]
+            ptl = (ptg - center) @ global_to_local
+            ptn = puzzler.geometry.nearest_point_to_axis_aligned_ellipse_at_origin(semi_major, semi_minor, ptl)
+            return np.linalg.norm(ptn - ptl)
+        
+        for aa in range(a,a+50):
+            d = dist(aa % n)
+            if d < 5:
+                break
+
+        for bb in range(b,b-50,-1):
+            d = dist(bb)
             if d < 5:
                 break
 
