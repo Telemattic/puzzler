@@ -44,6 +44,24 @@ def fit_ellipse_to_points(points):
 
     return Ellipse(np.array((cx, cy)), major, minor, phi)
 
+class DistanceToEllipseComputer:
+
+    def __init__(self, ellipse):
+        
+        self.center     = ellipse.center.copy()
+        self.semi_major = ellipse.semi_major
+        self.semi_minor = ellipse.semi_minor
+
+        c, s = math.cos(ellipse.phi), math.sin(ellipse.phi)
+        
+        self.rot = np.array((( c, s), (-s, c)))
+        
+    def __call__(self, pts):
+
+        pts_local   = (pts - self.center) @ self.rot
+        pts_nearest = np_nearest_point_to_axis_aligned_ellipse_at_origin(self.semi_major, self.semi_minor, pts_local)
+        return np.linalg.norm(pts_nearest - pts_local)
+
 # https://scipython.com/blog/direct-linear-least-squares-fitting-of-an-ellipse/
 
 def fit_ellipse(pts):
@@ -193,13 +211,14 @@ def nearest_point_to_axis_aligned_ellipse_at_origin(semi_major, semi_minor, p):
 
     return (math.copysign(a * tx, p[0]), math.copysign(b * ty, p[1]))
 
-def nearest_point_to_axis_aligned_ellipse_at_origin_2(semi_major, semi_minor, p):
+def np_nearest_point_to_axis_aligned_ellipse_at_origin(semi_major, semi_minor, p):
 
-    assert arg.shape[-1] == 2
+    assert p.shape[-1] == 2
+    p = np.atleast_2d(p)
     
     pxy = np.absolute(p)
 
-    txy = np.full(arg.shape, 0.707)
+    txy = np.full(p.shape, 0.707)
 
     a = semi_major
     b = semi_minor
