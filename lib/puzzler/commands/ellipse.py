@@ -207,9 +207,15 @@ class TabComputer:
         if self.verbose:
             print(f"fit_ellipse: {a=} {b=} {indent=}")
 
-        ellipse = puzzler.geometry.fit_ellipse_to_points(self.perimeter.slice(a, b))
+        points = self.perimeter.slice(a, b)
+        ellipse = puzzler.geometry.fit_ellipse_to_points(points)
         if ellipse is None:
             return None
+
+        dist = puzzler.geometry.DistanceToEllipseComputer(ellipse)(points)
+        sse  = np.sum(dist ** 2)
+        mse  = sse / len(points)
+        print(f"  fit: SSE={sse:.1f} MSE={mse:.1f}")
 
         poly = [ellipse.center[0], ellipse.center[1], ellipse.semi_major, ellipse.semi_minor, None, ellipse.phi]
 

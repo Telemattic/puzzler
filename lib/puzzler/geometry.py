@@ -236,8 +236,9 @@ def np_nearest_point_to_axis_aligned_ellipse_at_origin(semi_major, semi_minor, p
         r = np.linalg.norm(rxy, axis=1)
         q = np.linalg.norm(qxy, axis=1)
 
-        txy = np.clip((qxy * (r / q) + exy) / ab, 0., 1.)
-        txy = txy / np.linalg.norm(txy, axis=1)
+        r_over_q = r / q
+        txy = np.clip((qxy * r_over_q[:,np.newaxis] + exy) / ab, 0., 1.)
+        txy = txy / np.linalg.norm(txy, axis=1)[:,np.newaxis]
 
     return np.copysign(txy * ab, p)
             
