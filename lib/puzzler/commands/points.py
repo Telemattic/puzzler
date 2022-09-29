@@ -7,6 +7,9 @@ import PySimpleGUI as sg
 import tempfile
 import puzzler
 
+from tkinter import *
+from tkinter import ttk
+
 class PerimeterComputer:
 
     def __init__(self, img, save_images = False):
@@ -60,6 +63,66 @@ class PerimeterComputer:
         path = os.path.join(self.tempdir.name, filename)
         cv.imwrite(path, img)
         self.images.append((label, path))
+
+class PerimeterTk:
+
+    def __init__(self, parent, puzzle, label):
+        piece = None
+        for p in puzzle.pieces:
+            if p.label == label:
+                piece = p
+                
+        assert piece is not None
+
+        scan = puzzle.scans[piece.source.id]
+
+        scan = puzzler.segment.Segmenter.Scan(scan.path)
+        image = scan.get_subimage(piece.source.rect)
+
+        self.pc = PerimeterComputer(image, True)
+        w, h = self.pc.image_size
+
+        self.frame = ttk.Frame(parent, padding=5)
+        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(0, weight=1)
+
+        self.controls = ttk.Frame(self.frame)
+        self.controls.grid(column=1, row=0, sticky=(N, W, E, S))
+
+        self.label = ttk.Label(self.controls, text=f"{label} {w}x{h}")
+        self.label.grid(column=0, row=0, sticky=(N, W), padx=10)
+        
+        self.image_names = StringVar(value=[label for label, _ in self.pc.images])
+        self.lbox = Listbox(self.controls, listvariable=self.image_names, height=len(self.pc.images))
+        self.lbox.grid(column=0, row=1, sticky=(N, W), padx=10)
+        self.lbox.bind('<<ListboxSelect>>', self.render)
+        self.lbox.selection_set(0)
+
+        self.check_var = IntVar(value=1)
+        self.check = ttk.Checkbutton(self.controls, text='Render Contour', command=self.render,
+                                     variable=self.check_var)
+        self.check.grid(column=0, row=2, sticky=(N, W), padx=10)
+
+        self.canvas = Canvas(self.frame, width=w, height=h, background='blue', highlightthickness=0)
+        self.canvas.grid(column=0, row=0, rowspan=2, sticky=(N, W, E, S))
+
+        self.render()
+
+    def render(self, *args):
+
+        self.canvas.delete('all')
+        image = PhotoImage(file=self.get_image_path())
+        self.canvas.create_image((0, 0), image=image, anchor=NW)
+        self.displayed_image = image
+
+        if self.check_var.get():
+            points = self.pc.contour * np.array((1, -1)) + np.array((0, image.height()-1))
+            self.canvas.create_polygon(points.tolist(), outline='red', fill='')
+
+    def get_image_path(self):
+        i = self.lbox.curselection()[0]
+        return self.pc.images[i][1]
 
 class PerimeterUI:
 
@@ -145,7 +208,7 @@ class PerimeterUI:
             [sg.Graph(canvas_size=(w, h),
                       graph_bottom_left = (0, 0),
                       graph_top_right = (w, h),
-                      background_color='black',
+                      background_color='blue',
                       key='graph',
                       enable_events=True),
              controls],
@@ -198,8 +261,16 @@ def points_update(args):
 def points_view(args):
 
     puzzle = puzzler.file.load(args.puzzle)
-    ui = PerimeterUI(puzzle, args.label)
-    ui.run()
+    
+    if args.tk:
+        root = Tk()
+        ui = PerimeterTk(root, puzzle, args.label)
+        root.bind('<Key-Escape>', lambda e: root.destroy())
+        root.title("Puzzler: points")
+        root.mainloop()
+    else:
+        ui = PerimeterUI(puzzle, args.label)
+        ui.run()
     
 def add_parser(commands):
     parser_points = commands.add_parser("points", help="outline pieces")
@@ -211,4 +282,5 @@ def add_parser(commands):
 
     parser_view = commands.add_parser("view", help="view the points computation for a specific image")
     parser_view.add_argument("label")
+    parser_view.add_argument("--tk", default=False, action='store_const', const=True)
     parser_view.set_defaults(func=points_view)
