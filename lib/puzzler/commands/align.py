@@ -227,7 +227,7 @@ class AlignUI:
             color = colors[i%len(colors)]
             dxdy  = p.coords.dxdy
             
-            points = [tuple(xy + dxdy) for xy in np.squeeze(p.points) @ p.coords.rot_matrix()]
+            points = np.squeeze(p.points) @ p.coords.rot_matrix() + dxdy
             graph.draw_lines(points, color=color, width=2)
 
             h = DragHandle(p.coords)
