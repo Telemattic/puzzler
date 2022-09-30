@@ -301,7 +301,7 @@ class AlignUI:
 
             color = colors[i%len(colors)]
 
-            c = RenderContext()
+            c = puzzler.render.Renderer()
             c.translate(*p.coords.dxdy)
             c.rotate(p.coords.angle)
             points = c.to_device(p.points)
@@ -585,7 +585,7 @@ class AlignTk:
 
             color = colors[i%len(colors)]
 
-            c = RenderContext(canvas)
+            c = puzzler.render.Renderer(canvas)
             c.multiply(self.camera_matrix)
             
             c.translate(*p.coords.dxdy)
@@ -694,7 +694,7 @@ class AlignTk:
         print(f"umeyama: {self.umeyama(data0, data1)}")
         print(f"eldridge: {self.eldridge(data0, data1)}")
 
-        c = RenderContext(self.canvas)
+        c = puzzler.render.Renderer(self.canvas)
         c.multiply(self.camera_matrix)
         c.draw_circle(data0, 17, fill='purple', outline='')
 
