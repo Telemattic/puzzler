@@ -4,6 +4,10 @@ import PySimpleGUI as sg
 import puzzler
 import re
 
+from tkinter import *
+from tkinter import font
+from tkinter import ttk
+
 class Browser:
 
     class Outline:
@@ -91,6 +95,40 @@ class Browser:
 
         graph.draw_text(p.label, (x,y), font=('Courier', 12), color='black')
 
+    def render2(self, canvas):
+
+        self.font = font.Font(family='Courier', name='pieceLabelFont', size=12)
+        for i, o in enumerate(self.outlines):
+            x = (i %  self.cols) * self.tile_w + self.tile_w // 2
+            y = (i // self.cols) * self.tile_h + self.tile_h // 2
+            self.render2_outline(canvas, o, x, y)
+
+    def render2_outline(self, canvas, o, x, y):
+
+        p = o.piece
+
+        # want the corners of the outline bbox centered within the tile
+        bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
+        scale = np.array((self.scale, -self.scale))
+        trans = np.array((x, y)) - bbox_center * scale
+        
+        if p.tabs is not None:
+            for tab in p.tabs:
+                pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
+                pts = pts * scale + trans
+                canvas.create_polygon(pts.tolist(), fill='cyan')
+
+        if p.edges is not None:
+            for edge in p.edges:
+                pts = np.vstack((edge.line.pt0, edge.line.pt1))
+                pts = pts * scale + trans
+                canvas.create_line(pts.tolist(), width=4, fill='pink')
+        
+        poly = o.poly * scale + trans
+        canvas.create_polygon(poly.tolist(), outline='black', fill='', width=1)
+
+        canvas.create_text((x,y), text=p.label, font=self.font, fill='black')
+        
 class BrowseUI:
 
     def __init__(self, puzzle):
@@ -131,12 +169,42 @@ class BrowseUI:
             else:
                 print(event, values)
 
+class BrowseTk:
+
+    def __init__(self, parent, puzzle):
+
+        self.browser = Browser(puzzle)
+
+        w, h = self.browser.width, self.browser.height
+
+        self.frame = ttk.Frame(parent, padding=5)
+        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        
+        self.canvas = Canvas(self.frame, width=w, height=h, background='white', highlightthickness=0)
+        self.canvas.grid(column=0, row=0, rowspan=2, sticky=(N, W, E, S))
+
+        self.render()
+
+    def render(self):
+
+        self.canvas.delete('all')
+        self.browser.render2(self.canvas)
+
 def browse(args):
 
     puzzle = puzzler.file.load(args.puzzle)
-    ui = BrowseUI(puzzle)
-    ui.run()
+    
+    if args.tk:
+        root = Tk()
+        ui = BrowseTk(root, puzzle)
+        root.bind('<Key-Escape>', lambda e: root.destroy())
+        root.title("Puzzler: browse")
+        root.mainloop()
+    else:
+        ui = BrowseUI(puzzle)
+        ui.run()
 
 def add_parser(commands):
     parser_browse = commands.add_parser("browse", help="browse pieces")
+    parser_browse.add_argument("--tk", default=False, action='store_const', const=True)
     parser_browse.set_defaults(func=browse)
