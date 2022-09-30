@@ -1,5 +1,8 @@
 import puzzler
 
+from tkinter import *
+from tkinter import ttk
+
 def scan_add(args):
 
     puzzle = puzzler.file.load(args.puzzle)
@@ -7,8 +10,13 @@ def scan_add(args):
     id = puzzler.file.path_to_id(args.image)
     puzzle.scans[id] = puzzler.puzzle.Puzzle.Scan(args.image)
 
-    s = puzzler.segment.SegmenterUI(puzzle, id)
-    s.ui()
+    if args.tk:
+        root = Tk()
+        s = puzzler.segment.SegmenterTk(root, puzzle, id)
+        root.mainloop()
+    else:
+        s = puzzler.segment.SegmenterUI(puzzle, id)
+        s.ui()
 
     puzzler.file.save(args.puzzle, s.to_json())
 
@@ -16,8 +24,13 @@ def scan_edit(args):
 
     puzzle = puzzler.file.load(args.puzzle)
 
-    s = puzzler.segment.SegmenterUI(puzzle, args.id)
-    s.ui()
+    if args.tk:
+        root = Tk()
+        s = puzzler.segment.SegmenterTk(root, puzzle, args.id)
+        root.mainloop()
+    else:
+        s = puzzler.segment.SegmenterUI(puzzle, args.id)
+        s.ui()
 
     puzzler.file.save(args.puzzle, s.to_json())
         
@@ -42,10 +55,12 @@ def add_parser(commands):
 
     parser_add = commands.add_parser("add", help="add an image")
     parser_add.add_argument("image", help="path to image")
+    parser_add.add_argument("--tk", default=False, action='store_const', const=True)
     parser_add.set_defaults(func=scan_add)
 
     parser_edit = commands.add_parser("edit", help="edit an image")
     parser_edit.add_argument("id", help="id of image to edit")
+    parser_edit.add_argument("--tk", default=False, action='store_const', const=True)
     parser_edit.set_defaults(func=scan_edit)
 
     parser_list = commands.add_parser("list", help="list images")
