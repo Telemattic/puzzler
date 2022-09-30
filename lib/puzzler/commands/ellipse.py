@@ -7,6 +7,10 @@ import operator
 import PySimpleGUI as sg
 import puzzler
 
+from tkinter import *
+from tkinter import font
+from tkinter import ttk
+
 class PerimeterLoader:
 
     def __init__(self, piece):
@@ -494,6 +498,17 @@ class EllipseFitter:
 
         print(f"tabs={self.tabs}\nedges={self.edges}")
 
+        if len(self.edges) == 2:
+            l0, l1 = self.edges[0]['line'], self.edges[1]['line']
+            print(f"{l0=} {l1=}")
+            v0 = l0.pt1 - l0.pt0
+            v0 = v0 / np.linalg.norm(v0)
+            v1 = l1.pt1 - l1.pt0
+            v1 = v1 / np.linalg.norm(v1)
+            print(f"{v0=} {v1=}")
+            cross = np.cross(v0, v1)
+            print(f"{cross=}")
+
     def render(self):
 
         graph = self.window['graph']
@@ -628,12 +643,270 @@ class EllipseFitter:
             else:
                 print(event, values)
 
+class EllipseFitterTk:
+
+    def __init__(self, root, puzzle, label):
+        
+        piece = None
+        for p in puzzle.pieces:
+            if p.label == label:
+                piece = p
+        assert piece is not None
+
+        self.label = label
+        self.perimeter = PerimeterLoader(piece)
+        self.convex_hull = None
+        self.approx_pts = None
+        self.convexity_defects = None
+        self.tabs = None
+        self.edges = None
+
+        self.run(root)
+
+    def approx_poly(self):
+
+        apc = ApproxPolyComputer(self.perimeter, self.var_epsilon.get())
+
+        points = self.perimeter.points
+
+        convex_hull = cv.convexHull(points, returnPoints=False)
+        self.convex_hull = np.squeeze(points[convex_hull])
+
+        # print(f"{points=}")
+        # print(f"{convex_hull=}")
+
+        self.convexity_defects = []
+        convexity_defects = TabComputer.compute_convexity_defects(self.perimeter, apc)
+
+        # print(f"{convexity_defects=}")
+        for defect in convexity_defects:
+            indexes = apc.indexes
+            p0 = tuple(points[indexes[defect[0]]])
+            p1 = tuple(points[indexes[defect[1]]])
+            p2 = tuple(points[indexes[defect[2]]])
+            self.convexity_defects.append([p0, p2, p1])
+
+        self.approx_pts = [tuple(points[i]) for i in apc.indexes]
+        self.signed_area = apc.signed_area
+
+        self.render()
+
+    def ellipsify(self):
+        tc = TabComputer(self.perimeter, self.var_epsilon.get())
+        self.tabs = tc.tabs
+
+        ec = EdgeComputer(self.perimeter, tc.approx_poly, tc.tabs)
+        self.edges = ec.edges
+
+        self.render()
+
+        print(f"tabs={self.tabs}\nedges={self.edges}")
+
+        if len(self.edges) == 2:
+            l0, l1 = self.edges[0]['line'], self.edges[1]['line']
+            print(f"{l0=} {l1=}")
+            v0 = l0.pt1 - l0.pt0
+            v0 = v0 / np.linalg.norm(v0)
+            v1 = l1.pt1 - l1.pt0
+            v1 = v1 / np.linalg.norm(v1)
+            print(f"{v0=} {v1=}")
+            cross = np.cross(v0, v1)
+            print(f"{cross=}")
+
+    def to_device(self, points):
+        ret = (points - self.camera_trans) * self.camera_scale
+        return np.int32(ret).tolist()
+
+    def draw_points(self, points, radius, **kw):
+        
+        r = np.array((radius, radius))
+        for xy in np.atleast_2d(points):
+            bbox = np.array((xy-r, xy+r))
+            self.canvas.create_oval(self.to_device(bbox), **kw)
+
+    def render(self):
+
+        canvas = self.canvas
+        canvas.delete('all')
+
+        if self.var_render_perimeter.get():
+            self.draw_points(self.perimeter.points, radius=1, fill='black')
+
+        if self.var_render_convex_hull.get():
+            if self.convex_hull is not None:
+                hull = self.to_device(self.convex_hull)
+                canvas.create_polygon(hull, outline='black', fill='', width=1)
+
+        if self.var_render_ellipse_points.get():
+            if self.tabs is not None:
+                for i, tab in enumerate(self.tabs):
+                    self.draw_points(self.perimeter.slice(*tab['indexes']), radius=4, fill='purple', outline='')
+
+        if self.var_render_approx_poly.get():
+            if self.approx_pts is not None:
+                poly = self.to_device(self.approx_pts)
+                canvas.create_polygon(poly, outline='#00ff00', width=2, fill='')
+
+        if self.var_render_curvature.get():
+            if self.approx_pts is not None and self.signed_area is not None:
+                for xy, area in zip(self.approx_pts, self.signed_area):
+                    color = 'red' if area >= 0 else 'blue'
+                    self.draw_points(xy, radius=4, fill=color, outline='')
+
+        if self.var_render_approx_poly_index.get():
+            if self.approx_pts is not None:
+                for i, xy in enumerate(self.approx_pts):
+                    canvas.create_text(self.to_device(xy), text=f"{i}", fill='green')
+
+        if self.var_render_convexity_defects.get():
+            if self.convexity_defects is not None:
+                for defect in self.convexity_defects:
+                    canvas.create_line(self.to_device(defect), fill='lightblue', width=1)
+
+        if self.var_render_ellipses.get():
+            if self.tabs is not None:
+                for i, tab in enumerate(self.tabs):
+                    pts = puzzler.geometry.get_ellipse_points(tab['ellipse'], npts=40)
+                    canvas.create_line(self.to_device(pts), fill='blue', width=2)
+                    center = tab['ellipse'].center
+                    canvas.create_text(self.to_device(center), text=f"{i}", fill='red')
+                    for j in tab['tangents']:
+                        if j is None:
+                            # print("FNORD!")
+                            continue
+                        p = self.perimeter.points[j]
+                        self.draw_points(p, radius=6, fill='green')
+                        canvas.create_line(self.to_device(np.array((center, p))), fill='green')
+                    for j in tab['trimmed_indexes']:
+                        p = self.perimeter.points[j]
+                        self.draw_points(p, radius=6, fill='cyan')
+
+        if self.var_render_lines.get():
+            if self.edges is not None:
+                for edge in self.edges:
+                    line = edge['line']
+                    points = self.to_device(np.array((line.pt0, line.pt1)))
+                    canvas.create_line(points, fill='blue', width='2')
+
+    def _init_controls(self, parent):
+    
+        self.controls = ttk.Frame(parent)
+        self.controls.grid(column=0, row=1, sticky=(N, W, E, S), pady=5)
+
+        cf1 = ttk.LabelFrame(self.controls, text='Render')
+        cf1.grid(column=0, row=0, sticky=(N,W))
+        
+        self.var_render_perimeter = IntVar(value=1)
+        cb1 = ttk.Checkbutton(cf1, text='Perimeter', command=self.render,
+                              variable=self.var_render_perimeter)
+        cb1.grid(column=0, row=0)
+
+        self.var_render_convex_hull = IntVar(value=0)
+        cb2 = ttk.Checkbutton(cf1, text='Convex Hull', command=self.render,
+                              variable=self.var_render_convex_hull)
+        cb2.grid(column=1, row=0)
+
+        self.var_render_convexity_defects = IntVar(value=0)
+        cb3 = ttk.Checkbutton(cf1, text='Defects', command=self.render,
+                              variable=self.var_render_convexity_defects)
+        cb3.grid(column=2, row=0)
+        
+        cf2 = ttk.LabelFrame(self.controls, text='Approx')
+        cf2.grid(column=0, row=1, sticky=(N,W))
+        b1 = ttk.Button(cf2, text='Approx', command=self.approx_poly)
+        b1.grid(column=0, row=0)
+
+        l1 = ttk.Label(cf2, text='Epsilon')
+        l1.grid(column=1, row=0)
+
+        self.var_epsilon = DoubleVar(value=10.)
+        e1 = ttk.Entry(cf2, width=8, textvariable=self.var_epsilon)
+        e1.grid(column=2, row=0)
+
+        self.var_render_approx_poly = IntVar(value=0)
+        cb4 = ttk.Checkbutton(cf2, text='Approx Poly', command=self.render,
+                              variable=self.var_render_approx_poly)
+        cb4.grid(column=3, row=0)
+
+        self.var_render_curvature = IntVar(value=1)
+        cb5 = ttk.Checkbutton(cf2, text='Curvature', command=self.render,
+                              variable=self.var_render_curvature)
+        cb5.grid(column=4, row=0)
+
+        self.var_render_approx_poly_index = IntVar(value=0)
+        cb6 = ttk.Checkbutton(cf2, text='Indexes', command=self.render,
+                              variable=self.var_render_approx_poly_index)
+        cb6.grid(column=5, row=0)
+
+        cf3 = ttk.LabelFrame(self.controls, text='Tabs')
+        cf3.grid(column=0, row=2, sticky=(N,W))
+        b2 = ttk.Button(cf3, text='Ellipsify', command=self.ellipsify)
+        b2.grid(column=0, row=0)
+
+        self.var_render_ellipse_points = IntVar(value=1)
+        cb7 = ttk.Checkbutton(cf3, text='Points', command=self.render,
+                              variable=self.var_render_ellipse_points)
+        cb7.grid(column=1, row=0)
+
+        self.var_render_ellipses = IntVar(value=1)
+        cb8 = ttk.Checkbutton(cf3, text='Ellipses', command=self.render,
+                              variable=self.var_render_ellipses)
+        cb8.grid(column=2, row=0)
+
+        self.var_render_lines = IntVar(value=1)
+        cb9 = ttk.Checkbutton(cf3, text='Lines', command=self.render,
+                              variable=self.var_render_lines)
+        cb9.grid(column=3, row=0)
+
+    def run(self, parent):
+
+        bbox = list(self.perimeter.bbox)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        bbox[0] -= w // 5
+        bbox[2] += w // 5
+        bbox[1] -= h // 5
+        bbox[3] += h // 5
+        
+        s = 1
+        if max(w,h) > 800:
+            s = 800 / max(w,h)
+            w = int(w*s)
+            h = int(h*s)
+
+        # print(f"{w=} {h=} {s=}")
+        self.camera = bbox
+        self.camera_trans = np.array(bbox[0:2])
+        self.camera_scale = min(w / (bbox[2]-bbox[0]), h / (bbox[3]-bbox[1]))
+        
+        self.frame = ttk.Frame(parent, padding=5)
+        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(0, weight=1)
+
+        self.canvas = Canvas(self.frame, width=w, height=h,
+                             background='white', highlightthickness=0)
+        self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
+
+        self._init_controls(self.frame)
+
+        self.render()
+
 def feature_view(args):
 
     puzzle = puzzler.file.load(args.puzzle)
-    ui = EllipseFitter(puzzle, args.label)
-    ui.epsilon = args.epsilon
-    ui.run()
+
+    if args.tk:
+        root = Tk()
+        ui = EllipseFitterTk(root, puzzle, args.label)
+        ui.var_epsilon.set(args.epsilon)
+        root.bind('<Key-Escape>', lambda e: root.destroy())
+        root.title("Puzzler: features view")
+        root.mainloop()
+    else:
+        ui = EllipseFitter(puzzle, args.label)
+        ui.epsilon = args.epsilon
+        ui.run()
 
 def feature_update(args):
 
@@ -673,4 +946,5 @@ def add_parser(commands):
     
     parser_view = commands.add_parser("view", help="view the feature computation")
     parser_view.add_argument("label")
+    parser_view.add_argument("--tk", default=False, action='store_const', const=True)
     parser_view.set_defaults(func=feature_view)
