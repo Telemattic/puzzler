@@ -279,8 +279,13 @@ class SegmenterTk:
         print(f"scale={self.image_scale} -> {self.image_size}")
         
         img      = cv.resize(img, self.image_size, cv.INTER_CUBIC)
+
+        # trim off the margin introduced by a bit of overscan around
+        # the black background
+        img      = img[0:h-16,0:w-16,:]
+              
         gray     = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        thresh   = 255 - cv.threshold(gray, 84, 255, cv.THRESH_BINARY_INV)[1]
+        thresh   = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
         dilate   = cv.dilate(thresh, cv.getStructuringElement(cv.MORPH_RECT, (2,2)))
 
         print(f"temp={self.tempdir.name}")
@@ -291,13 +296,12 @@ class SegmenterTk:
         cv.imwrite(os.path.join(self.tempdir.name, "dilate.png"), dilate)
         
         contours = cv.findContours(dilate, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-
         assert len(contours)==2
 
         contours = [c for c in contours[0] if cv.contourArea(c) > 2000]
         for i, c in enumerate(contours):
             area = cv.contourArea(c)
-            print(f"{i}: area={area:.1f}")
+            print(f"{i}: {area=:.1f}")
 
         self.contours = contours
 
