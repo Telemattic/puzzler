@@ -6,9 +6,14 @@ import PySimpleGUI as sg
 import scipy
 import puzzler
 
+from tkinter import *
+from tkinter import font
+from tkinter import ttk
+
 class RenderContext:
 
-    def __init__(self):
+    def __init__(self, canvas=None):
+        self.canvas = canvas
         self.stack  = []
         self.matrix = np.identity(3)
 
@@ -50,7 +55,19 @@ class RenderContext:
 
     def to_device(self, pts):
         return self.to_v2(self.to_v3(pts, 1) @ self.matrix.T)
-    
+
+    def to_canvas(self, pts):
+        return np.int32(self.to_device(pts)).tolist()
+
+    def draw_lines(self, points, **kw):
+        device_points = np.int32(self.to_device(points)).tolist()
+        self.canvas.create_line(self.to_canvas(points), **kw)
+
+    def draw_circle(self, points, radius, **kw):
+        r = np.array((radius, radius)) / 3
+        for xy in self.to_device(np.atleast_2d(points)):
+            bbox = np.array((xy-r, xy+r))
+            self.canvas.create_oval(bbox.tolist(), **kw)
 
 class AffineTransform:
 
@@ -215,6 +232,18 @@ class DragHandle:
 
         # graph.draw_line(tuple(dragxy), tuple(knobxy), color=self.color, width=2)
 
+    def render2(self, ctx):
+
+        dragxy = np.float64((0,0))
+        ctx.draw_circle(dragxy, self.drag_radius,
+                        outline=self.color, fill='', width=3)
+
+        knobxy = np.float64((0.,self.drag_radius))
+        ctx.draw_circle(knobxy, self.knob_radius,
+                        fill=self.color, outline='white', width=2)
+
+        # graph.draw_line(tuple(dragxy), tuple(knobxy), color=self.color, width=2)
+        
 class AlignUI:
 
     def __init__(self, pieces):
@@ -483,6 +512,282 @@ class AlignUI:
             else:
                 print(event, values)
 
+class AlignTk:
+
+    def __init__(self, parent, pieces):
+        self.pieces = pieces
+
+        self.drag_handle = None
+        self.drag_id     = None
+
+        self.keep0 = None
+        self.keep1 = None
+
+        self._init_ui(parent)
+
+    def find_nearest_piece(self, xy):
+        return min((p.dist(xy)[0], i) for i, p in enumerate(self.pieces))
+
+    def canvas_press(self, event):
+
+        cm = self.camera_matrix
+        inv = np.linalg.inv(cm)
+        wxy = np.array((event.x, event.y, 1), dtype=np.float64) @ inv.T
+
+        xy = wxy[:2]
+
+        dist, id = self.find_nearest_piece(xy)
+        if dist < 20:
+            self.drag_id = id
+            self.drag_handle = DragHandle(self.pieces[id].coords)
+            self.drag_handle.start_drag(xy, 'move')
+        else:
+            for i, p in enumerate(self.pieces):
+                h = DragHandle(p.coords)
+                t = h.hit_test(xy)
+                if t:
+                    self.drag_id = i
+                    self.drag_handle = h
+                    h.start_drag(xy, t)
+                    break
+
+        self.render()
+        
+    def canvas_drag(self, event):
+
+        cm = self.camera_matrix
+        inv = np.linalg.inv(cm)
+        wxy = np.array((event.x, event.y, 1), dtype=np.float64) @ inv.T
+
+        xy = wxy[:2]
+
+        if self.drag_handle:
+            self.drag_handle.drag(xy)
+            self.render()
+
+    def canvas_release(self, event):
+                
+        if self.drag_handle:
+            self.drag_handle.end_drag()
+                
+        self.drag_handle = None
+        self.drag_id     = None
+            
+        self.render()
+
+    def render(self):
+
+        canvas = self.canvas
+        canvas.delete('all')
+
+        colors = ['red', 'green', 'blue']
+        for i, p in enumerate(self.pieces):
+
+            color = colors[i%len(colors)]
+
+            c = RenderContext(canvas)
+
+            if False:
+                s = self.camera_scale
+                w = int(canvas.configure('width')[4])
+                h = int(canvas.configure('height')[4])
+                camera = np.array(((1/s,    0,   0),
+                                   (  0, -1/s, h-1),
+                                   (  0,    0,   1)), dtype=np.float64)
+                
+            c.multiply(self.camera_matrix)
+            
+            c.translate(*p.coords.dxdy)
+            c.rotate(p.coords.angle)
+            
+            c.draw_lines(p.points, fill=color, width=2)
+
+            h = DragHandle(p.coords)
+            h.render2(c)
+
+    @staticmethod
+    def umeyama(P, Q):
+        assert P.shape == Q.shape
+        n, dim = P.shape
+
+        centeredP = P - P.mean(axis=0)
+        centeredQ = Q - Q.mean(axis=0)
+
+        C = np.dot(np.transpose(centeredP), centeredQ) / n
+
+        V, S, W = np.linalg.svd(C)
+        d = (np.linalg.det(V) * np.linalg.det(W)) < 0.0
+
+        if d:
+            S[-1] = -S[-1]
+            V[:, -1] = -V[:, -1]
+
+        R = np.dot(V, W)
+
+        varP = np.var(P, axis=0).sum()
+        c = 1/varP * np.sum(S) # scale factor
+
+        t = Q.mean(axis=0) - P.mean(axis=0).dot(c*R)
+
+        return c, R, t
+
+    @staticmethod
+    def eldridge(P, Q):
+        m = P.shape[0]
+        assert P.shape == Q.shape == (m, 2)
+
+        # want the optimized rotation and translation to map P -> Q
+
+        Px, Py = np.sum(P, axis=0)
+        Qx, Qy = np.sum(Q, axis=0)
+
+        A00 =np.sum(np.square(P))
+        A = np.array([[A00, -Py, Px], 
+                      [-Py,  m , 0.],
+                      [ Px,  0., m ]], dtype=np.float64)
+
+        u0 = np.sum(P[:,0]*Q[:,1]) - np.sum(P[:,1]*Q[:,0])
+        u = np.array([u0, Qx-Px, Qy-Py], dtype=np.float64)
+
+        return np.linalg.lstsq(A, u, rcond=None)
+
+    @staticmethod
+    def icp(d, n, s):
+        m = d.shape[0]
+        assert d.shape == n.shape == s.shape == (m, 2)
+
+        a = s[:,0]*n[:,1] - s[:,1]*n[:,0]
+        a = a.reshape((m,1))
+        A = np.hstack((a, n))
+
+        # n dot (d-s)
+        v = np.sum(n * (d-s), axis=1)
+
+        # print(f"icp: {d=} {n=} {s=}")
+        # print(f"  {A=}")
+        # print(f"  {v=}")
+
+        return np.linalg.lstsq(A, v, rcond=None)
+
+    def do_fit(self):
+        
+        print("Fit!")
+
+        graph = self.window['graph']
+
+        piece0 = self.pieces[0]
+        piece1 = self.pieces[1]
+
+        points0 = piece0.coords.to_global_xy(piece0.points)
+        kdtree0 = scipy.spatial.KDTree(points0)
+        
+        points1 = piece1.coords.to_global_xy(piece1.points)
+        kdtree1 = scipy.spatial.KDTree(points1)
+
+        indexes = kdtree0.query_ball_tree(kdtree1, r=15)
+        matches = [i for i, v in enumerate(indexes) if len(v)]
+
+        print(f"{len(matches)} points in piece0 have a correspondence with piece1")
+
+        keep = [matches[i] for i in range(0, len(matches), (len(matches)-4) // 4)]
+        print(f"{keep=}")
+
+        data0 = points0[keep]
+        d, i = kdtree1.query(data0)
+        data1 = points1[i]
+
+        for xy in data0:
+            graph.draw_point(tuple(xy), color='purple', size=17)
+
+        self.keep0 = keep
+        self.keep1 = i
+
+        print(f"{data0=}")
+        print(f"{data1=}")
+
+        print(f"umeyama: {self.umeyama(data0, data1)}")
+        print(f"eldridge: {self.eldridge(data0, data1)}")
+
+    def do_refit(self):
+
+        if self.keep0 is None or self.keep1 is None:
+            return
+        
+        graph = self.window['graph']
+
+        piece0 = self.pieces[0]
+        piece1 = self.pieces[1]
+
+        points0 = piece0.coords.to_global_xy(piece0.points)
+        points1 = piece1.coords.to_global_xy(piece1.points)
+
+        data0 = points0[self.keep0]
+        data1 = points1[self.keep1]
+        
+        normal0 = np.array([piece0.normal_at_index(i) for i in self.keep0])
+        normal1 = np.array([piece1.normal_at_index(i) for i in self.keep1])
+
+        for i, xy in enumerate(data0):
+            graph.draw_point(tuple(xy), color='purple', size=17)
+            graph.draw_text(f"{i}", tuple(xy), color='purple')
+            uv = np.array(normal0[i])
+            graph.draw_line(tuple(xy), tuple(xy + uv*50), color='black')
+            
+        for i, xy in enumerate(data1):
+            graph.draw_point(tuple(xy), color='purple', size=17)
+            graph.draw_text(f"{i}", tuple(xy), color='purple')
+            uv = np.array(normal1[i])
+            graph.draw_line(tuple(xy), tuple(xy + uv*50), color='black')
+
+        if False:
+            for i in range(len(data0)):
+                uv0 = normal0[i]
+                uv1 = normal1[i]
+                print(f"{i}: p0_xy={data0[i]} p0_uv={uv0[0]:+6.3f},{uv0[1]:+6.3f} p1_xy={data1[i]} p1_uv={uv1[0]:+6.3f},{uv1[1]:+6.3f}")
+
+        # print(f"{data0=}")
+        # print(f"{data1=}")
+
+        # print(f"umeyama: {self.umeyama(data0, data1)}")
+        # print(f"eldridge: {self.eldridge(data0, data1)}")
+
+        data1 = data1 - piece1.coords.dxdy
+
+        theta, tx, ty = self.icp(data0, normal0, data1)[0]
+        dxdy = np.array((tx,ty))
+        print(f"icp: theta={theta*180/math.pi:.3f} degrees, {dxdy=}")
+
+        c = piece1.coords
+        print(f"  before: {c.angle=} {c.dxdy=}")
+
+        c.angle += theta
+        c.dxdy   = dxdy
+
+        print(f"  after:  {c.angle=} {c.dxdy=}")
+        
+        self.render()
+        
+    def _init_ui(self, parent):
+
+        w, h, s = 1024, 1024, 3
+
+        self.camera_matrix = np.array(
+            ((1/s,    0,   0),
+             (  0, -1/s, h-1),
+             (  0,    0,   1)), dtype=np.float64)
+        
+        self.frame = ttk.Frame(parent, padding=5)
+        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+
+        self.canvas = Canvas(self.frame, width=w, height=h,
+                             background='white', highlightthickness=0)
+        self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.canvas.bind("<Button-1>", self.canvas_press)
+        self.canvas.bind("<B1-Motion>", self.canvas_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.canvas_release)
+
+        self.render()
+                
 def align_ui(args):
 
     puzzle = puzzler.file.load(args.puzzle)
@@ -492,12 +797,20 @@ def align_ui(args):
         by_label[p.label] = p
 
     pieces = [Piece(by_label[l]) for l in args.labels]
-    
-    ui = AlignUI(pieces)
-    ui.run()
+
+    if args.tk:
+        root = Tk()
+        ui = AlignTk(root, pieces)
+        root.bind('<Key-Escape>', lambda e: root.destroy())
+        root.title("Puzzler: align")
+        root.mainloop()
+    else:
+        ui = AlignUI(pieces)
+        ui.run()
 
 def add_parser(commands):
 
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
     parser_align.add_argument("labels", nargs='+')
+    parser_align.add_argument("--tk", default=False, action='store_const', const=True)
     parser_align.set_defaults(func=align_ui)
