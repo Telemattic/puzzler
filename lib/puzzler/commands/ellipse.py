@@ -902,6 +902,7 @@ def feature_view(args):
         ui.var_epsilon.set(args.epsilon)
         root.bind('<Key-Escape>', lambda e: root.destroy())
         root.title("Puzzler: features view")
+        root.wm_resizable(0, 0)
         root.mainloop()
     else:
         ui = EllipseFitter(puzzle, args.label)

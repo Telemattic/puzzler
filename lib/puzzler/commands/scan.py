@@ -13,6 +13,9 @@ def scan_add(args):
     if args.tk:
         root = Tk()
         s = puzzler.segment.SegmenterTk(root, puzzle, id)
+        root.bind('<Key-Escape>', lambda e: root.destroy())
+        root.title("Puzzler: scan")
+        root.wm_resizable(0, 0)
         root.mainloop()
     else:
         s = puzzler.segment.SegmenterUI(puzzle, id)

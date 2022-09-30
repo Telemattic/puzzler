@@ -267,6 +267,7 @@ def points_view(args):
         ui = PerimeterTk(root, puzzle, args.label)
         root.bind('<Key-Escape>', lambda e: root.destroy())
         root.title("Puzzler: points")
+        root.wm_resizable(0, 0)
         root.mainloop()
     else:
         ui = PerimeterUI(puzzle, args.label)
