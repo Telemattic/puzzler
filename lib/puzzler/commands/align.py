@@ -586,15 +586,6 @@ class AlignTk:
             color = colors[i%len(colors)]
 
             c = RenderContext(canvas)
-
-            if False:
-                s = self.camera_scale
-                w = int(canvas.configure('width')[4])
-                h = int(canvas.configure('height')[4])
-                camera = np.array(((1/s,    0,   0),
-                                   (  0, -1/s, h-1),
-                                   (  0,    0,   1)), dtype=np.float64)
-                
             c.multiply(self.camera_matrix)
             
             c.translate(*p.coords.dxdy)
@@ -673,8 +664,6 @@ class AlignTk:
         
         print("Fit!")
 
-        graph = self.window['graph']
-
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
@@ -696,9 +685,6 @@ class AlignTk:
         d, i = kdtree1.query(data0)
         data1 = points1[i]
 
-        for xy in data0:
-            graph.draw_point(tuple(xy), color='purple', size=17)
-
         self.keep0 = keep
         self.keep1 = i
 
@@ -708,13 +694,15 @@ class AlignTk:
         print(f"umeyama: {self.umeyama(data0, data1)}")
         print(f"eldridge: {self.eldridge(data0, data1)}")
 
+        c = RenderContext(self.canvas)
+        c.multiply(self.camera_matrix)
+        c.draw_circle(data0, 17, fill='purple', outline='')
+
     def do_refit(self):
 
         if self.keep0 is None or self.keep1 is None:
             return
         
-        graph = self.window['graph']
-
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
@@ -726,30 +714,6 @@ class AlignTk:
         
         normal0 = np.array([piece0.normal_at_index(i) for i in self.keep0])
         normal1 = np.array([piece1.normal_at_index(i) for i in self.keep1])
-
-        for i, xy in enumerate(data0):
-            graph.draw_point(tuple(xy), color='purple', size=17)
-            graph.draw_text(f"{i}", tuple(xy), color='purple')
-            uv = np.array(normal0[i])
-            graph.draw_line(tuple(xy), tuple(xy + uv*50), color='black')
-            
-        for i, xy in enumerate(data1):
-            graph.draw_point(tuple(xy), color='purple', size=17)
-            graph.draw_text(f"{i}", tuple(xy), color='purple')
-            uv = np.array(normal1[i])
-            graph.draw_line(tuple(xy), tuple(xy + uv*50), color='black')
-
-        if False:
-            for i in range(len(data0)):
-                uv0 = normal0[i]
-                uv1 = normal1[i]
-                print(f"{i}: p0_xy={data0[i]} p0_uv={uv0[0]:+6.3f},{uv0[1]:+6.3f} p1_xy={data1[i]} p1_uv={uv1[0]:+6.3f},{uv1[1]:+6.3f}")
-
-        # print(f"{data0=}")
-        # print(f"{data1=}")
-
-        # print(f"umeyama: {self.umeyama(data0, data1)}")
-        # print(f"eldridge: {self.eldridge(data0, data1)}")
 
         data1 = data1 - piece1.coords.dxdy
 
@@ -777,7 +741,7 @@ class AlignTk:
              (  0,    0,   1)), dtype=np.float64)
         
         self.frame = ttk.Frame(parent, padding=5)
-        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.frame.grid(sticky=(N, W, E, S))
 
         self.canvas = Canvas(self.frame, width=w, height=h,
                              background='white', highlightthickness=0)
@@ -785,6 +749,15 @@ class AlignTk:
         self.canvas.bind("<Button-1>", self.canvas_press)
         self.canvas.bind("<B1-Motion>", self.canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_release)
+
+        self.controls = ttk.Frame(self.frame)
+        self.controls.grid(row=1, sticky=W)
+
+        b1 = ttk.Button(self.controls, text='Fit', command=self.do_fit)
+        b1.grid(column=0, row=0, sticky=N)
+
+        b2 = ttk.Button(self.controls, text='Refit', command=self.do_refit)
+        b2.grid(column=1, row=0, sticky=N)
 
         self.render()
                 
@@ -803,6 +776,7 @@ def align_ui(args):
         ui = AlignTk(root, pieces)
         root.bind('<Key-Escape>', lambda e: root.destroy())
         root.title("Puzzler: align")
+        root.wm_resizable(0, 0)
         root.mainloop()
     else:
         ui = AlignUI(pieces)
