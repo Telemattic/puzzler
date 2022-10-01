@@ -50,6 +50,12 @@ class Renderer:
     def to_canvas(self, pts):
         return np.int32(self.to_device(pts)).tolist()
 
+    def draw_points(self, points, radius, **kw):
+        r = np.array((radius, radius))
+        for xy in self.to_device(points):
+            bbox = np.array((xy-r, xy+r))
+            self.canvas.create_oval(bbox.tolist(), **kw)
+            
     def draw_lines(self, points, **kw):
         self.canvas.create_line(self.to_canvas(points), **kw)
 
