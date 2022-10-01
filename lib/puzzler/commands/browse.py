@@ -95,15 +95,15 @@ class Browser:
 
         graph.draw_text(p.label, (x,y), font=('Courier', 12), color='black')
 
-    def render2(self, canvas):
+    def render(self, canvas):
 
         self.font = font.Font(family='Courier', name='pieceLabelFont', size=12)
         for i, o in enumerate(self.outlines):
             x = (i %  self.cols) * self.tile_w + self.tile_w // 2
             y = (i // self.cols) * self.tile_h + self.tile_h // 2
-            self.render2_outline(canvas, o, x, y)
+            self.render_outline(canvas, o, x, y)
 
-    def render2_outline(self, canvas, o, x, y):
+    def render_outline(self, canvas, o, x, y):
 
         p = o.piece
 
@@ -129,46 +129,6 @@ class Browser:
 
         canvas.create_text((x,y), text=p.label, font=self.font, fill='black')
         
-class BrowseUI:
-
-    def __init__(self, puzzle):
-
-        self.browser = Browser(puzzle)
-
-    def render(self):
-
-        graph = self.window['graph']
-        graph.erase()
-
-        self.browser.render(graph)
-
-    def _init_ui(self):
-        
-        w, h = self.browser.width, self.browser.height
-
-        layout = [
-            [sg.Graph(canvas_size=(w, h),
-                      graph_bottom_left = (0, 0),
-                      graph_top_right = (w, h),
-                      background_color='white',
-                      key='graph',
-                      enable_events=True)]
-        ]
-        
-        self.window = sg.Window('Browser', layout, finalize=True)
-        self.render()
-
-    def run(self):
-        
-        self._init_ui()
-
-        while True:
-            event, values = self.window.read()
-            if event == sg.WIN_CLOSED:
-                break
-            else:
-                print(event, values)
-
 class BrowseTk:
 
     def __init__(self, parent, puzzle):
@@ -188,23 +148,18 @@ class BrowseTk:
     def render(self):
 
         self.canvas.delete('all')
-        self.browser.render2(self.canvas)
+        self.browser.render(self.canvas)
 
 def browse(args):
 
     puzzle = puzzler.file.load(args.puzzle)
     
-    if args.tk:
-        root = Tk()
-        ui = BrowseTk(root, puzzle)
-        root.bind('<Key-Escape>', lambda e: root.destroy())
-        root.title("Puzzler: browse")
-        root.mainloop()
-    else:
-        ui = BrowseUI(puzzle)
-        ui.run()
+    root = Tk()
+    ui = BrowseTk(root, puzzle)
+    root.bind('<Key-Escape>', lambda e: root.destroy())
+    root.title("Puzzler: browse")
+    root.mainloop()
 
 def add_parser(commands):
     parser_browse = commands.add_parser("browse", help="browse pieces")
-    parser_browse.add_argument("--tk", default=False, action='store_const', const=True)
     parser_browse.set_defaults(func=browse)
