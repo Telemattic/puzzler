@@ -36,6 +36,7 @@ class Renderer:
         self.multiply(m)
 
     def to_v3(self, pts, w):
+        pts = np.atleast_2d(pts)
         assert pts.ndim == 2 and pts.shape[1] == 2
         return np.hstack((pts, np.full((len(pts),1), w, dtype=pts.dtype)))
 
@@ -50,7 +51,6 @@ class Renderer:
         return np.int32(self.to_device(pts)).tolist()
 
     def draw_lines(self, points, **kw):
-        device_points = np.int32(self.to_device(points)).tolist()
         self.canvas.create_line(self.to_canvas(points), **kw)
 
     def draw_circle(self, points, radius, **kw):
@@ -58,4 +58,10 @@ class Renderer:
         for xy in self.to_device(np.atleast_2d(points)):
             bbox = np.array((xy-r, xy+r))
             self.canvas.create_oval(bbox.tolist(), **kw)
+
+    def draw_polygon(self, points, **kw):
+        self.canvas.create_polygon(self.to_canvas(points), **kw)
+
+    def draw_text(self, xy, text, **kw):
+        self.canvas.create_text(self.to_canvas(xy),text=text, **kw)
 

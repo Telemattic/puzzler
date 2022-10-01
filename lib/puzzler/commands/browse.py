@@ -1,6 +1,5 @@
 import cv2 as cv
 import numpy as np
-import PySimpleGUI as sg
 import puzzler
 import re
 
@@ -57,77 +56,62 @@ class Browser:
         self.cols = cols
         self.rows = compute_rows(cols)
 
+        self.bbox_w = bbox_w
+        self.bbox_h = bbox_h
         self.tile_w = max_w // cols
         self.tile_h = self.tile_w * bbox_h // bbox_w
         self.scale  = min(self.tile_w / bbox_w, self.tile_h / bbox_h)
         self.width  = self.tile_w * self.cols
         self.height = self.tile_h * self.rows
 
-    def render(self, graph):
-
-        for i, o in enumerate(self.outlines):
-            x = (i %  self.cols) * self.tile_w + self.tile_w // 2
-            y = (self.rows - 1 - (i // self.cols)) * self.tile_h + self.tile_h // 2
-            self.render_outline(graph, o, x, y)
-
-    def render_outline(self, graph, o, x, y):
-
-        p = o.piece
-
-        # want the corners of the outline bbox centered within the tile
-        bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
-        dxdy = np.array((x, y)) - bbox_center * self.scale
-        
-        if p.tabs is not None:
-            for tab in p.tabs:
-                pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
-                pts = pts * self.scale + dxdy
-                graph.draw_polygon(pts, fill_color='cyan')
-
-        if p.edges is not None:
-            for edge in p.edges:
-                pts = np.vstack((edge.line.pt0, edge.line.pt1))
-                pts = pts * self.scale + dxdy
-                graph.draw_lines(pts, width=4, color='pink')
-        
-        poly = o.poly * self.scale + dxdy
-        graph.draw_lines(poly, color='black', width=1)
-
-        graph.draw_text(p.label, (x,y), font=('Courier', 12), color='black')
-
     def render(self, canvas):
 
+        h = self.height
+        camera_matrix = np.array(
+            ((1,  0,   0),
+             (0, -1, h-1),
+             (0,  0,   1)), dtype=np.float64)
+
+        r = puzzler.render.Renderer(canvas)
+        r.multiply(camera_matrix)
+        r.scale(self.scale)
+        
         self.font = font.Font(family='Courier', name='pieceLabelFont', size=12)
         for i, o in enumerate(self.outlines):
-            x = (i %  self.cols) * self.tile_w + self.tile_w // 2
-            y = (i // self.cols) * self.tile_h + self.tile_h // 2
-            self.render_outline(canvas, o, x, y)
+            x = (i %  self.cols)
+            y = (self.rows - 1 - (i // self.cols))
+            tx = (x + .5) * self.bbox_w
+            ty = (y + .5) * self.bbox_h
+            r.push()
+            r.translate(tx, ty)
+            self.render_outline(r, o)
+            r.pop()
 
-    def render_outline(self, canvas, o, x, y):
+    def render_outline(self, r, o):
 
         p = o.piece
 
         # want the corners of the outline bbox centered within the tile
         bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
-        scale = np.array((self.scale, -self.scale))
-        trans = np.array((x, y)) - bbox_center * scale
-        
+
+        r.push()
+        r.translate(*-bbox_center)
+
         if p.tabs is not None:
             for tab in p.tabs:
                 pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
-                pts = pts * scale + trans
-                canvas.create_polygon(pts.tolist(), fill='cyan')
+                r.draw_polygon(pts, fill='cyan', outline='')
 
         if p.edges is not None:
             for edge in p.edges:
                 pts = np.vstack((edge.line.pt0, edge.line.pt1))
-                pts = pts * scale + trans
-                canvas.create_line(pts.tolist(), width=4, fill='pink')
-        
-        poly = o.poly * scale + trans
-        canvas.create_polygon(poly.tolist(), outline='black', fill='', width=1)
+                r.draw_lines(pts, width=4, fill='pink')
 
-        canvas.create_text((x,y), text=p.label, font=self.font, fill='black')
+        r.draw_polygon(o.poly, outline='black', fill='', width=1)
+
+        r.pop()
+
+        r.draw_text((0, 0), text=p.label, font=self.font, fill='black')
         
 class BrowseTk:
 
