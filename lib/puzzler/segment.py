@@ -2,7 +2,6 @@ import cv2 as cv
 import numpy as np
 import os
 import puzzler
-import PySimpleGUI as sg
 import re
 import tempfile
 

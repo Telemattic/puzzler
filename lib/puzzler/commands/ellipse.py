@@ -4,7 +4,6 @@ import itertools
 import math
 import numpy as np
 import operator
-import PySimpleGUI as sg
 import puzzler
 
 from tkinter import *
@@ -440,209 +439,6 @@ class EdgeComputer:
         diff = np.diff(convex_hull, axis=0, append=convex_hull[0:1])
         return np.sum(np.linalg.norm(diff, axis=1))
 
-class EllipseFitter:
-
-    def __init__(self, puzzle, label):
-        
-        piece = None
-        for p in puzzle.pieces:
-            if p.label == label:
-                piece = p
-        assert piece is not None
-
-        self.label = label
-        self.perimeter = PerimeterLoader(piece)
-        self.epsilon  = 10.
-        self.convex_hull = None
-        self.approx_pts = None
-        self.convexity_defects = None
-        self.tabs = None
-        self.edges = None
-
-    def approx_poly(self):
-
-        apc = ApproxPolyComputer(self.perimeter, self.epsilon)
-
-        points = self.perimeter.points
-
-        convex_hull = cv.convexHull(points, returnPoints=False)
-        self.convex_hull = np.squeeze(points[convex_hull])
-
-        # print(f"{points=}")
-        # print(f"{convex_hull=}")
-
-        self.convexity_defects = []
-        convexity_defects = TabComputer.compute_convexity_defects(self.perimeter, apc)
-
-        # print(f"{convexity_defects=}")
-        for defect in convexity_defects:
-            indexes = apc.indexes
-            p0 = tuple(points[indexes[defect[0]]])
-            p1 = tuple(points[indexes[defect[1]]])
-            p2 = tuple(points[indexes[defect[2]]])
-            self.convexity_defects.append([p0, p2, p1])
-
-        self.approx_pts = [tuple(points[i]) for i in apc.indexes]
-        self.signed_area = apc.signed_area
-
-        self.render()
-
-    def ellipsify(self):
-        tc = TabComputer(self.perimeter, self.epsilon)
-        self.tabs = tc.tabs
-
-        ec = EdgeComputer(self.perimeter, tc.approx_poly, tc.tabs)
-        self.edges = ec.edges
-
-        self.render()
-
-        print(f"tabs={self.tabs}\nedges={self.edges}")
-
-        if len(self.edges) == 2:
-            l0, l1 = self.edges[0]['line'], self.edges[1]['line']
-            print(f"{l0=} {l1=}")
-            v0 = l0.pt1 - l0.pt0
-            v0 = v0 / np.linalg.norm(v0)
-            v1 = l1.pt1 - l1.pt0
-            v1 = v1 / np.linalg.norm(v1)
-            print(f"{v0=} {v1=}")
-            cross = np.cross(v0, v1)
-            print(f"{cross=}")
-
-    def render(self):
-
-        graph = self.window['graph']
-        graph.erase()
-
-        if self.window['render_perimeter'].get():
-                for xy in self.perimeter.points:
-                    graph.draw_point(tuple(xy), size=1, color='black')
-
-        if self.window['render_convex_hull'].get():
-            if self.convex_hull is not None:
-                xy_tuples = list(tuple(i) for i in self.convex_hull)
-                xy_tuples.append(xy_tuples[0])
-                graph.draw_lines(xy_tuples, color='black', width=1)
-
-        if self.window['render_ellipse_points'].get():
-            if self.tabs is not None:
-                for i, tab in enumerate(self.tabs):
-                    for p in self.perimeter.slice(*tab['indexes']):
-                        graph.draw_point(p.tolist(), size=8, color='purple')
-
-        if self.window['render_approx_poly'].get():
-            if self.approx_pts is not None:
-                graph.draw_lines(self.approx_pts + [self.approx_pts[0]], color='#00ff00', width=2)
-
-        if self.window['render_curvature'].get():
-            if self.approx_pts is not None and self.signed_area is not None:
-                for xy, area in zip(self.approx_pts, self.signed_area):
-                    color = 'red' if area >= 0 else 'blue'
-                    graph.draw_point(xy, size=12, color=color)
-
-        if self.window['render_approx_poly_index'].get():
-            if self.approx_pts is not None:
-                for i, xy in enumerate(self.approx_pts):
-                    graph.draw_text(f"{i}", xy, color='green', font=(16))
-
-        if self.window['render_convexity_defects'].get():
-            if self.convexity_defects is not None:
-                for defect in self.convexity_defects:
-                    graph.draw_lines(defect, color='lightblue', width=1)
-
-        if self.window['render_ellipses'].get():
-            if self.tabs is not None:
-                for i, tab in enumerate(self.tabs):
-                    pts = puzzler.geometry.get_ellipse_points(tab['ellipse'], npts=40)
-                    graph.draw_lines(pts, color='blue', width=2)
-                    center = tab['ellipse'].center
-                    graph.draw_text(f"{i}", center.tolist(), color='red', font=('Courier', 12))
-                    for j in tab['tangents']:
-                        if j is None:
-                            # print("FNORD!")
-                            continue
-                        p = self.perimeter.points[j].tolist()
-                        graph.draw_point(p, size=10, color='green')
-                        graph.draw_line(center.tolist(), p, color='green')
-                    for j in tab['trimmed_indexes']:
-                        p = self.perimeter.points[j].tolist()
-                        graph.draw_point(p, size=10, color='cyan')
-
-        if self.window['render_lines'].get():
-            if self.edges is not None:
-                for edge in self.edges:
-                    line = edge['line']
-                    graph.draw_line(line.pt0.tolist(), line.pt1.tolist(), color='blue', width='2')
-
-    def run(self):
-
-        render_layout = [
-            sg.CB('Perimeter',   default=True, enable_events=True, key='render_perimeter'),
-            sg.CB('Convex Hull', default=False, enable_events=True, key='render_convex_hull'),
-            sg.CB('Defects',     default=False, enable_events=True, key='render_convexity_defects')
-        ]
-
-        approx_layout = [
-            sg.Button('Approx', key='button_approx'),
-            sg.Text('Epsilon'),
-            sg.InputText(f"{self.epsilon}", key='epsilon', size=(5,1), enable_events=True),
-            sg.CB('Approx Poly', default=False, enable_events=True, key='render_approx_poly'),
-            sg.CB('Curvature',   default=True, enable_events=True, key='render_curvature'),
-            sg.CB('Indexes', default=False, enable_events=True, key='render_approx_poly_index')
-        ]
-
-        tabs_layout = [
-            sg.Button('Ellipsify', key='button_ellipsify'),
-            sg.CB('Points', default=True, enable_events=True, key='render_ellipse_points'),
-            sg.CB('Ellipses', default=True, enable_events=True, key='render_ellipses'),
-            sg.CB('Lines', default=True, enable_events=True, key='render_lines'),
-        ]
-
-        bbox = list(self.perimeter.bbox)
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
-        bbox[0] -= w // 5
-        bbox[2] += w // 5
-        bbox[1] -= h // 5
-        bbox[3] += h // 5
-        s = 1
-        if max(w,h) > 800:
-            s = 800 / max(w,h)
-
-        # print(f"{w=} {h=} {s=}")
-        
-        layout = [
-            [sg.Graph(canvas_size=(int(w * s), int(h * s)),
-                      graph_bottom_left = (bbox[0],bbox[1]),
-                      graph_top_right = (bbox[2],bbox[3]),
-                      background_color='white',
-                      key='graph',
-                      enable_events=True)],
-            [sg.Frame('Render', [render_layout])],
-            [sg.Frame('Approx', [approx_layout])],
-            [sg.Frame('Tabs',   [tabs_layout])]
-        ]
-        self.window = sg.Window(f"Ellipse Fitter ({self.label})", layout, finalize=True)
-        self.render()
-
-        while True:
-            event, values = self.window.read()
-            if event == sg.WIN_CLOSED:
-                break
-            elif event == 'button_approx':
-                self.approx_poly()
-            elif event == 'button_ellipsify':
-                self.ellipsify()
-            elif event.startswith('render_'):
-                self.render()
-            elif event == 'epsilon':
-                try:
-                    self.epsilon = float(self.window['epsilon'].get())
-                except ValueError as err:
-                    print(err)
-            else:
-                print(event, values)
-
 class EllipseFitterTk:
 
     def __init__(self, root, puzzle, label):
@@ -895,18 +691,13 @@ def feature_view(args):
 
     puzzle = puzzler.file.load(args.puzzle)
 
-    if args.tk:
-        root = Tk()
-        ui = EllipseFitterTk(root, puzzle, args.label)
-        ui.var_epsilon.set(args.epsilon)
-        root.bind('<Key-Escape>', lambda e: root.destroy())
-        root.title("Puzzler: features view")
-        root.wm_resizable(0, 0)
-        root.mainloop()
-    else:
-        ui = EllipseFitter(puzzle, args.label)
-        ui.epsilon = args.epsilon
-        ui.run()
+    root = Tk()
+    ui = EllipseFitterTk(root, puzzle, args.label)
+    ui.var_epsilon.set(args.epsilon)
+    root.bind('<Key-Escape>', lambda e: root.destroy())
+    root.title("Puzzler: features view")
+    root.wm_resizable(0, 0)
+    root.mainloop()
 
 def feature_update(args):
 
@@ -946,5 +737,4 @@ def add_parser(commands):
     
     parser_view = commands.add_parser("view", help="view the feature computation")
     parser_view.add_argument("label")
-    parser_view.add_argument("--tk", default=False, action='store_const', const=True)
     parser_view.set_defaults(func=feature_view)
