@@ -3,7 +3,6 @@ import cv2 as cv
 import math
 import numpy as np
 import os
-import PySimpleGUI as sg
 import tempfile
 import puzzler
 
@@ -124,115 +123,6 @@ class PerimeterTk:
         i = self.lbox.curselection()[0]
         return self.pc.images[i][1]
 
-class PerimeterUI:
-
-    def __init__(self, puzzle, label):
-
-        piece = None
-        for p in puzzle.pieces:
-            if p.label == label:
-                piece = p
-                
-        assert piece is not None
-
-        scan = puzzle.scans[piece.source.id]
-
-        scan = puzzler.segment.Segmenter.Scan(scan.path)
-        image = scan.get_subimage(piece.source.rect)
-
-        self.pc = PerimeterComputer(image, True)
-
-    def get_image_path(self):
-
-        for label, path in self.pc.images:
-            if self.window['radio_image_' + label].get():
-                return path
-        return None
-
-    def draw_histogram(self):
-
-        graph = self.window['graph']
-        
-        img = cv.imread(self.get_image_path())
-        bgr = len(img.shape) == 3 and img.shape[2]==3
-
-        if bgr:
-            for i, color in enumerate(['blue', 'green', 'red']):
-                hist = cv.calcHist([img], [i], None, [256], [0, 256])
-                scale = 100. / np.max(hist)
-                points = [(10+i, 10+scale*v) for i, v in enumerate(np.squeeze(hist))]
-                graph.draw_lines(points, color=color)
-        else:
-            hist = cv.calcHist([img], [0], None, [256], [0, 256])
-            scale = 100. / np.max(hist)
-            points = [(10+i, 10+scale*v) for i, v in enumerate(np.squeeze(hist))]
-            graph.draw_lines(points, color='black')
-
-    def draw_contour(self):
-        graph = self.window['graph']
-        
-        points = [tuple(xy) for xy in np.squeeze(self.pc.contour)]
-        graph.draw_lines(points, color='red', width=2)
-
-    def render(self):
-
-        graph = self.window['graph']
-        graph.erase()
-
-        path = self.get_image_path()
-        graph.draw_image(filename=path, location=(0,self.pc.image_size[1]))
-
-        if self.window['render_histogram'].get():
-            self.draw_histogram()
-
-        if self.window['render_contour'].get():
-            self.draw_contour()
-
-    def _init_ui(self):
-        
-        w, h = self.pc.image_size
-
-        controls = []
-        
-        for image in self.pc.images:
-            label = image[0]
-            is_default = 0 == len(controls)
-            key = 'radio_image_' + label
-            r = sg.Radio(label, 'radio_image', default=is_default, enable_events=True, key=key)
-            controls.append(r)
-
-        controls.append(sg.CB('Render Histogram', default=False, enable_events=True, key='render_histogram'))
-        controls.append(sg.CB('Render Contour', default=True, enable_events=True, key='render_contour'))
-        
-        layout = [
-            [sg.Graph(canvas_size=(w, h),
-                      graph_bottom_left = (0, 0),
-                      graph_top_right = (w, h),
-                      background_color='blue',
-                      key='graph',
-                      enable_events=True),
-             controls],
-        ]
-        
-        self.window = sg.Window('Perimeter Computer', layout, finalize=True)
-        self.render()
-
-    def run(self):
-        
-        self._init_ui()
-
-        while True:
-            event, values = self.window.read()
-            if event == sg.WIN_CLOSED:
-                break
-            elif event.startswith('radio_image_'):
-                self.render()
-            elif event.startswith('render_'):
-                self.render()
-            else:
-                print(event, values)
-
-
 def points_update(args):
 
     puzzle = puzzler.file.load(args.puzzle)
@@ -262,16 +152,12 @@ def points_view(args):
 
     puzzle = puzzler.file.load(args.puzzle)
     
-    if args.tk:
-        root = Tk()
-        ui = PerimeterTk(root, puzzle, args.label)
-        root.bind('<Key-Escape>', lambda e: root.destroy())
-        root.title("Puzzler: points")
-        root.wm_resizable(0, 0)
-        root.mainloop()
-    else:
-        ui = PerimeterUI(puzzle, args.label)
-        ui.run()
+    root = Tk()
+    ui = PerimeterTk(root, puzzle, args.label)
+    root.bind('<Key-Escape>', lambda e: root.destroy())
+    root.title("Puzzler: points")
+    root.wm_resizable(0, 0)
+    root.mainloop()
     
 def add_parser(commands):
     parser_points = commands.add_parser("points", help="outline pieces")
@@ -283,5 +169,4 @@ def add_parser(commands):
 
     parser_view = commands.add_parser("view", help="view the points computation for a specific image")
     parser_view.add_argument("label")
-    parser_view.add_argument("--tk", default=False, action='store_const', const=True)
     parser_view.set_defaults(func=points_view)

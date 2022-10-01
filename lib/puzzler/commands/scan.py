@@ -10,16 +10,12 @@ def scan_add(args):
     id = puzzler.file.path_to_id(args.image)
     puzzle.scans[id] = puzzler.puzzle.Puzzle.Scan(args.image)
 
-    if args.tk:
-        root = Tk()
-        s = puzzler.segment.SegmenterTk(root, puzzle, id)
-        root.bind('<Key-Escape>', lambda e: root.destroy())
-        root.title("Puzzler: scan")
-        root.wm_resizable(0, 0)
-        root.mainloop()
-    else:
-        s = puzzler.segment.SegmenterUI(puzzle, id)
-        s.ui()
+    root = Tk()
+    s = puzzler.segment.SegmenterTk(root, puzzle, id)
+    root.bind('<Key-Escape>', lambda e: root.destroy())
+    root.title("Puzzler: scan")
+    root.wm_resizable(0, 0)
+    root.mainloop()
 
     puzzler.file.save(args.puzzle, s.to_json())
 
@@ -27,13 +23,12 @@ def scan_edit(args):
 
     puzzle = puzzler.file.load(args.puzzle)
 
-    if args.tk:
-        root = Tk()
-        s = puzzler.segment.SegmenterTk(root, puzzle, args.id)
-        root.mainloop()
-    else:
-        s = puzzler.segment.SegmenterUI(puzzle, args.id)
-        s.ui()
+    root = Tk()
+    s = puzzler.segment.SegmenterTk(root, puzzle, args.id)
+    root.bind('<Key-Escape>', lambda e: root.destroy())
+    root.title("Puzzler: scan")
+    root.wm_resizable(0, 0)
+    root.mainloop()
 
     puzzler.file.save(args.puzzle, s.to_json())
         
@@ -58,12 +53,10 @@ def add_parser(commands):
 
     parser_add = commands.add_parser("add", help="add an image")
     parser_add.add_argument("image", help="path to image")
-    parser_add.add_argument("--tk", default=False, action='store_const', const=True)
     parser_add.set_defaults(func=scan_add)
 
     parser_edit = commands.add_parser("edit", help="edit an image")
     parser_edit.add_argument("id", help="id of image to edit")
-    parser_edit.add_argument("--tk", default=False, action='store_const', const=True)
     parser_edit.set_defaults(func=scan_edit)
 
     parser_list = commands.add_parser("list", help="list images")
