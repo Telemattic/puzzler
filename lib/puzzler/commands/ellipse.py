@@ -713,80 +713,79 @@ class EllipseFitterTk:
             cross = np.cross(v0, v1)
             print(f"{cross=}")
 
-    def to_device(self, points):
-        ret = (points - self.camera_trans) * self.camera_scale
-        return np.int32(ret).tolist()
-
-    def draw_points(self, points, radius, **kw):
-        
-        r = np.array((radius, radius))
-        for xy in np.atleast_2d(points):
-            bbox = np.array((xy-r, xy+r))
-            self.canvas.create_oval(self.to_device(bbox), **kw)
-
     def render(self):
 
         canvas = self.canvas
         canvas.delete('all')
 
+        r = puzzler.render.Renderer(self.canvas)
+
+        h = int(canvas.configure('height')[4])
+        camera_matrix = np.array(
+            ((1,  0,   0),
+             (0, -1, h-1),
+             (0,  0,   1)), dtype=np.float64)
+        r.multiply(camera_matrix)
+        r.scale(self.camera_scale)
+        r.translate(*-self.camera_trans)
+
         if self.var_render_perimeter.get():
-            self.draw_points(self.perimeter.points, radius=1, fill='black')
+            r.draw_points(self.perimeter.points, radius=1, fill='black')
 
         if self.var_render_convex_hull.get():
             if self.convex_hull is not None:
-                hull = self.to_device(self.convex_hull)
-                canvas.create_polygon(hull, outline='black', fill='', width=1)
+                r.draw_polygon(self.convex_hull, outline='black', fill='', width=1)
 
         if self.var_render_ellipse_points.get():
             if self.tabs is not None:
                 for i, tab in enumerate(self.tabs):
-                    self.draw_points(self.perimeter.slice(*tab['indexes']), radius=4, fill='purple', outline='')
+                    points = self.perimeter.slice(*tab['indexes'])
+                    r.draw_points(points, radius=4, fill='purple', outline='')
 
         if self.var_render_approx_poly.get():
             if self.approx_pts is not None:
-                poly = self.to_device(self.approx_pts)
-                canvas.create_polygon(poly, outline='#00ff00', width=2, fill='')
+                r.draw_polygon(self.approx_pts, outline='#00ff00', width=2, fill='')
 
         if self.var_render_curvature.get():
             if self.approx_pts is not None and self.signed_area is not None:
                 for xy, area in zip(self.approx_pts, self.signed_area):
                     color = 'red' if area >= 0 else 'blue'
-                    self.draw_points(xy, radius=4, fill=color, outline='')
+                    r.draw_points(xy, radius=4, fill=color, outline='')
 
         if self.var_render_approx_poly_index.get():
             if self.approx_pts is not None:
                 for i, xy in enumerate(self.approx_pts):
-                    canvas.create_text(self.to_device(xy), text=f"{i}", fill='green')
+                    r.draw_text(xy, text=f"{i}", fill='green')
 
         if self.var_render_convexity_defects.get():
             if self.convexity_defects is not None:
                 for defect in self.convexity_defects:
-                    canvas.create_line(self.to_device(defect), fill='lightblue', width=1)
+                    r.draw_lines(defect, fill='lightblue', width=1)
 
         if self.var_render_ellipses.get():
             if self.tabs is not None:
                 for i, tab in enumerate(self.tabs):
                     pts = puzzler.geometry.get_ellipse_points(tab['ellipse'], npts=40)
-                    canvas.create_line(self.to_device(pts), fill='blue', width=2)
+                    r.draw_lines(pts, fill='blue', width=2)
                     center = tab['ellipse'].center
-                    canvas.create_text(self.to_device(center), text=f"{i}", fill='red')
+                    r.draw_text(center, text=f"{i}", fill='red')
                     for j in tab['tangents']:
                         if j is None:
                             # print("FNORD!")
                             continue
                         p = self.perimeter.points[j]
-                        self.draw_points(p, radius=6, fill='green')
-                        canvas.create_line(self.to_device(np.array((center, p))), fill='green')
+                        r.draw_points(p, radius=6, fill='green')
+                        r.draw_lines(np.array((center, p)), fill='green')
                     for j in tab['trimmed_indexes']:
                         p = self.perimeter.points[j]
-                        self.draw_points(p, radius=6, fill='cyan')
+                        r.draw_points(p, radius=6, fill='cyan')
 
         if self.var_render_lines.get():
             if self.edges is not None:
                 for edge in self.edges:
                     line = edge['line']
-                    points = self.to_device(np.array((line.pt0, line.pt1)))
-                    canvas.create_line(points, fill='blue', width='2')
+                    points = np.array((line.pt0, line.pt1))
+                    r.draw_lines(points, fill='blue', width='2')
 
     def _init_controls(self, parent):
     
