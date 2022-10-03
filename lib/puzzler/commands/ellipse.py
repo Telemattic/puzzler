@@ -377,7 +377,14 @@ class EdgeComputer:
             line = np.squeeze(cv.fitLine(points, cv.DIST_L2, 0, 0.01, 0.01))
             v, c = line[:2], line[2:]
             l *= .5
-            self.edges.append({'fit_indexes':(a,b), 'line':puzzler.geometry.Line(c-v*l, c+v*l)})
+            pt0, pt1 = c - v*l, c + v*l
+
+            # order points so that a -> b corresponds to pt0 -> pt1
+            ptA = self.perimeter.points[a]
+            if np.linalg.norm(pt1 - ptA) < np.linalg.norm(pt0 - ptA):
+                pt0, pt1 = pt1, pt0
+            
+            self.edges.append({'fit_indexes':(a,b), 'line':puzzler.geometry.Line(pt0, pt1)})
 
     def overlaps_tab(self, tabs, a, b):
         
