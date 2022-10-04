@@ -383,8 +383,8 @@ class EdgeComputer:
             ptA = self.perimeter.points[a]
             if np.linalg.norm(pt1 - ptA) < np.linalg.norm(pt0 - ptA):
                 pt0, pt1 = pt1, pt0
-            
-            self.edges.append({'fit_indexes':(a,b), 'line':puzzler.geometry.Line(pt0, pt1)})
+            line = puzzler.geometry.Line(np.array((pt0, pt1)))
+            self.edges.append({'fit_indexes':(a,b), 'line':line})
 
     def overlaps_tab(self, tabs, a, b):
         
@@ -508,9 +508,9 @@ class EllipseFitterTk:
         if len(self.edges) == 2:
             l0, l1 = self.edges[0]['line'], self.edges[1]['line']
             print(f"{l0=} {l1=}")
-            v0 = l0.pt1 - l0.pt0
+            v0 = l0.pts[1] - l0.pts[0]
             v0 = v0 / np.linalg.norm(v0)
-            v1 = l1.pt1 - l1.pt0
+            v1 = l1.pts[1] - l1.pts[0]
             v1 = v1 / np.linalg.norm(v1)
             print(f"{v0=} {v1=}")
             cross = np.cross(v0, v1)
@@ -528,9 +528,9 @@ class EllipseFitterTk:
             ((1,  0,   0),
              (0, -1, h-1),
              (0,  0,   1)), dtype=np.float64)
-        r.multiply(camera_matrix)
-        r.scale(self.camera_scale)
-        r.translate(*-self.camera_trans)
+        r.transform.multiply(camera_matrix)
+        r.transform.scale(self.camera_scale)
+        r.transform.translate(*-self.camera_trans)
 
         if self.var_render_perimeter.get():
             r.draw_points(self.perimeter.points, radius=1, fill='black')
@@ -587,8 +587,7 @@ class EllipseFitterTk:
             if self.edges is not None:
                 for edge in self.edges:
                     line = edge['line']
-                    points = np.array((line.pt0, line.pt1))
-                    r.draw_lines(points, fill='blue', width='2')
+                    r.draw_lines(line.pts, fill='blue', width='2')
 
     def _init_controls(self, parent):
     

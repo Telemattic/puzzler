@@ -122,14 +122,14 @@ class Autofit:
 
         dst_edge = self.get_edge(dst)
 
-        dst_edge_vec = dst_edge.line.pt1 - dst_edge.line.pt0
+        dst_edge_vec = dst_edge.line.pts[1] - dst_edge.line.pts[0]
         dst_edge_angle = dst.coords.angle + np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
 
         print(f"{dst.piece.label}: {math.degrees(dst_edge_angle)=:.1f}")
         
         src_edge = self.get_edge(src)
 
-        src_edge_vec = src_edge.line.pt1 - src_edge.line.pt0
+        src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
         src_edge_angle = src.coords.angle + np.arctan2(src_edge_vec[1], src_edge_vec[0])
 
         print(f"{src.piece.label}: {math.degrees(src_edge_angle)=:.1f}")
@@ -148,8 +148,8 @@ class Autofit:
         with np.printoptions(precision=5):
             print(f"{dst_edge_vec=} {src_edge_vec=}")
 
-        dst_p1 = dst.coords.to_global_xy(dst_edge.line.pt0)
-        src_p0 = new_coords.to_global_xy(src_edge.line.pt0)
+        dst_p1 = dst.coords.to_global_xy(dst_edge.line.pts[0])
+        src_p0 = new_coords.to_global_xy(src_edge.line.pts[0])
 
         dist = dst_edge_vec[0] * (src_p0[1] - dst_p1[1]) - dst_edge_vec[1] * (src_p0[0] - dst_p1[0])
 
@@ -327,23 +327,22 @@ class AlignTk:
             color = colors[i%len(colors)]
 
             c = puzzler.render.Renderer(canvas)
-            c.multiply(self.camera_matrix)
+            c.transform.multiply(self.camera_matrix)
             
-            c.translate(*p.coords.dxdy)
-            c.rotate(p.coords.angle)
-            c.push()
-            c.translate(*-p.center)
+            c.transform.translate(*p.coords.dxdy)
+            c.transform.rotate(p.coords.angle)
+            c.transform.push()
+            c.transform.translate(*-p.center)
             
             if p.piece.edges:
                 for edge in p.piece.edges:
-                    points = np.array((edge.line.pt0, edge.line.pt1))
-                    c.draw_lines(points, fill='pink', width=8)
-                    c.draw_points(edge.line.pt0, fill='purple', radius=8)
-                    c.draw_points(edge.line.pt1, fill='green', radius=8)
+                    c.draw_lines(edge.line.pts, fill='pink', width=8)
+                    c.draw_points(edge.line.pts[0], fill='purple', radius=8)
+                    c.draw_points(edge.line.pts[1], fill='green', radius=8)
 
             c.draw_lines(p.piece.points, fill=color, width=2)
 
-            c.pop()
+            c.transform.pop()
 
             h = DragHandle(p.coords)
             h.render(c)
@@ -447,7 +446,7 @@ class AlignTk:
         print(f"eldridge: {self.eldridge(data0, data1)}")
 
         c = puzzler.render.Renderer(self.canvas)
-        c.multiply(self.camera_matrix)
+        c.transform.multiply(self.camera_matrix)
         c.draw_circle(data0, 17, fill='purple', outline='')
 
     def do_refit(self):

@@ -7,12 +7,11 @@ from dataclasses import dataclass
 @dataclass
 class Line:
 
-    pt0: np.array
-    pt1: np.array
+    pts: np.array
 
     def __repr__(self):
-        x0, y0 = self.pt0
-        x1, y1 = self.pt1
+        x0, y0 = self.pts[0]
+        x1, y1 = self.pts[1]
         return f"Line(({x0:.1f},{y0:.1f}),({x1:.1f},{y1:.1f}))"
 
 @dataclass

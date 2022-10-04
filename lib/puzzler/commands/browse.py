@@ -74,8 +74,8 @@ class Browser:
              (0,  0,   1)), dtype=np.float64)
 
         r = puzzler.render.Renderer(canvas)
-        r.multiply(camera_matrix)
-        r.scale(self.scale)
+        r.transform.multiply(camera_matrix)
+        r.transform.scale(self.scale)
         
         self.font = font.Font(family='Courier', name='pieceLabelFont', size=12)
         for i, o in enumerate(self.outlines):
@@ -83,10 +83,10 @@ class Browser:
             y = (self.rows - 1 - (i // self.cols))
             tx = (x + .5) * self.bbox_w
             ty = (y + .5) * self.bbox_h
-            r.push()
-            r.translate(tx, ty)
+            r.transform.push()
+            r.transform.translate(tx, ty)
             self.render_outline(r, o)
-            r.pop()
+            r.transform.pop()
 
     def render_outline(self, r, o):
 
@@ -95,8 +95,8 @@ class Browser:
         # want the corners of the outline bbox centered within the tile
         bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
 
-        r.push()
-        r.translate(*-bbox_center)
+        r.transform.push()
+        r.transform.translate(*-bbox_center)
 
         if p.tabs is not None:
             for tab in p.tabs:
@@ -105,12 +105,11 @@ class Browser:
 
         if p.edges is not None:
             for edge in p.edges:
-                pts = np.vstack((edge.line.pt0, edge.line.pt1))
-                r.draw_lines(pts, width=4, fill='pink')
+                r.draw_lines(edge.line.pts, width=4, fill='pink')
 
         r.draw_polygon(o.poly, outline='black', fill='', width=1)
 
-        r.pop()
+        r.transform.pop()
 
         r.draw_text((0, 0), text=p.label, font=self.font, fill='black')
         

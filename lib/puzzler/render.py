@@ -1,9 +1,8 @@
 import numpy as np
 
-class Renderer:
+class Transform:
 
-    def __init__(self, canvas=None):
-        self.canvas = canvas
+    def __init__(self):
         self.stack  = []
         self.matrix = np.identity(3)
 
@@ -34,6 +33,12 @@ class Renderer:
                       (s,  c, 0),
                       (0,  0, 1)))
         self.multiply(m)
+        
+class Renderer:
+
+    def __init__(self, canvas=None):
+        self.canvas    = canvas
+        self.transform = Transform()
 
     def to_v3(self, pts, w):
         pts = np.atleast_2d(pts)
@@ -45,7 +50,7 @@ class Renderer:
         return pts[:,:2]
 
     def to_device(self, pts):
-        return self.to_v2(self.to_v3(pts, 1) @ self.matrix.T)
+        return self.to_v2(self.to_v3(pts, 1) @ self.transform.matrix.T)
 
     def to_canvas(self, pts):
         return np.int32(self.to_device(pts)).tolist()

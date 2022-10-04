@@ -92,7 +92,7 @@ class Parser:
 
         pt0 = np.array(data['pt0'])
         pt1 = np.array(data['pt1'])
-        return puzzler.geometry.Line(pt0, pt1)
+        return puzzler.geometry.Line(np.array((pt0, pt1)))
 
 class Formatter:
 
@@ -154,7 +154,7 @@ class Formatter:
                 'phi': e.phi}
 
     def format_line(self, l):
-        return {'pt0': l.pt0.tolist(), 'pt1': l.pt1.tolist()}
+        return {'pt0': l.pts[0].tolist(), 'pt1': l.pts[1].tolist()}
 
     def format_indexes(self, i):
         return list(i)
