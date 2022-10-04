@@ -148,9 +148,16 @@ class Autofit:
         with np.printoptions(precision=5):
             print(f"{dst_edge_vec=} {src_edge_vec=}")
 
-        dst_p1 = dst.coords.to_global_xy(dst_edge.line.pts[0])
-        src_p0 = new_coords.to_global_xy(src_edge.line.pts[0])
+        dst_matrix = puzzler.render.Transform()
+        dst_matrix.translate(*dst.coords.dxdy)
+        dst_matrix.rotate(dst.coords.angle)
+        dst_matrix.translate(*-dst.center)
 
+        src_matrix = puzzler.render.Transform().translate(*new_coords.dxdy).rotate(new_coords.angle).translate(*-src.center)
+
+        dst_p1 = dst_matrix.apply_v2(dst_edge.line.pts[0])
+        src_p0 = src_matrix.apply_v2(src_edge.line.pts[0])
+        
         dist = dst_edge_vec[0] * (src_p0[1] - dst_p1[1]) - dst_edge_vec[1] * (src_p0[0] - dst_p1[0])
 
         with np.printoptions(precision=2):
@@ -331,18 +338,18 @@ class AlignTk:
             
             c.transform.translate(*p.coords.dxdy)
             c.transform.rotate(p.coords.angle)
-            c.transform.push()
-            c.transform.translate(*-p.center)
+
+            with puzzler.render.save_matrix(c.transform):
+                
+                c.transform.translate(*-p.center)
             
-            if p.piece.edges:
-                for edge in p.piece.edges:
-                    c.draw_lines(edge.line.pts, fill='pink', width=8)
-                    c.draw_points(edge.line.pts[0], fill='purple', radius=8)
-                    c.draw_points(edge.line.pts[1], fill='green', radius=8)
+                if p.piece.edges:
+                    for edge in p.piece.edges:
+                        c.draw_lines(edge.line.pts, fill='pink', width=8)
+                        c.draw_points(edge.line.pts[0], fill='purple', radius=8)
+                        c.draw_points(edge.line.pts[1], fill='green', radius=8)
 
-            c.draw_lines(p.piece.points, fill=color, width=2)
-
-            c.transform.pop()
+                    c.draw_lines(p.piece.points, fill=color, width=2)
 
             h = DragHandle(p.coords)
             h.render(c)

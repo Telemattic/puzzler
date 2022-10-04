@@ -83,10 +83,9 @@ class Browser:
             y = (self.rows - 1 - (i // self.cols))
             tx = (x + .5) * self.bbox_w
             ty = (y + .5) * self.bbox_h
-            r.transform.push()
-            r.transform.translate(tx, ty)
-            self.render_outline(r, o)
-            r.transform.pop()
+            with puzzler.render.save_matrix(r.transform):
+                r.transform.translate(tx, ty)
+                self.render_outline(r, o)
 
     def render_outline(self, r, o):
 
@@ -95,23 +94,21 @@ class Browser:
         # want the corners of the outline bbox centered within the tile
         bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
 
-        r.transform.push()
-        r.transform.translate(*-bbox_center)
+        with puzzler.render.save_matrix(r.transform):
+            r.transform.translate(*-bbox_center)
 
-        if p.tabs is not None:
-            for tab in p.tabs:
-                pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
-                r.draw_polygon(pts, fill='cyan', outline='')
+            if p.tabs is not None:
+                for tab in p.tabs:
+                    pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
+                    r.draw_polygon(pts, fill='cyan', outline='')
 
-        if p.edges is not None:
-            for edge in p.edges:
-                r.draw_lines(edge.line.pts, width=4, fill='pink')
+            if p.edges is not None:
+                for edge in p.edges:
+                    r.draw_lines(edge.line.pts, width=4, fill='pink')
 
-        r.draw_polygon(o.poly, outline='black', fill='', width=1)
+            r.draw_polygon(o.poly, outline='black', fill='', width=1)
 
-        r.transform.pop()
-
-        r.draw_text((0, 0), text=p.label, font=self.font, fill='black')
+        r.draw_text(np.zeros(2), text=p.label, font=self.font, fill='black')
         
 class BrowseTk:
 
