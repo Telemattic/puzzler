@@ -723,12 +723,15 @@ def feature_update(args):
         piece.tabs = []
         for tab in tc.tabs:
             piece.tabs.append(puzzler.feature.Tab(tab['indexes'], tab['ellipse'], tab['indent'], tab['tangents']))
+        piece.tabs.sort(key=operator.attrgetter('fit_indexes'))
 
         # print(" tabs:", ', '.join(f"{t.ellipse.semi_major/t.ellipse.semi_minor:.3f}" for t in piece.tabs))
                 
         piece.edges = []
         for edge in ec.edges:
             piece.edges.append(puzzler.feature.Edge(edge['fit_indexes'], edge['line']))
+            
+        piece.edges.sort(key=operator.attrgetter('fit_indexes'))
 
     puzzler.file.save(args.puzzle, puzzle)
 
