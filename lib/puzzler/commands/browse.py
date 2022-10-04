@@ -13,6 +13,7 @@ class Browser:
 
         def __init__(self, piece, epsilon=10):
 
+            assert piece.points is not None
             approx  = cv.approxPolyDP(piece.points, epsilon, True)
             self.poly = np.squeeze(approx)
             self.poly = np.concatenate((self.poly, self.poly[:1,:]))
