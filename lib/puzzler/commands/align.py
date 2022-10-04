@@ -141,30 +141,20 @@ class Autofit:
         new_coords = src.coords.copy()
         new_coords.angle += delta_angle
 
-        dst_edge_vec = (dst_edge_vec / np.linalg.norm(dst_edge_vec)) @ dst.coords.rot_matrix()
+        dst_matrix = (puzzler.render.Transform()
+                      .translate(*dst.coords.dxdy)
+                      .rotate(dst.coords.angle)
+                      .translate(*-dst.center))
 
-        src_edge_vec = (src_edge_vec / np.linalg.norm(src_edge_vec)) @ new_coords.rot_matrix()
+        src_matrix = (puzzler.render.Transform()
+                      .translate(*new_coords.dxdy)
+                      .rotate(new_coords.angle)
+                      .translate(*-src.center))
 
-        with np.printoptions(precision=5):
-            print(f"{dst_edge_vec=} {src_edge_vec=}")
-
-        dst_matrix = puzzler.render.Transform()
-        dst_matrix.translate(*dst.coords.dxdy)
-        dst_matrix.rotate(dst.coords.angle)
-        dst_matrix.translate(*-dst.center)
-
-        src_matrix = puzzler.render.Transform().translate(*new_coords.dxdy).rotate(new_coords.angle).translate(*-src.center)
-
-        dst_p1 = dst_matrix.apply_v2(dst_edge.line.pts[0])
-        src_p0 = src_matrix.apply_v2(src_edge.line.pts[0])
+        dst_line = dst_matrix.apply_v2(dst_edge.line.pts)
+        src_point = src_matrix.apply_v2(src_edge.line.pts[0])
         
-        dist = dst_edge_vec[0] * (src_p0[1] - dst_p1[1]) - dst_edge_vec[1] * (src_p0[0] - dst_p1[0])
-
-        with np.printoptions(precision=2):
-            print(f"{dst_p1=} {src_p0=} {dist=:.1f}")
-            print(f"{dst.center=} {src.center=}")
-
-        new_coords.dxdy = src.coords.dxdy + dist * np.array((dst_edge_vec[1],-dst_edge_vec[0]))
+        new_coords.dxdy = src.coords.dxdy + puzzler.math.vector_to_line(src_point, dst_line)
 
         print(f"{new_coords.angle=} {new_coords.dxdy=}")
 
