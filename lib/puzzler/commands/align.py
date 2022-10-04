@@ -91,22 +91,102 @@ class ApproxPoly:
         
 class Piece:
 
-    def __init__(self, data):
+    def __init__(self, piece):
 
-        points = data.points
-        self.points = points - np.array(np.mean(points, axis=0), dtype=np.int32)
-        self.perimeter = Perimeter(self.points)
+        self.piece  = piece
+        self.center = np.array(np.mean(self.piece.points, axis=0), dtype=np.int32)
+        self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
-        self.kdtree = scipy.spatial.KDTree(self.points)
+        self.kdtree = scipy.spatial.KDTree(self.piece.points)
 
     def dist(self, xy):
-        xy = self.coords.to_local_xy(xy)
+        xy = self.coords.to_local_xy(xy) + self.center
         return self.kdtree.query(xy, distance_upper_bound=20)
 
     def normal_at_index(self, i):
         uv = self.approx.normal_at_index(i)
         return uv @ self.coords.rot_matrix()
+
+class Autofit:
+
+    def __init__(self, pieces):
+
+        self.pieces = pieces
+
+        anchor = self.choose_anchor()
+
+        self.align_edges(self.pieces[0], self.pieces[1])
+        
+    def align_edges(self, dst, src):
+
+        dst_edge = self.get_edge(dst)
+
+        dst_edge_vec = dst_edge.line.pt1 - dst_edge.line.pt0
+        dst_edge_angle = dst.coords.angle + np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
+
+        print(f"{dst.piece.label}: {math.degrees(dst_edge_angle)=:.1f}")
+        
+        src_edge = self.get_edge(src)
+
+        src_edge_vec = src_edge.line.pt1 - src_edge.line.pt0
+        src_edge_angle = src.coords.angle + np.arctan2(src_edge_vec[1], src_edge_vec[0])
+
+        print(f"{src.piece.label}: {math.degrees(src_edge_angle)=:.1f}")
+
+        delta_angle = dst_edge_angle - src_edge_angle
+
+        print(f"{math.degrees(delta_angle)=:.1f}")
+
+        new_coords = src.coords.copy()
+        new_coords.angle += delta_angle
+
+        dst_edge_vec = (dst_edge_vec / np.linalg.norm(dst_edge_vec)) @ dst.coords.rot_matrix()
+
+        src_edge_vec = (src_edge_vec / np.linalg.norm(src_edge_vec)) @ new_coords.rot_matrix()
+
+        with np.printoptions(precision=5):
+            print(f"{dst_edge_vec=} {src_edge_vec=}")
+
+        dst_p1 = dst.coords.to_global_xy(dst_edge.line.pt0)
+        src_p0 = new_coords.to_global_xy(src_edge.line.pt0)
+
+        dist = dst_edge_vec[0] * (src_p0[1] - dst_p1[1]) - dst_edge_vec[1] * (src_p0[0] - dst_p1[0])
+
+        with np.printoptions(precision=2):
+            print(f"{dst_p1=} {src_p0=} {dist=:.1f}")
+            print(f"{dst.center=} {src.center=}")
+
+        new_coords.dxdy = src.coords.dxdy + dist * np.array((dst_edge_vec[1],-dst_edge_vec[0]))
+
+        print(f"{new_coords.angle=} {new_coords.dxdy=}")
+
+        src.coords = new_coords
+
+    def get_edge(self, piece):
+
+        return piece.piece.edges[0]
+        
+    def choose_anchor(self):
+
+        corners = self.find_corners()
+        if corners:
+            return corners[0]
+
+        edges = self.find_edges()
+        if edges:
+            return edges[0]
+
+        return self.pieces[0]
+
+    def find_corners(self):
+        return [p for p in self.pieces if len(p.piece.edges) >= 2]
+
+    def find_edges(self):
+        return [p for p in self.pieces if len(p.piece.edges) != 0]
+
+    def find_field(self):
+        return [p for p in self.pieces if len(p.piece.edges) == 0]
 
 class DragHandle:
 
@@ -251,8 +331,19 @@ class AlignTk:
             
             c.translate(*p.coords.dxdy)
             c.rotate(p.coords.angle)
+            c.push()
+            c.translate(*-p.center)
             
-            c.draw_lines(p.points, fill=color, width=2)
+            if p.piece.edges:
+                for edge in p.piece.edges:
+                    points = np.array((edge.line.pt0, edge.line.pt1))
+                    c.draw_lines(points, fill='pink', width=8)
+                    c.draw_points(edge.line.pt0, fill='purple', radius=8)
+                    c.draw_points(edge.line.pt1, fill='green', radius=8)
+
+            c.draw_lines(p.piece.points, fill=color, width=2)
+
+            c.pop()
 
             h = DragHandle(p.coords)
             h.render(c)
@@ -391,6 +482,11 @@ class AlignTk:
         print(f"  after:  {c.angle=} {c.dxdy=}")
         
         self.render()
+
+    def do_autofit(self):
+        print("Autofit!")
+        af = Autofit(self.pieces)
+        self.render()
         
     def _init_ui(self, parent):
 
@@ -419,6 +515,9 @@ class AlignTk:
 
         b2 = ttk.Button(self.controls, text='Refit', command=self.do_refit)
         b2.grid(column=1, row=0, sticky=N)
+
+        b3 = ttk.Button(self.controls, text='Autofit', command=self.do_autofit)
+        b3.grid(column=3, row=0, sticky=N)
 
         self.render()
                 
