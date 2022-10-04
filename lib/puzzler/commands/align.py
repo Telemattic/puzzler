@@ -100,6 +100,12 @@ class Piece:
         self.coords = AffineTransform()
         self.kdtree = scipy.spatial.KDTree(self.piece.points)
 
+    def get_transform(self):
+        return (puzzler.render.Transform()
+                .translate(*self.coords.dxdy)
+                .rotate(self.coords.angle)
+                .translate(*-self.center))        
+
     def dist(self, xy):
         xy = self.coords.to_local_xy(xy) + self.center
         return self.kdtree.query(xy, distance_upper_bound=20)
@@ -125,40 +131,17 @@ class Autofit:
         dst_edge_vec = dst_edge.line.pts[1] - dst_edge.line.pts[0]
         dst_edge_angle = dst.coords.angle + np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
 
-        print(f"{dst.piece.label}: {math.degrees(dst_edge_angle)=:.1f}")
-        
         src_edge = self.get_edge(src)
 
         src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
         src_edge_angle = src.coords.angle + np.arctan2(src_edge_vec[1], src_edge_vec[0])
 
-        print(f"{src.piece.label}: {math.degrees(src_edge_angle)=:.1f}")
+        src.coords.angle += dst_edge_angle - src_edge_angle
 
-        delta_angle = dst_edge_angle - src_edge_angle
-
-        print(f"{math.degrees(delta_angle)=:.1f}")
-
-        new_coords = src.coords.copy()
-        new_coords.angle += delta_angle
-
-        dst_matrix = (puzzler.render.Transform()
-                      .translate(*dst.coords.dxdy)
-                      .rotate(dst.coords.angle)
-                      .translate(*-dst.center))
-
-        src_matrix = (puzzler.render.Transform()
-                      .translate(*new_coords.dxdy)
-                      .rotate(new_coords.angle)
-                      .translate(*-src.center))
-
-        dst_line = dst_matrix.apply_v2(dst_edge.line.pts)
-        src_point = src_matrix.apply_v2(src_edge.line.pts[0])
+        dst_line = dst.get_transform().apply_v2(dst_edge.line.pts)
+        src_point = src.get_transform().apply_v2(src_edge.line.pts[0])
         
-        new_coords.dxdy = src.coords.dxdy + puzzler.math.vector_to_line(src_point, dst_line)
-
-        print(f"{new_coords.angle=} {new_coords.dxdy=}")
-
-        src.coords = new_coords
+        src.coords.dxdy = src.coords.dxdy + puzzler.math.vector_to_line(src_point, dst_line)
 
     def get_edge(self, piece):
 
