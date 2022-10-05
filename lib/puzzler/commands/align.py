@@ -316,13 +316,13 @@ class AlignTk:
                 
                 c.transform.translate(*-p.center)
             
-                if p.piece.edges:
+                if p.piece.edges and False:
                     for edge in p.piece.edges:
                         c.draw_lines(edge.line.pts, fill='pink', width=8)
                         c.draw_points(edge.line.pts[0], fill='purple', radius=8)
                         c.draw_points(edge.line.pts[1], fill='green', radius=8)
 
-                    c.draw_lines(p.piece.points, fill=color, width=2)
+                c.draw_polygon(p.piece.points, outline=color, fill='', width=2)
 
             h = DragHandle(p.coords)
             h.render(c)
@@ -398,10 +398,10 @@ class AlignTk:
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
-        points0 = piece0.coords.to_global_xy(piece0.points)
+        points0 = piece0.coords.to_global_xy(piece0.piece.points) - piece0.center
         kdtree0 = scipy.spatial.KDTree(points0)
         
-        points1 = piece1.coords.to_global_xy(piece1.points)
+        points1 = piece1.coords.to_global_xy(piece1.piece.points) - piece1.center
         kdtree1 = scipy.spatial.KDTree(points1)
 
         indexes = kdtree0.query_ball_tree(kdtree1, r=15)
@@ -437,8 +437,8 @@ class AlignTk:
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
-        points0 = piece0.coords.to_global_xy(piece0.points)
-        points1 = piece1.coords.to_global_xy(piece1.points)
+        points0 = piece0.coords.to_global_xy(piece0.piece.points) - piece0.center
+        points1 = piece1.coords.to_global_xy(piece1.piece.points) - piece1.center
 
         data0 = points0[self.keep0]
         data1 = points1[self.keep1]
@@ -446,57 +446,107 @@ class AlignTk:
         normal0 = np.array([piece0.normal_at_index(i) for i in self.keep0])
         normal1 = np.array([piece1.normal_at_index(i) for i in self.keep1])
 
-        data1 = data1 - piece1.coords.dxdy
+        # data1 = data1 - piece1.coords.dxdy
 
         theta, tx, ty = self.icp(data0, normal0, data1)[0]
         dxdy = np.array((tx,ty))
-        print(f"icp: theta={theta*180/math.pi:.3f} degrees, {dxdy=}")
+        with np.printoptions(precision=3):
+            print(f"icp: theta={math.degrees(theta):.3f} degrees, {dxdy=}")
 
         c = piece1.coords
         print(f"  before: {c.angle=} {c.dxdy=}")
 
         c.angle += theta
-        c.dxdy   = dxdy
+        c.dxdy  += dxdy
 
         print(f"  after:  {c.angle=} {c.dxdy=}")
         
         self.render()
 
+        c = puzzler.render.Renderer(self.canvas)
+        c.transform.multiply(self.camera_matrix)
+
+        with puzzler.render.save_matrix(c.transform):
+            p = piece0
+            c.transform.translate(*p.coords.dxdy)
+            c.transform.rotate(p.coords.angle)
+            c.transform.translate(*-p.center)
+
+            for i, k in enumerate(self.keep0):
+                xy = p.piece.points[k]
+                c.draw_lines(np.array((xy, xy+normal0[i]*50)), fill='red', width=1, arrow='last')
+        
+        with puzzler.render.save_matrix(c.transform):
+            p = piece1
+            c.transform.translate(*p.coords.dxdy)
+            c.transform.rotate(p.coords.angle)
+            c.transform.translate(*-p.center)
+
+            for i, k in enumerate(self.keep1):
+                xy = p.piece.points[k]
+                c.draw_lines(np.array((xy, xy+normal1[i]*50)), fill='green', width=1, arrow='last')
+        
+
     def do_autofit(self):
         print("Autofit!")
         af = Autofit(self.pieces)
         self.render()
-        
-    def _init_ui(self, parent):
 
-        w, h, s = 1024, 1024, 3
+    def mouse_wheel(self, event):
+        self.camera_scale *= pow(1.05, 1 if event.delta > 0 else -1)
+        self.init_camera_matrix()
+        self.render()
+        # print(event)
+
+    def motion(self, event):
+        self.var_label.set(f"{event.x},{event.y}")
+        print(self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1))
+
+    def init_camera_matrix(self):
+        
+        w, h, s = self.canvas_width, self.canvas_height, self.camera_scale
 
         self.camera_matrix = np.array(
             ((1/s,    0,   0),
              (  0, -1/s, h-1),
              (  0,    0,   1)), dtype=np.float64)
         
+    def _init_ui(self, parent):
+
+        self.canvas_width = 1024
+        self.canvas_height = 1024
+        self.camera_scale = 3.
+        self.init_camera_matrix()
+        
         self.frame = ttk.Frame(parent, padding=5)
         self.frame.grid(sticky=(N, W, E, S))
 
-        self.canvas = Canvas(self.frame, width=w, height=h,
+        self.canvas = Canvas(self.frame, width=self.canvas_width, height=self.canvas_height,
                              background='white', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
         self.canvas.bind("<Button-1>", self.canvas_press)
         self.canvas.bind("<B1-Motion>", self.canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_release)
+        self.canvas.bind("<MouseWheel>", self.mouse_wheel)
+        self.canvas.bind("<Motion>", self.motion)
 
         self.controls = ttk.Frame(self.frame)
-        self.controls.grid(row=1, sticky=W)
+        self.controls.grid(row=1, sticky=(W,E))
 
         b1 = ttk.Button(self.controls, text='Fit', command=self.do_fit)
-        b1.grid(column=0, row=0, sticky=N)
+        b1.grid(column=0, row=0, sticky=W)
 
         b2 = ttk.Button(self.controls, text='Refit', command=self.do_refit)
-        b2.grid(column=1, row=0, sticky=N)
+        b2.grid(column=1, row=0, sticky=W)
 
         b3 = ttk.Button(self.controls, text='Autofit', command=self.do_autofit)
-        b3.grid(column=3, row=0, sticky=N)
+        b3.grid(column=3, row=0, sticky=W)
+
+        self.var_label = StringVar(value="x,y")
+        l1 = ttk.Label(self.controls, textvariable=self.var_label, width=20)
+        l1.grid(column=4, row=0, sticky=(E))
+
+        #self.controls.columnconfigure(4, weight=1)
 
         self.render()
                 
