@@ -15,9 +15,6 @@ class AffineTransform:
         self.angle = angle
         self.dxdy  = np.array(xy, dtype=np.float64)
 
-    def to_global_xy(self, points):
-        return points @ self.rot_matrix() + self.dxdy
-
     def to_local_xy(self, points):
         return (points - self.dxdy) @ self.rot_matrix().T
 
@@ -112,7 +109,9 @@ class Piece:
 
     def normal_at_index(self, i):
         uv = self.approx.normal_at_index(i)
-        return uv @ self.coords.rot_matrix()
+        ret = uv @ self.coords.rot_matrix()
+        print(f"  normal_at_index: {i=} {uv=} uv'={ret}")
+        return ret
 
 class Autofit:
 
@@ -142,6 +141,12 @@ class Autofit:
         src_point = src.get_transform().apply_v2(src_edge.line.pts[0])
         
         src.coords.dxdy = src.coords.dxdy + puzzler.math.vector_to_line(src_point, dst_line)
+
+    def get_tab_succ(self, x, edge):
+        pass
+
+    def get_tab_prev(self, x, edge):
+        pass
 
     def get_edge(self, piece):
 
@@ -322,6 +327,11 @@ class AlignTk:
                         c.draw_points(edge.line.pts[0], fill='purple', radius=8)
                         c.draw_points(edge.line.pts[1], fill='green', radius=8)
 
+                if p.piece.tabs and False:
+                    for tab in p.piece.tabs:
+                        pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
+                        c.draw_polygon(pts, fill='cyan', outline='')
+
                 c.draw_polygon(p.piece.points, outline=color, fill='', width=2)
 
             h = DragHandle(p.coords)
@@ -398,10 +408,10 @@ class AlignTk:
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
-        points0 = piece0.coords.to_global_xy(piece0.piece.points) - piece0.center
+        points0 = piece0.get_transform().apply_v2(piece0.piece.points)
         kdtree0 = scipy.spatial.KDTree(points0)
         
-        points1 = piece1.coords.to_global_xy(piece1.piece.points) - piece1.center
+        points1 = piece1.get_transform().apply_v2(piece1.piece.points)
         kdtree1 = scipy.spatial.KDTree(points1)
 
         indexes = kdtree0.query_ball_tree(kdtree1, r=15)
@@ -437,8 +447,8 @@ class AlignTk:
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
-        points0 = piece0.coords.to_global_xy(piece0.piece.points) - piece0.center
-        points1 = piece1.coords.to_global_xy(piece1.piece.points) - piece1.center
+        points0 = piece0.get_transform().apply_v2(piece0.piece.points)
+        points1 = piece1.get_transform().apply_v2(piece1.piece.points)
 
         data0 = points0[self.keep0]
         data1 = points1[self.keep1]
@@ -452,9 +462,15 @@ class AlignTk:
         dxdy = np.array((tx,ty))
         with np.printoptions(precision=3):
             print(f"icp: theta={math.degrees(theta):.3f} degrees, {dxdy=}")
+            print(f"  {normal0=}")
+            print(f"  {normal1=}")
 
         c = piece1.coords
         print(f"  before: {c.angle=} {c.dxdy=}")
+
+        dxdy = puzzler.math.rotate(dxdy, c.angle)
+        with np.printoptions(precision=3):
+            print(f"  correcting for rotation, {dxdy=}")
 
         c.angle += theta
         c.dxdy  += dxdy
@@ -466,26 +482,11 @@ class AlignTk:
         c = puzzler.render.Renderer(self.canvas)
         c.transform.multiply(self.camera_matrix)
 
-        with puzzler.render.save_matrix(c.transform):
-            p = piece0
-            c.transform.translate(*p.coords.dxdy)
-            c.transform.rotate(p.coords.angle)
-            c.transform.translate(*-p.center)
-
-            for i, k in enumerate(self.keep0):
-                xy = p.piece.points[k]
-                c.draw_lines(np.array((xy, xy+normal0[i]*50)), fill='red', width=1, arrow='last')
+        for i, xy in enumerate(data0):
+            c.draw_lines(np.array((xy, xy+normal0[i]*50)), fill='red', width=1, arrow='last')
         
-        with puzzler.render.save_matrix(c.transform):
-            p = piece1
-            c.transform.translate(*p.coords.dxdy)
-            c.transform.rotate(p.coords.angle)
-            c.transform.translate(*-p.center)
-
-            for i, k in enumerate(self.keep1):
-                xy = p.piece.points[k]
-                c.draw_lines(np.array((xy, xy+normal1[i]*50)), fill='green', width=1, arrow='last')
-        
+        for i, xy in enumerate(data1):
+            c.draw_lines(np.array((xy, xy+normal1[i]*50)), fill='green', width=1, arrow='last')
 
     def do_autofit(self):
         print("Autofit!")
@@ -499,8 +500,10 @@ class AlignTk:
         # print(event)
 
     def motion(self, event):
-        self.var_label.set(f"{event.x},{event.y}")
-        print(self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1))
+        xy0 = np.array((event.x, event.y, 1))
+        xy1 = xy0 @ np.linalg.inv(self.camera_matrix).T
+        self.var_label.set(f"{xy1[0]:.0f},{xy1[1]:.0f}")
+        # print(self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1))
 
     def init_camera_matrix(self):
         
@@ -543,7 +546,7 @@ class AlignTk:
         b3.grid(column=3, row=0, sticky=W)
 
         self.var_label = StringVar(value="x,y")
-        l1 = ttk.Label(self.controls, textvariable=self.var_label, width=20)
+        l1 = ttk.Label(self.controls, textvariable=self.var_label, width=40)
         l1.grid(column=4, row=0, sticky=(E))
 
         #self.controls.columnconfigure(4, weight=1)

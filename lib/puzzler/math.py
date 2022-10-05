@@ -21,3 +21,8 @@ def vector_to_line(pt, line):
     # vector is perpendicular to the line
     return dist * np.array((-vec1[1], vec1[0]))
 
+def rotate(points, angle):
+    c, s = np.cos(angle), np.sin(angle)
+    m = np.array(((c, -s),
+                  (s,  c)))
+    return points @ m.T
