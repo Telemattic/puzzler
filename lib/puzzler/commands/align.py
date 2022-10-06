@@ -432,23 +432,18 @@ class AlignTk:
         points0 = piece0.get_transform().apply_v2(piece0.piece.points)
         points1 = piece1.get_transform().apply_v2(piece1.piece.points)
 
+        # we're solving with an assumption that the rotation is about
+        # the center of piece, so make that the origin
         data0 = points0[self.keep0] - piece1.coords.dxdy
         data1 = points1[self.keep1] - piece1.coords.dxdy
         
         normal0 = np.array([piece0.normal_at_index(i) for i in self.keep0])
         normal1 = np.array([piece1.normal_at_index(i) for i in self.keep1])
 
-        # data1 = data1 - piece1.coords.dxdy
-
         theta, tx, ty = self.icp(data0, normal0, data1)[0]
         dxdy = np.array((tx,ty))
         with np.printoptions(precision=3):
             print(f"icp: theta={math.degrees(theta):.3f} degrees, {dxdy=}")
-
-        with np.printoptions(precision=3):
-            dxdy_p = puzzler.math.rotate(dxdy,  theta)
-            dxdy_n = puzzler.math.rotate(dxdy, -theta)
-            print(f"  correcting for rotation, {dxdy_p=} {dxdy_n=}")
 
         c = piece1.coords
         print(f"  before: {c.angle=} {c.dxdy=}")
@@ -540,16 +535,6 @@ def align_ui(args):
     by_label = dict()
     for p in puzzle.pieces:
         by_label[p.label] = p
-
-    if len(args.labels) >= 2:
-        print("*** RECENTERING ***")
-        p = by_label[args.labels[1]]
-        center = np.array(np.mean(p.points, axis=0), dtype=np.int32)
-        p.points = p.points - center
-        for edge in p.edges:
-            edge.line.pts = edge.line.pts - center
-        for tab in p.tabs:
-            tab.ellipse.center -= center
 
     pieces = [Piece(by_label[l]) for l in args.labels]
 
