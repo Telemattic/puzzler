@@ -52,6 +52,15 @@ class Camera:
     def matrix(self):
         return self._matrix
 
+    def fixed_point_zoom(self, f, xy):
+        xy  = np.array((*xy, 1))
+        inv = np.linalg.inv(self._matrix)
+        xy  = (xy @ inv.T)[:2]
+
+        self._center = self._zoom * (f - 1) * xy + self._center
+        self._zoom   = self._zoom * f
+        self.__update_matrix()
+
     def __update_matrix(self):
         w, h = self.viewport
         
@@ -545,9 +554,11 @@ class AlignTk:
         self.render()
 
     def mouse_wheel(self, event):
-        self.camera.zoom = self.camera.zoom * pow(1.05, 1 if event.delta > 0 else -1)
+        f = pow(1.05, 1 if event.delta > 0 else -1)
+        xy = (event.x, event.y)
+        self.camera.fixed_point_zoom(f, xy)
+        self.motion(event)
         self.render()
-        # print(event)
 
     def motion(self, event):
         xy0 = np.array((event.x, event.y, 1))
