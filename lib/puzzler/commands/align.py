@@ -51,6 +51,12 @@ class Camera:
     @property
     def matrix(self):
         return self._matrix
+
+    def invert(self, x, y):
+
+        inv = np.linalg.inv(self._matrix)
+        xy = np.array((x, y, 1)) @ inv.T
+        return xy[:2]
         
     def __update_matrix(self):
         w, h = self.viewport
@@ -70,52 +76,64 @@ class Camera:
 
 class Draggable:
 
-    def __init__(self, screen_coordinates = False):
-        self.screen_coordinates = screen_coordinates
-
     def start(self, xy):
         pass
 
-    def drag(self, dxdy):
+    def drag(self, xy):
         raise NotImplementedError
 
     def commit(self):
         pass
 
-class MovePiece(Draggable):
+class TransformDraggable(Draggable):
 
-    def __init__(self, piece):
+    def __init__(self, camera_matrix):
+        self.matrix = np.linalg.inv(camera_matrix)
+
+    def transform(self, xy):
+        uv = np.hstack((xy, np.ones(1))) @ self.matrix.T
+        return uv[:2]
+
+class MovePiece(TransformDraggable):
+
+    def __init__(self, piece, camera_matrix):
         self.piece = piece
         self.init_piece_dxdy = piece.coords.dxdy.copy()
-        super().__init__()
+        super().__init__(camera_matrix)
 
-    def drag(self, dxdy):
-        self.piece.coords.dxdy = self.init_piece_dxdy + dxdy
-        return True
+    def start(self, xy):
+        self.origin = self.transform(xy)
 
-class RotatePiece(Draggable):
+    def drag(self, xy):
+        self.piece.coords.dxdy = self.init_piece_dxdy + (self.transform(xy) - self.origin)
+
+class RotatePiece(TransformDraggable):
     
-    def __init__(self, piece):
+    def __init__(self, piece, camera_matrix):
         self.piece = piece
         self.init_piece_angle = piece.coords.angle
-        super().__init__()
+        super().__init__(camera_matrix)
 
-    def drag(self, dxdy):
-        dx, dy = dxdy
+    def start(self, xy):
+        self.origin = self.transform(xy)
+
+    def drag(self, xy):
+        dx, dy = self.transform(xy) - self.origin
         if dx or dy:
             self.piece.coords.angle = math.atan2(dy, dx) - math.pi / 2
-        return True
 
 class MoveCamera(Draggable):
 
     def __init__(self, camera):
         self.camera = camera
         self.init_camera_center = camera.center.copy()
-        super().__init__(True)
 
-    def drag(self, dxdy):
-        self.camera.center = self.init_camera_center + (dxdy / self.camera.zoom)
-        return True
+    def start(self, xy):
+        self.origin = xy
+
+    def drag(self, xy):
+        delta = (xy - self.origin) * np.array((-1, 1))
+        self.camera.center = self.init_camera_center + delta
 
 class AffineTransform:
 
@@ -279,38 +297,6 @@ class DragHandle:
         self.drag_radius = 50
         self.knob_radius = 20
 
-        self.drag_kind = None
-        self.drag_start = None
-
-    def start_drag(self, xy, kind):
-
-        self.drag_kind = kind
-        self.drag_start = xy
-        self.drag_coord = self.coord.copy()
-
-    def drag(self, xy):
-
-        if self.drag_kind == 'move':
-            dx, dy = xy[0] - self.drag_start[0], xy[1] - self.drag_start[1]
-            self.coord.dxdy = self.drag_coord.dxdy + (dx, dy)
-            
-            #newloc = self.drag_coord.dxdy + (dx, dy)
-            #print(f"move: xy={tuple(newloc)}")
-
-        elif self.drag_kind == 'turn':
-            dx, dy = xy[0] - self.drag_coord.dxdy[0], xy[1] - self.drag_coord.dxdy[1]
-            if dx or dy:
-                angle = math.atan2(dy, dx)
-                angle -= math.pi / 2
-                self.coord.angle = angle
-                # print(f"turn: angle={angle:.3f} ({angle*180./math.pi:.3f} deg)")
-
-    def end_drag(self):
-
-        self.drag_kind = None
-        self.drag_start = None
-        self.drag_coord = None
-
     def render(self, ctx, tags):
 
         dragxy = np.float64((0,0))
@@ -323,8 +309,6 @@ class DragHandle:
         knobxy = np.float64((0.,self.drag_radius))
         ctx.draw_circle(knobxy, self.knob_radius,
                         fill=self.color, outline='white', width=2, tags=tags)
-
-        # graph.draw_line(tuple(dragxy), tuple(knobxy), color=self.color, width=2)
 
 class AlignTk:
 
@@ -351,38 +335,30 @@ class AlignTk:
                 drag_type = 'turn'
 
         if piece_no is None:
-            return
-        
-        inv = np.linalg.inv(self.camera.matrix)
-        wxy = np.array((event.x, event.y, 1), dtype=np.float64) @ inv.T
-            
-        self.drag_id = piece_no
-        self.drag_handle = DragHandle(self.pieces[piece_no].coords)
-        self.drag_handle.start_drag(wxy[:2], drag_type)
+            self.draggable = MoveCamera(self.camera)
+        else:
+            piece = self.pieces[piece_no]
+            if drag_type == 'move':
+                self.draggable = MovePiece(piece, self.camera.matrix)
+            else:
+                self.draggable = RotatePiece(piece, self.camera.matrix)
+
+        self.draggable.start(np.array((event.x, event.y)))
 
         self.render()
         
     def canvas_drag(self, event):
 
-        cm = self.camera.matrix
-        inv = np.linalg.inv(cm)
-        wxy = np.array((event.x, event.y, 1), dtype=np.float64) @ inv.T
-
-        xy = wxy[:2]
-
-        if self.drag_handle:
-            self.drag_handle.drag(xy)
+        if self.draggable:
+            self.draggable.drag(np.array((event.x, event.y)))
             self.render()
 
     def canvas_release(self, event):
                 
-        if self.drag_handle:
-            self.drag_handle.end_drag()
-                
-        self.drag_handle = None
-        self.drag_id     = None
-            
-        self.render()
+        if self.draggable:
+            self.draggable.commit()
+            self.draggable = None
+            self.render()
 
     def render(self):
 
