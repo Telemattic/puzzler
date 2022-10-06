@@ -70,9 +70,10 @@ class Renderer:
         self.canvas.create_line(self.to_canvas(points), **kw)
 
     def draw_circle(self, points, radius, **kw):
-        r = np.array((radius, radius)) / 3
+        r = np.linalg.norm(np.array((radius, 0, 0)) @ self.transform.matrix.T)
+        rr = np.array((r, r))
         for xy in self.transform.apply_v2(np.atleast_2d(points)):
-            bbox = np.array((xy-r, xy+r))
+            bbox = np.array((xy-rr, xy+rr))
             self.canvas.create_oval(bbox.tolist(), **kw)
 
     def draw_polygon(self, points, **kw):

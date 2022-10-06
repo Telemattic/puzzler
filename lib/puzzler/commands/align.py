@@ -52,12 +52,6 @@ class Camera:
     def matrix(self):
         return self._matrix
 
-    def invert(self, x, y):
-
-        inv = np.linalg.inv(self._matrix)
-        xy = np.array((x, y, 1)) @ inv.T
-        return xy[:2]
-        
     def __update_matrix(self):
         w, h = self.viewport
         
@@ -118,10 +112,14 @@ class RotatePiece(TransformDraggable):
         self.origin = self.transform(xy)
 
     def drag(self, xy):
-        dx, dy = self.transform(xy) - self.origin
-        if dx or dy:
-            self.piece.coords.angle = math.atan2(dy, dx) - math.pi / 2
+        self.piece.coords.angle = (self.init_piece_angle
+                                   + self.to_angle(self.transform(xy))
+                                   - self.to_angle(self.origin))
 
+    def to_angle(self, xy):
+        dx, dy = xy - self.piece.coords.dxdy
+        return math.atan2(dy, dx) if dx or dy else 0.
+            
 class MoveCamera(Draggable):
 
     def __init__(self, camera):
@@ -289,34 +287,13 @@ class Autofit:
     def find_field(self):
         return [p for p in self.pieces if len(p.piece.edges) == 0]
 
-class DragHandle:
-
-    def __init__(self, coord):
-        self.coord = coord
-        self.color = 'black'
-        self.drag_radius = 50
-        self.knob_radius = 20
-
-    def render(self, ctx, tags):
-
-        dragxy = np.float64((0,0))
-        ctx.draw_circle(dragxy, self.drag_radius,
-                        outline=self.color, fill='', width=3, tags=tags)
-
-        if tags:
-            tags = ('rotate', tags)
-            
-        knobxy = np.float64((0.,self.drag_radius))
-        ctx.draw_circle(knobxy, self.knob_radius,
-                        fill=self.color, outline='white', width=2, tags=tags)
-
 class AlignTk:
 
     def __init__(self, parent, pieces):
         self.pieces = pieces
 
-        self.drag_handle = None
-        self.drag_id     = None
+        self.draggable = None
+        self.selection = None
 
         self.keep0 = None
         self.keep1 = None
@@ -336,12 +313,14 @@ class AlignTk:
 
         if piece_no is None:
             self.draggable = MoveCamera(self.camera)
+            self.selection = None
         else:
             piece = self.pieces[piece_no]
             if drag_type == 'move':
                 self.draggable = MovePiece(piece, self.camera.matrix)
             else:
                 self.draggable = RotatePiece(piece, self.camera.matrix)
+            self.selection = piece_no
 
         self.draggable.start(np.array((event.x, event.y)))
 
@@ -374,11 +353,11 @@ class AlignTk:
             c = puzzler.render.Renderer(canvas)
             c.transform.multiply(self.camera.matrix)
             
-            c.transform.translate(*p.coords.dxdy)
-            c.transform.rotate(p.coords.angle)
-
             with puzzler.render.save_matrix(c.transform):
                 
+                c.transform.translate(*p.coords.dxdy)
+                c.transform.rotate(p.coords.angle)
+
                 c.transform.translate(*-p.center)
             
                 if p.piece.edges and False:
@@ -394,9 +373,22 @@ class AlignTk:
 
                 c.draw_polygon(p.piece.points, outline=color, fill='', width=2, tag=tag)
 
-            h = DragHandle(p.coords)
-            h.render(c, tag)
+        if self.selection is not None:
 
+            p = self.pieces[self.selection]
+
+            c = puzzler.render.Renderer(canvas)
+            c.transform.multiply(self.camera.matrix)
+            
+            c.transform.translate(*p.coords.dxdy)
+            c.transform.rotate(p.coords.angle)
+
+            points = p.piece.points
+            bbox = np.array((np.min(points, axis=0), np.max(points, axis=0)))
+            diameter = np.linalg.norm(bbox[1] - bbox[0])
+            tags = ('rotate', f'piece_{self.selection}')
+            c.draw_circle((0,0), diameter/4, width=4, outline='gray', fill='', tags=tags)
+            
     @staticmethod
     def umeyama(P, Q):
         assert P.shape == Q.shape
