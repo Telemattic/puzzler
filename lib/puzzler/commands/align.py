@@ -10,6 +10,113 @@ from tkinter import *
 from tkinter import font
 from tkinter import ttk
 
+from dataclasses import dataclass
+
+class Camera:
+
+    def __init__(self, center, zoom, viewport):
+        self._center = center.copy()
+        self._zoom = zoom
+        self._viewport = viewport
+        self._matrix = None
+        self.__update_matrix()
+
+    @property
+    def center(self):
+        return self._center
+
+    @center.setter
+    def center(self, v):
+        self._center = v.copy()
+        self.__update_matrix()
+
+    @property
+    def zoom(self):
+        return self._zoom
+
+    @zoom.setter
+    def zoom(self, v):
+        self._zoom = v
+        self.__update_matrix()
+
+    @property
+    def viewport(self):
+        return self._viewport
+
+    @viewport.setter
+    def viewport(self, v):
+        self._viewport = v
+        self.__update_matrix()
+
+    @property
+    def matrix(self):
+        return self._matrix
+        
+    def __update_matrix(self):
+        w, h = self.viewport
+        
+        vp = np.array(((1,  0, w/2),
+                       (0, -1, h/2),
+                       (0,  0, 1)), dtype=np.float64)
+
+        x, y = self.center
+        z = self.zoom
+        
+        lookat = np.array(((z, 0, -x),
+                           (0, z, -y),
+                           (0, 0,  1)))
+
+        self._matrix = vp @ lookat
+
+class Draggable:
+
+    def __init__(self, screen_coordinates = False):
+        self.screen_coordinates = screen_coordinates
+
+    def start(self, xy):
+        pass
+
+    def drag(self, dxdy):
+        raise NotImplementedError
+
+    def commit(self):
+        pass
+
+class MovePiece(Draggable):
+
+    def __init__(self, piece):
+        self.piece = piece
+        self.init_piece_dxdy = piece.coords.dxdy.copy()
+        super().__init__()
+
+    def drag(self, dxdy):
+        self.piece.coords.dxdy = self.init_piece_dxdy + dxdy
+        return True
+
+class RotatePiece(Draggable):
+    
+    def __init__(self, piece):
+        self.piece = piece
+        self.init_piece_angle = piece.coords.angle
+        super().__init__()
+
+    def drag(self, dxdy):
+        dx, dy = dxdy
+        if dx or dy:
+            self.piece.coords.angle = math.atan2(dy, dx) - math.pi / 2
+        return True
+
+class MoveCamera(Draggable):
+
+    def __init__(self, camera):
+        self.camera = camera
+        self.init_camera_center = camera.center.copy()
+        super().__init__(True)
+
+    def drag(self, dxdy):
+        self.camera.center = self.init_camera_center + (dxdy / self.camera.zoom)
+        return True
+
 class AffineTransform:
 
     def __init__(self, angle=0., xy=(0.,0.)):
@@ -246,7 +353,7 @@ class AlignTk:
         if piece_no is None:
             return
         
-        inv = np.linalg.inv(self.camera_matrix)
+        inv = np.linalg.inv(self.camera.matrix)
         wxy = np.array((event.x, event.y, 1), dtype=np.float64) @ inv.T
             
         self.drag_id = piece_no
@@ -257,7 +364,7 @@ class AlignTk:
         
     def canvas_drag(self, event):
 
-        cm = self.camera_matrix
+        cm = self.camera.matrix
         inv = np.linalg.inv(cm)
         wxy = np.array((event.x, event.y, 1), dtype=np.float64) @ inv.T
 
@@ -289,7 +396,7 @@ class AlignTk:
             tag = f"piece_{i}"
 
             c = puzzler.render.Renderer(canvas)
-            c.transform.multiply(self.camera_matrix)
+            c.transform.multiply(self.camera.matrix)
             
             c.transform.translate(*p.coords.dxdy)
             c.transform.rotate(p.coords.angle)
@@ -414,7 +521,7 @@ class AlignTk:
         print(f"eldridge: {self.eldridge(data0, data1)}")
 
         c = puzzler.render.Renderer(self.canvas)
-        c.transform.multiply(self.camera_matrix)
+        c.transform.multiply(self.camera.matrix)
         c.draw_circle(data0, 17, fill='purple', outline='')
 
     def do_refit(self):
@@ -456,7 +563,7 @@ class AlignTk:
         self.render()
 
         c = puzzler.render.Renderer(self.canvas)
-        c.transform.multiply(self.camera_matrix)
+        c.transform.multiply(self.camera.matrix)
 
         for i, xy in enumerate(data0):
             c.draw_lines(np.array((xy, xy+normal0[i]*50)), fill='red', width=1, arrow='last')
@@ -470,45 +577,16 @@ class AlignTk:
         self.render()
 
     def mouse_wheel(self, event):
-        self.camera_zoom *= pow(1.05, 1 if event.delta > 0 else -1)
-        self.init_camera_matrix()
+        self.camera.zoom = self.camera.zoom * pow(1.05, 1 if event.delta > 0 else -1)
         self.render()
         # print(event)
 
     def motion(self, event):
         xy0 = np.array((event.x, event.y, 1))
-        xy1 = xy0 @ np.linalg.inv(self.camera_matrix).T
+        xy1 = xy0 @ np.linalg.inv(self.camera.matrix).T
         tags = self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1)
         tags = [self.canvas.gettags(i) for i in tags]
         self.var_label.set(f"{xy1[0]:.0f},{xy1[1]:.0f} " + ','.join(str(i) for i in tags))
-
-    def init_camera_matrix(self):
-        
-        w, h = self.canvas_width, self.canvas_height
-
-        x, y = self.camera_center
-        z = self.camera_zoom
-
-        vp = np.array(((1, 0, w/2),
-                       (0, -1, h/2),
-                       (0, 0, 1)), dtype=np.float64)
-        lookat = np.array(((z, 0, -x),
-                           (0, z, -y),
-                           (0, 0,  1)))
-                        
-
-        self.camera_matrix = np.array(
-            ((z,  0, w/2),
-             (0, -z, h/2),
-             (0,  0,   1)), dtype=np.float64)
-
-        with np.printoptions(precision=3):
-            print(f"{self.camera_matrix=}")
-
-        self.camera_matrix = vp @ lookat
-        
-        with np.printoptions(precision=3):
-            print(f"{self.camera_matrix=}")
 
     def keypress(self, event):
         print(event)
@@ -524,25 +602,21 @@ class AlignTk:
             dx = 1
 
         if dx or dy:
-            dx *= 100 * self.camera_zoom
-            dy *= 100 * self.camera_zoom
+            dx *= 100 * self.camera.zoom
+            dy *= 100 * self.camera.zoom
 
-            self.camera_center = self.camera_center + np.array((dx, dy))
-            self.init_camera_matrix()
+            self.camera.center = self.camera.center + np.array((dx, dy))
             self.render()
 
     def _init_ui(self, parent):
 
-        self.canvas_width = 1024
-        self.canvas_height = 1024
-        self.camera_center = np.array((0,0), dtype=np.float64)
-        self.camera_zoom = 1/3.
-        self.init_camera_matrix()
+        viewport = (1024, 1024)
+        self.camera = Camera(np.array((0,0), dtype=np.float64), 1/3, viewport)
         
         self.frame = ttk.Frame(parent, padding=5)
         self.frame.grid(sticky=(N, W, E, S))
 
-        self.canvas = Canvas(self.frame, width=self.canvas_width, height=self.canvas_height,
+        self.canvas = Canvas(self.frame, width=viewport[0], height=viewport[1],
                              background='white', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
         self.canvas.bind("<Button-1>", self.canvas_press)
