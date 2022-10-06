@@ -2,6 +2,7 @@ import bisect
 import cv2 as cv
 import math
 import numpy as np
+import re
 import scipy
 import puzzler
 
@@ -14,9 +15,6 @@ class AffineTransform:
     def __init__(self, angle=0., xy=(0.,0.)):
         self.angle = angle
         self.dxdy  = np.array(xy, dtype=np.float64)
-
-    def to_local_xy(self, points):
-        return (points - self.dxdy) @ self.rot_matrix().T
 
     def rot_matrix(self):
         c, s = np.cos(self.angle), np.sin(self.angle)
@@ -95,7 +93,6 @@ class Piece:
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
-        self.kdtree = scipy.spatial.KDTree(self.piece.points)
 
     def get_transform(self):
         return (puzzler.render.Transform()
@@ -103,15 +100,9 @@ class Piece:
                 .rotate(self.coords.angle)
                 .translate(*-self.center))        
 
-    def dist(self, xy):
-        xy = self.coords.to_local_xy(xy) + self.center
-        return self.kdtree.query(xy, distance_upper_bound=20)
-
     def normal_at_index(self, i):
         uv = self.approx.normal_at_index(i)
-        ret = uv @ self.coords.rot_matrix()
-        print(f"  normal_at_index: {i=} {uv=} uv'={ret}")
-        return ret
+        return uv @ self.coords.rot_matrix()
 
 class Autofit:
 
@@ -184,19 +175,6 @@ class DragHandle:
         self.drag_kind = None
         self.drag_start = None
 
-    def hit_test(self, xy):
-        
-        dragxy = self.coord.dxdy
-        knobxy = np.float64((0.,self.drag_radius)) @ self.coord.rot_matrix() + dragxy
-
-        if np.linalg.norm(knobxy - xy) <= self.knob_radius:
-            return 'turn'
-
-        if np.linalg.norm(dragxy - xy) <= self.drag_radius:
-            return 'move'
-
-        return None
-
     def start_drag(self, xy, kind):
 
         self.drag_kind = kind
@@ -226,15 +204,18 @@ class DragHandle:
         self.drag_start = None
         self.drag_coord = None
 
-    def render(self, ctx):
+    def render(self, ctx, tags):
 
         dragxy = np.float64((0,0))
         ctx.draw_circle(dragxy, self.drag_radius,
-                        outline=self.color, fill='', width=3)
+                        outline=self.color, fill='', width=3, tags=tags)
 
+        if tags:
+            tags = ('rotate', tags)
+            
         knobxy = np.float64((0.,self.drag_radius))
         ctx.draw_circle(knobxy, self.knob_radius,
-                        fill=self.color, outline='white', width=2)
+                        fill=self.color, outline='white', width=2, tags=tags)
 
         # graph.draw_line(tuple(dragxy), tuple(knobxy), color=self.color, width=2)
 
@@ -251,31 +232,26 @@ class AlignTk:
 
         self._init_ui(parent)
 
-    def find_nearest_piece(self, xy):
-        return min((p.dist(xy)[0], i) for i, p in enumerate(self.pieces))
-
     def canvas_press(self, event):
 
-        cm = self.camera_matrix
-        inv = np.linalg.inv(cm)
+        piece_no  = None
+        drag_type = 'move'
+        for tag in self.canvas.gettags(self.canvas.find('withtag', 'current')):
+            m = re.fullmatch("piece_(\d+)", tag)
+            if m:
+                piece_no = int(m[1])
+            if tag == 'rotate':
+                drag_type = 'turn'
+
+        if piece_no is None:
+            return
+        
+        inv = np.linalg.inv(self.camera_matrix)
         wxy = np.array((event.x, event.y, 1), dtype=np.float64) @ inv.T
-
-        xy = wxy[:2]
-
-        dist, id = self.find_nearest_piece(xy)
-        if dist < 20:
-            self.drag_id = id
-            self.drag_handle = DragHandle(self.pieces[id].coords)
-            self.drag_handle.start_drag(xy, 'move')
-        else:
-            for i, p in enumerate(self.pieces):
-                h = DragHandle(p.coords)
-                t = h.hit_test(xy)
-                if t:
-                    self.drag_id = i
-                    self.drag_handle = h
-                    h.start_drag(xy, t)
-                    break
+            
+        self.drag_id = piece_no
+        self.drag_handle = DragHandle(self.pieces[piece_no].coords)
+        self.drag_handle.start_drag(wxy[:2], drag_type)
 
         self.render()
         
@@ -310,6 +286,7 @@ class AlignTk:
         for i, p in enumerate(self.pieces):
 
             color = colors[i%len(colors)]
+            tag = f"piece_{i}"
 
             c = puzzler.render.Renderer(canvas)
             c.transform.multiply(self.camera_matrix)
@@ -332,10 +309,10 @@ class AlignTk:
                         pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
                         c.draw_polygon(pts, fill='cyan', outline='')
 
-                c.draw_polygon(p.piece.points, outline=color, fill='', width=2)
+                c.draw_polygon(p.piece.points, outline=color, fill='', width=2, tag=tag)
 
             h = DragHandle(p.coords)
-            h.render(c)
+            h.render(c, tag)
 
     @staticmethod
     def umeyama(P, Q):
@@ -419,7 +396,8 @@ class AlignTk:
 
         print(f"{len(matches)} points in piece0 have a correspondence with piece1")
 
-        keep = [matches[i] for i in range(0, len(matches), (len(matches)-4) // 4)]
+        n = len(matches)
+        keep = [matches[i] for i in range(n // 8, n, n // 5)]
         print(f"{keep=}")
 
         data0 = points0[keep]
@@ -443,15 +421,19 @@ class AlignTk:
 
         if self.keep0 is None or self.keep1 is None:
             return
+
+        print("Refit!")
         
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
+        print(f"{piece0.center=} {piece1.center=}")
+
         points0 = piece0.get_transform().apply_v2(piece0.piece.points)
         points1 = piece1.get_transform().apply_v2(piece1.piece.points)
 
-        data0 = points0[self.keep0]
-        data1 = points1[self.keep1]
+        data0 = points0[self.keep0] - piece1.coords.dxdy
+        data1 = points1[self.keep1] - piece1.coords.dxdy
         
         normal0 = np.array([piece0.normal_at_index(i) for i in self.keep0])
         normal1 = np.array([piece1.normal_at_index(i) for i in self.keep1])
@@ -462,15 +444,14 @@ class AlignTk:
         dxdy = np.array((tx,ty))
         with np.printoptions(precision=3):
             print(f"icp: theta={math.degrees(theta):.3f} degrees, {dxdy=}")
-            print(f"  {normal0=}")
-            print(f"  {normal1=}")
+
+        with np.printoptions(precision=3):
+            dxdy_p = puzzler.math.rotate(dxdy,  theta)
+            dxdy_n = puzzler.math.rotate(dxdy, -theta)
+            print(f"  correcting for rotation, {dxdy_p=} {dxdy_n=}")
 
         c = piece1.coords
         print(f"  before: {c.angle=} {c.dxdy=}")
-
-        dxdy = puzzler.math.rotate(dxdy, c.angle)
-        with np.printoptions(precision=3):
-            print(f"  correcting for rotation, {dxdy=}")
 
         c.angle += theta
         c.dxdy  += dxdy
@@ -502,8 +483,9 @@ class AlignTk:
     def motion(self, event):
         xy0 = np.array((event.x, event.y, 1))
         xy1 = xy0 @ np.linalg.inv(self.camera_matrix).T
-        self.var_label.set(f"{xy1[0]:.0f},{xy1[1]:.0f}")
-        # print(self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1))
+        tags = self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1)
+        tags = [self.canvas.gettags(i) for i in tags]
+        self.var_label.set(f"{xy1[0]:.0f},{xy1[1]:.0f} " + ','.join(str(i) for i in tags))
 
     def init_camera_matrix(self):
         
@@ -549,8 +531,6 @@ class AlignTk:
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=40)
         l1.grid(column=4, row=0, sticky=(E))
 
-        #self.controls.columnconfigure(4, weight=1)
-
         self.render()
                 
 def align_ui(args):
@@ -560,6 +540,16 @@ def align_ui(args):
     by_label = dict()
     for p in puzzle.pieces:
         by_label[p.label] = p
+
+    if len(args.labels) >= 2:
+        print("*** RECENTERING ***")
+        p = by_label[args.labels[1]]
+        center = np.array(np.mean(p.points, axis=0), dtype=np.int32)
+        p.points = p.points - center
+        for edge in p.edges:
+            edge.line.pts = edge.line.pts - center
+        for tab in p.tabs:
+            tab.ellipse.center -= center
 
     pieces = [Piece(by_label[l]) for l in args.labels]
 
