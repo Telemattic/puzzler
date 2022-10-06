@@ -470,7 +470,7 @@ class AlignTk:
         self.render()
 
     def mouse_wheel(self, event):
-        self.camera_scale *= pow(1.05, 1 if event.delta > 0 else -1)
+        self.camera_zoom *= pow(1.05, 1 if event.delta > 0 else -1)
         self.init_camera_matrix()
         self.render()
         # print(event)
@@ -484,18 +484,59 @@ class AlignTk:
 
     def init_camera_matrix(self):
         
-        w, h, s = self.canvas_width, self.canvas_height, self.camera_scale
+        w, h = self.canvas_width, self.canvas_height
+
+        x, y = self.camera_center
+        z = self.camera_zoom
+
+        vp = np.array(((1, 0, w/2),
+                       (0, -1, h/2),
+                       (0, 0, 1)), dtype=np.float64)
+        lookat = np.array(((z, 0, -x),
+                           (0, z, -y),
+                           (0, 0,  1)))
+                        
 
         self.camera_matrix = np.array(
-            ((1/s,    0,   0),
-             (  0, -1/s, h-1),
-             (  0,    0,   1)), dtype=np.float64)
+            ((z,  0, w/2),
+             (0, -z, h/2),
+             (0,  0,   1)), dtype=np.float64)
+
+        with np.printoptions(precision=3):
+            print(f"{self.camera_matrix=}")
+
+        self.camera_matrix = vp @ lookat
         
+        with np.printoptions(precision=3):
+            print(f"{self.camera_matrix=}")
+
+    def keypress(self, event):
+        print(event)
+
+        dx = dy = 0
+        if event.keycode == 38:
+            dy = 1
+        elif event.keycode == 40:
+            dy = -1
+        elif event.keycode == 37:
+            dx = -1
+        elif event.keycode == 39:
+            dx = 1
+
+        if dx or dy:
+            dx *= 100 * self.camera_zoom
+            dy *= 100 * self.camera_zoom
+
+            self.camera_center = self.camera_center + np.array((dx, dy))
+            self.init_camera_matrix()
+            self.render()
+
     def _init_ui(self, parent):
 
         self.canvas_width = 1024
         self.canvas_height = 1024
-        self.camera_scale = 3.
+        self.camera_center = np.array((0,0), dtype=np.float64)
+        self.camera_zoom = 1/3.
         self.init_camera_matrix()
         
         self.frame = ttk.Frame(parent, padding=5)
@@ -509,6 +550,8 @@ class AlignTk:
         self.canvas.bind("<ButtonRelease-1>", self.canvas_release)
         self.canvas.bind("<MouseWheel>", self.mouse_wheel)
         self.canvas.bind("<Motion>", self.motion)
+
+        parent.bind("<Key>", self.keypress)
 
         self.controls = ttk.Frame(self.frame)
         self.controls.grid(row=1, sticky=(W,E))
