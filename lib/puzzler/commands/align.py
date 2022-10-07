@@ -382,7 +382,7 @@ class AlignTk:
 
                 c.draw_polygon(p.piece.points, outline=color, fill='', width=2, tag=tag)
 
-        if self.selection is not None:
+        if False and self.selection is not None:
 
             p = self.pieces[self.selection]
 
@@ -397,7 +397,33 @@ class AlignTk:
             diameter = np.linalg.norm(bbox[1] - bbox[0])
             tags = ('rotate', f'piece_{self.selection}')
             c.draw_circle((0,0), diameter/4, width=4, outline='gray', fill='', tags=tags)
+
+        if self.selection is not None:
+
+            p = self.pieces[self.selection]
+
+            c = puzzler.render.Renderer(canvas)
+            c.transform.multiply(self.camera.matrix)
             
+            c.transform.translate(*p.coords.dxdy)
+            c.transform.rotate(p.coords.angle)
+
+            r1  = 250
+            r2  = 300
+            phi = np.linspace(0, math.pi/2, num=20)
+            cos = np.cos(phi)
+            sin = np.sin(phi)
+            x   = np.concatenate((r1 * cos, r2 * np.flip(cos)))
+            y   = np.concatenate((r1 * sin, r2 * np.flip(sin)))
+            points = np.vstack((x, y)).T
+            # print(f"{points=}")
+            tags = ('rotate', f'piece_{self.selection}')
+
+            for i in range(4):
+                with puzzler.render.save_matrix(c.transform):
+                    c.transform.rotate(i * math.pi / 2)
+                    c.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
+
     @staticmethod
     def umeyama(P, Q):
         assert P.shape == Q.shape
