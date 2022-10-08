@@ -4,13 +4,14 @@ import math
 import numpy as np
 import re
 import scipy
+import puzzler.feature
 import puzzler
 
 from tkinter import *
 from tkinter import font
 from tkinter import ttk
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 class Camera:
 
@@ -225,6 +226,7 @@ class Piece:
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
+        self.info   = None
 
     def get_transform(self):
         return (puzzler.render.Transform()
@@ -236,6 +238,48 @@ class Piece:
         uv = self.approx.normal_at_index(i)
         return uv @ self.coords.rot_matrix()
 
+@dataclass
+class BorderInfo:
+
+    @dataclass
+    class TabInfo:
+        
+        tab: puzzler.feature.Tab
+        dist: float
+
+    edge: puzzler.feature.Edge
+    tab_prev: TabInfo
+    tab_next: TabInfo
+    scores: dict[str,float] = field(default_factory=dict)
+
+def make_border_info(piece):
+
+    edges = piece.edges
+
+    tab_next = piece.tabs[0]
+    for tab in piece.tabs:
+        if edges[-1].fit_indexes < tab.fit_indexes:
+            tab_next = tab
+            break
+
+    tab_prev = piece.tabs[-1]
+    for tab in piece.tabs:
+        if edges[0].fit_indexes < tab.fit_indexes:
+            break
+        tab_prev = tab
+
+    dist_next = puzzler.math.distance_to_line(
+        tab_next.ellipse.center, edges[-1].line.pts)        
+    tab_next = BorderInfo.TabInfo(tab_next, dist_next)
+
+    dist_prev = puzzler.math.distance_to_line(
+        tab_prev.ellipse.center, edges[0].line.pts)
+    tab_prev = BorderInfo.TabInfo(tab_prev, dist_prev)
+
+    print(f"{piece.label}: {dist_prev=:.1f} {dist_next=:.1f}")
+
+    return BorderInfo(edges, tab_prev, tab_next)
+
 class Autofit:
 
     def __init__(self, pieces):
@@ -244,7 +288,9 @@ class Autofit:
 
         anchor = self.choose_anchor()
 
-        self.align_edges(self.pieces[0], self.pieces[1])
+        fp = self.align_edges(self.pieces[0], self.pieces[1])
+        self.dst_fit_pts = fp[0]
+        self.src_fit_pts = fp[1]
         
     def align_edges(self, dst, src):
 
@@ -264,6 +310,45 @@ class Autofit:
         src_point = src.get_transform().apply_v2(src_edge.line.pts[0])
         
         src.coords.dxdy = src.coords.dxdy + puzzler.math.vector_to_line(src_point, dst_line)
+
+        dst_fit_pts = None
+        src_fit_pts = None
+        if dst.info and src.info:
+            pts = dst.get_transform().apply_v2(dst_edge.line.pts)
+            edge_vec = puzzler.math.unit_vector(pts[1] - pts[0])
+            dst_center = dst.get_transform().apply_v2(
+                dst.info.tab_next.tab.ellipse.center)
+            src_center = src.get_transform().apply_v2(
+                src.info.tab_prev.tab.ellipse.center)
+            d = np.dot(edge_vec, (dst_center - src_center))
+            with np.printoptions(precision=1):
+                print(f"{dst_center=}")
+                print(f"{src_center=}")
+                print(f"tabs are {d=:.1f} units apart")
+            src.coords.dxdy = src.coords.dxdy + edge_vec * d
+
+            dst_fit_pts = (dst.info.edge[-1].fit_indexes[1],
+                           dst.info.tab_next.tab.fit_indexes[1])
+            src_fit_pts = (src.info.tab_prev.tab.fit_indexes[0],
+                           src.info.edge[0].fit_indexes[0])
+
+        dst_matrix = dst.get_transform().matrix
+        src_matrix = src.get_transform().matrix
+
+        matrix_b = np.linalg.inv(dst_matrix) @ src_matrix
+
+        def dissect(m):
+            angle = math.atan2(m[1,0], m[0,0])
+            x, y = m[0,2], m[1,2]
+            return f"{angle=:.3f} {x=:.1f} {y=:.1f}"
+
+        with np.printoptions(precision=3):
+            print(f"{dst_matrix=} {dissect(dst_matrix)}")
+            print(f"{src_matrix=} {dissect(src_matrix)}")
+            print(f"{matrix_b=} {dissect(matrix_b)}")
+            print(f"{dst_matrix @ matrix_b=}")
+
+        return (dst_fit_pts, src_fit_pts)
 
     def get_tab_succ(self, x, edge):
         pass
@@ -354,36 +439,38 @@ class AlignTk:
         canvas.delete('all')
 
         colors = ['red', 'green', 'blue']
-        for i, p in enumerate(self.pieces):
+        for i, piece in enumerate(self.pieces):
 
             color = colors[i%len(colors)]
-            tag = f"piece_{i}"
 
-            c = puzzler.render.Renderer(canvas)
-            c.transform.multiply(self.camera.matrix)
-            
-            with puzzler.render.save_matrix(c.transform):
-                
-                c.transform.translate(*p.coords.dxdy)
-                c.transform.rotate(p.coords.angle)
+            r = puzzler.render.Renderer(canvas)
+            r.transform.multiply(self.camera.matrix)
 
-                c.transform.translate(*-p.center)
-            
-                if p.piece.edges and False:
-                    for edge in p.piece.edges:
-                        c.draw_lines(edge.line.pts, fill='pink', width=8)
-                        c.draw_points(edge.line.pts[0], fill='purple', radius=8)
-                        c.draw_points(edge.line.pts[1], fill='green', radius=8)
-
-                if p.piece.tabs and False:
-                    for tab in p.piece.tabs:
-                        pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
-                        c.draw_polygon(pts, fill='cyan', outline='')
-
-                c.draw_polygon(p.piece.points, outline=color, fill='', width=2, tag=tag)
+            self.draw_piece(r, piece, color, f"piece_{i}")
 
         if self.selection is not None:
             self.draw_rotate_handles(self.selection)
+            
+    def draw_piece(self, r, p, color, tag):
+            
+        with puzzler.render.save_matrix(r.transform):
+                
+            r.transform.translate(*p.coords.dxdy)
+            r.transform.rotate(p.coords.angle)
+            r.transform.translate(*-p.center)
+            
+            if p.piece.edges and False:
+                for edge in p.piece.edges:
+                    r.draw_lines(edge.line.pts, fill='pink', width=8)
+                    r.draw_points(edge.line.pts[0], fill='purple', radius=8)
+                    r.draw_points(edge.line.pts[1], fill='green', radius=8)
+
+            if p.piece.tabs and False:
+                for tab in p.piece.tabs:
+                    pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
+                    r.draw_polygon(pts, fill='cyan', outline='')
+
+            r.draw_polygon(p.piece.points, outline=color, fill='', width=2, tag=tag)
 
     def draw_rotate_handles(self, piece_id):
 
@@ -410,6 +497,12 @@ class AlignTk:
             with puzzler.render.save_matrix(c.transform):
                 c.transform.rotate(i * math.pi / 2)
                 c.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
+
+        if p.info:
+            with puzzler.render.save_matrix(c.transform):
+                c.transform.translate(*-p.center)
+                c.draw_text(p.info.tab_next.tab.ellipse.center, "n")
+                c.draw_text(p.info.tab_prev.tab.ellipse.center, "p")
 
     @staticmethod
     def umeyama(P, Q):
@@ -565,6 +658,22 @@ class AlignTk:
         print("Autofit!")
         af = Autofit(self.pieces)
         self.render()
+        if af.dst_fit_pts:
+            c = puzzler.render.Renderer(self.canvas)
+            c.transform.multiply(self.camera.matrix)
+
+            dst = self.pieces[0]
+            a, b = af.dst_fit_pts
+            pts = dst.piece.points[a:b]
+            c.draw_lines(dst.get_transform().apply_v2(pts), fill='pink', width=3)
+        if af.src_fit_pts:
+            c = puzzler.render.Renderer(self.canvas)
+            c.transform.multiply(self.camera.matrix)
+
+            src = self.pieces[1]
+            a, b = af.src_fit_pts
+            pts = src.piece.points[a:b]
+            c.draw_lines(src.get_transform().apply_v2(pts), fill='cyan', width=3)
 
     def mouse_wheel(self, event):
         f = pow(1.05, 1 if event.delta > 0 else -1)
@@ -646,6 +755,9 @@ def align_ui(args):
         by_label[p.label] = p
 
     pieces = [Piece(by_label[l]) for l in args.labels]
+    for piece in pieces:
+        if piece.piece.edges:
+            piece.info = make_border_info(piece.piece)
 
     root = Tk()
     ui = AlignTk(root, pieces)
