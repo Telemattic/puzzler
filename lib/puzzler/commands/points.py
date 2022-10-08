@@ -142,7 +142,9 @@ def points_update(args):
         for piece in pieces:
             image = scan.get_subimage(piece.source.rect)
             pc = PerimeterComputer(image)
-            piece.points = np.squeeze(pc.contour)
+            points = np.squeeze(pc.contour)
+            center = np.array(np.mean(points, axis=0), dtype=np.int32)
+            piece.points = points-center
             piece.tabs = None
             piece.edges = None
     

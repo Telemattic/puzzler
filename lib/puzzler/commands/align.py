@@ -756,6 +756,7 @@ def align_ui(args):
 
     pieces = [Piece(by_label[l]) for l in args.labels]
     for piece in pieces:
+        print(f"{piece.piece.label}: center={piece.center}")
         if piece.piece.edges:
             piece.info = make_border_info(piece.piece)
 
