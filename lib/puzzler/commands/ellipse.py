@@ -484,12 +484,12 @@ class EllipseFitterTk:
         # print(f"{convexity_defects=}")
         for defect in convexity_defects:
             indexes = apc.indexes
-            p0 = tuple(points[indexes[defect[0]]])
-            p1 = tuple(points[indexes[defect[1]]])
-            p2 = tuple(points[indexes[defect[2]]])
-            self.convexity_defects.append([p0, p2, p1])
+            p0 = points[indexes[defect[0]]]
+            p1 = points[indexes[defect[1]]]
+            p2 = points[indexes[defect[2]]]
+            self.convexity_defects.append(np.array((p0, p2, p1)))
 
-        self.approx_pts = [tuple(points[i]) for i in apc.indexes]
+        self.approx_pts = np.array([points[i] for i in apc.indexes])
         self.signed_area = apc.signed_area
 
         self.render()
@@ -530,7 +530,7 @@ class EllipseFitterTk:
              (0,  0,   1)), dtype=np.float64)
         r.transform.multiply(camera_matrix)
         r.transform.scale(self.camera_scale)
-        r.transform.translate(self.camera_trans)
+        r.transform.translate(-self.camera_trans)
 
         if self.var_render_perimeter.get():
             r.draw_points(self.perimeter.points, radius=1, fill='black')
