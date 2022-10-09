@@ -84,7 +84,7 @@ class Browser:
             tx = (x + .5) * self.bbox_w
             ty = (y + .5) * self.bbox_h
             with puzzler.render.save_matrix(r.transform):
-                r.transform.translate(tx, ty)
+                r.transform.translate((tx, ty))
                 self.render_outline(r, o)
 
     def render_outline(self, r, o):
@@ -95,7 +95,7 @@ class Browser:
         bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
 
         with puzzler.render.save_matrix(r.transform):
-            r.transform.translate(*-bbox_center)
+            r.transform.translate(-bbox_center)
 
             if p.tabs is not None:
                 for tab in p.tabs:

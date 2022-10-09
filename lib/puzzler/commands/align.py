@@ -222,7 +222,6 @@ class Piece:
     def __init__(self, piece):
 
         self.piece  = piece
-        self.center = np.array(np.mean(self.piece.points, axis=0), dtype=np.int32)
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
@@ -230,9 +229,8 @@ class Piece:
 
     def get_transform(self):
         return (puzzler.render.Transform()
-                .translate(*self.coords.dxdy)
-                .rotate(self.coords.angle)
-                .translate(*-self.center))        
+                .translate(self.coords.dxdy)
+                .rotate(self.coords.angle))
 
     def normal_at_index(self, i):
         uv = self.approx.normal_at_index(i)
@@ -455,9 +453,8 @@ class AlignTk:
             
         with puzzler.render.save_matrix(r.transform):
                 
-            r.transform.translate(*p.coords.dxdy)
+            r.transform.translate(p.coords.dxdy)
             r.transform.rotate(p.coords.angle)
-            r.transform.translate(*-p.center)
             
             if p.piece.edges and False:
                 for edge in p.piece.edges:
@@ -479,7 +476,7 @@ class AlignTk:
         c = puzzler.render.Renderer(self.canvas)
         c.transform.multiply(self.camera.matrix)
             
-        c.transform.translate(*p.coords.dxdy)
+        c.transform.translate(p.coords.dxdy)
         c.transform.rotate(p.coords.angle)
 
         r1  = 250
@@ -500,7 +497,6 @@ class AlignTk:
 
         if p.info:
             with puzzler.render.save_matrix(c.transform):
-                c.transform.translate(*-p.center)
                 c.draw_text(p.info.tab_next.tab.ellipse.center, "n")
                 c.draw_text(p.info.tab_prev.tab.ellipse.center, "p")
 
@@ -616,8 +612,6 @@ class AlignTk:
         
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
-
-        print(f"{piece0.center=} {piece1.center=}")
 
         points0 = piece0.get_transform().apply_v2(piece0.piece.points)
         points1 = piece1.get_transform().apply_v2(piece1.piece.points)
@@ -756,7 +750,6 @@ def align_ui(args):
 
     pieces = [Piece(by_label[l]) for l in args.labels]
     for piece in pieces:
-        print(f"{piece.piece.label}: center={piece.center}")
         if piece.piece.edges:
             piece.info = make_border_info(piece.piece)
 

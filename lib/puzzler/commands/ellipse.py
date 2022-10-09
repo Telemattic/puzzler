@@ -530,7 +530,7 @@ class EllipseFitterTk:
              (0,  0,   1)), dtype=np.float64)
         r.transform.multiply(camera_matrix)
         r.transform.scale(self.camera_scale)
-        r.transform.translate(*-self.camera_trans)
+        r.transform.translate(self.camera_trans)
 
         if self.var_render_perimeter.get():
             r.draw_points(self.perimeter.points, radius=1, fill='black')

@@ -18,7 +18,8 @@ class Transform:
                       (0, 0, 1)))
         return self.multiply(m)
 
-    def translate(self, x, y):
+    def translate(self, xy):
+        x, y = xy
         m = np.array(((1, 0, x),
                       (0, 1, y),
                       (0, 0, 1)))
