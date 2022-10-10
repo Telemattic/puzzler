@@ -3,6 +3,7 @@ from . import commands
 from . import feature
 from . import file
 from . import geometry
+from . import icp
 from . import math
 from . import puzzle
 from . import render
