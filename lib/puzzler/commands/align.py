@@ -149,10 +149,15 @@ class AffineTransform:
         self.angle = angle
         self.dxdy  = np.array(xy, dtype=np.float64)
 
+    def get_transform(self):
+        return (puzzler.render.Transform()
+                .translate(self.dxdy)
+                .rotate(self.angle))
+
     def rot_matrix(self):
         c, s = np.cos(self.angle), np.sin(self.angle)
-        return np.array(((c, s),
-                         (-s, c)))
+        return np.array(((c, -s),
+                         (s,  c)))
 
     def copy(self):
         return AffineTransform(self.angle, tuple(self.dxdy))
@@ -227,14 +232,9 @@ class Piece:
         self.coords = AffineTransform()
         self.info   = None
 
-    def get_transform(self):
-        return (puzzler.render.Transform()
-                .translate(self.coords.dxdy)
-                .rotate(self.coords.angle))
-
     def normal_at_index(self, i):
         uv = self.approx.normal_at_index(i)
-        return uv @ self.coords.rot_matrix()
+        return uv @ self.coords.rot_matrix().T
 
 @dataclass
 class BorderInfo:
@@ -289,34 +289,37 @@ class Autofit:
         fp = self.align_edges(self.pieces[0], self.pieces[1])
         self.dst_fit_pts = fp[0]
         self.src_fit_pts = fp[1]
+
+        for src in self.pieces[1:]:
+            self.align_edge_src_to_dst(self.pieces[0], src)
         
     def align_edges(self, dst, src):
 
-        dst_edge = self.get_edge(dst)
+        dst_edge = dst.piece.edges[-1]
 
         dst_edge_vec = dst_edge.line.pts[1] - dst_edge.line.pts[0]
         dst_edge_angle = dst.coords.angle + np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
 
-        src_edge = self.get_edge(src)
+        src_edge = src.piece.edges[0]
 
         src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
         src_edge_angle = src.coords.angle + np.arctan2(src_edge_vec[1], src_edge_vec[0])
 
         src.coords.angle += dst_edge_angle - src_edge_angle
 
-        dst_line = dst.get_transform().apply_v2(dst_edge.line.pts)
-        src_point = src.get_transform().apply_v2(src_edge.line.pts[0])
+        dst_line = dst.coords.get_transform().apply_v2(dst_edge.line.pts)
+        src_point = src.coords.get_transform().apply_v2(src_edge.line.pts[0])
         
         src.coords.dxdy = src.coords.dxdy + puzzler.math.vector_to_line(src_point, dst_line)
 
         dst_fit_pts = None
         src_fit_pts = None
         if dst.info and src.info:
-            pts = dst.get_transform().apply_v2(dst_edge.line.pts)
+            pts = dst.coords.get_transform().apply_v2(dst_edge.line.pts)
             edge_vec = puzzler.math.unit_vector(pts[1] - pts[0])
-            dst_center = dst.get_transform().apply_v2(
+            dst_center = dst.coords.get_transform().apply_v2(
                 dst.info.tab_next.tab.ellipse.center)
-            src_center = src.get_transform().apply_v2(
+            src_center = src.coords.get_transform().apply_v2(
                 src.info.tab_prev.tab.ellipse.center)
             d = np.dot(edge_vec, (dst_center - src_center))
             with np.printoptions(precision=1):
@@ -326,12 +329,12 @@ class Autofit:
             src.coords.dxdy = src.coords.dxdy + edge_vec * d
 
             dst_fit_pts = (dst.info.edge[-1].fit_indexes[1],
-                           dst.info.tab_next.tab.fit_indexes[1])
-            src_fit_pts = (src.info.tab_prev.tab.fit_indexes[0],
+                           dst.info.tab_next.tab.tangent_indexes[1])
+            src_fit_pts = (src.info.tab_prev.tab.tangent_indexes[0],
                            src.info.edge[0].fit_indexes[0])
 
-        dst_matrix = dst.get_transform().matrix
-        src_matrix = src.get_transform().matrix
+        dst_matrix = dst.coords.get_transform().matrix
+        src_matrix = src.coords.get_transform().matrix
 
         matrix_b = np.linalg.inv(dst_matrix) @ src_matrix
 
@@ -348,16 +351,63 @@ class Autofit:
 
         return (dst_fit_pts, src_fit_pts)
 
+    def align_edge_src_to_dst(self, dst, src):
+
+        print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
+
+        assert isinstance(dst.info, BorderInfo) and isinstance(src.info, BorderInfo)
+
+        dst_edge = dst.piece.edges[-1]
+
+        dst_edge_vec = dst_edge.line.pts[1] - dst_edge.line.pts[0]
+        dst_edge_angle = np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
+
+        src_edge = src.piece.edges[0]
+
+        src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
+        src_edge_angle = np.arctan2(src_edge_vec[1], src_edge_vec[0])
+
+        src_coords = AffineTransform()
+        src_coords.angle = dst_edge_angle - src_edge_angle
+
+        dst_line = dst_edge.line.pts
+        src_point = src_coords.get_transform().apply_v2(src_edge.line.pts[0])
+        
+        src_coords.dxdy = puzzler.math.vector_to_line(src_point, dst_line)
+
+        dst_center = dst.info.tab_next.tab.ellipse.center
+        src_center = src_coords.get_transform().apply_v2(
+            src.info.tab_prev.tab.ellipse.center)
+
+        dst_edge_vec = puzzler.math.unit_vector(dst_edge_vec)
+        d = np.dot(dst_edge_vec, (dst_center - src_center))
+        src_coords.dxdy = src_coords.dxdy + dst_edge_vec * d
+
+        dst_fit_pts = (dst.info.edge[-1].fit_indexes[1],
+                       dst.info.tab_next.tab.tangent_indexes[1])
+        src_fit_pts = (src.info.tab_prev.tab.tangent_indexes[0],
+                       src.info.edge[0].fit_indexes[0])
+
+        with np.printoptions(precision=3):
+            print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
+            print(f"  matrix={src_coords.get_transform().matrix}")
+
+        points = src_coords.get_transform().apply_v2(
+            src.piece.points[src_fit_pts[0]:src_fit_pts[1]]
+        )
+        d, i = scipy.spatial.KDTree(dst.piece.points).query(points)
+        mse = np.sum(d ** 2) / len(d)
+
+        print(f"  MSE={mse:.1f}")
+
+        return (src_coords, src_fit_pts)
+    
     def get_tab_succ(self, x, edge):
         pass
 
     def get_tab_prev(self, x, edge):
         pass
 
-    def get_edge(self, piece):
-
-        return piece.piece.edges[0]
-        
     def choose_anchor(self):
 
         corners = self.find_corners()
@@ -659,7 +709,7 @@ class AlignTk:
             dst = self.pieces[0]
             a, b = af.dst_fit_pts
             pts = dst.piece.points[a:b]
-            c.draw_lines(dst.get_transform().apply_v2(pts), fill='pink', width=3)
+            c.draw_lines(dst.coords.get_transform().apply_v2(pts), fill='pink', width=3)
         if af.src_fit_pts:
             c = puzzler.render.Renderer(self.canvas)
             c.transform.multiply(self.camera.matrix)
@@ -667,7 +717,7 @@ class AlignTk:
             src = self.pieces[1]
             a, b = af.src_fit_pts
             pts = src.piece.points[a:b]
-            c.draw_lines(src.get_transform().apply_v2(pts), fill='cyan', width=3)
+            c.draw_lines(src.coords.get_transform().apply_v2(pts), fill='cyan', width=3)
 
     def mouse_wheel(self, event):
         f = pow(1.05, 1 if event.delta > 0 else -1)
