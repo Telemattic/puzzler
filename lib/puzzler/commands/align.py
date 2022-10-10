@@ -294,7 +294,7 @@ class Autofit:
         dst = self.pieces[0]
         src = self.pieces[1]
         
-        src_coords, src_fit_pts = self.align_edge_src_to_dst(dst, src)
+        mse, src_coords, src_fit_pts = self.align_edge_src_to_dst(dst, src)
         dst_m = dst.coords.get_transform().matrix
         src_m = src_coords.get_transform().matrix
         src.coords = AffineTransform.invert_matrix(dst_m @ src_m)
@@ -303,10 +303,44 @@ class Autofit:
 
         for src in self.pieces[1:]:
             self.align_edge_src_to_dst(dst, src)
+
+    def align_border(self):
+
+        borders = []
+        edges = []
+        corners = []
+        for i in self.pieces:
+            if isinstance(i.info, BorderInfo):
+                borders.append(i)
+                if len(i.piece.edges) == 2:
+                    corners.append(i)
+                elif len(i.piece.edges) == 1:
+                    edges.append(i)
+
+        print(f"{len(corners)} corners and {len(edges)} edges")
+
+        for dst in borders:
+            for src in borders:
+                
+                # while the fit might be excellent, this would prove
+                # topologically difficult
+                if dst is src:
+                    continue
+                
+                # tabs have to be complementary (one indent and one
+                # outdent)
+                if dst.info.tab_next.tab.indent == src.info.tab_prev.tab.indent:
+                    continue
+
+                dst.info.scores[src.piece.label] = self.align_edge_src_to_dst(dst, src)
+
+        for dst in borders:
+            for src, score in dst.info.scores.items():
+                print(f"{dst.piece.label},{src},{score[0]:.1f}")
         
     def align_edge_src_to_dst(self, dst, src):
 
-        print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
+        # print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
 
         assert isinstance(dst.info, BorderInfo) and isinstance(src.info, BorderInfo)
 
@@ -341,9 +375,9 @@ class Autofit:
         src_fit_pts = (src.info.tab_prev.tab.tangent_indexes[0],
                        src.info.edge[0].fit_indexes[0])
 
-        with np.printoptions(precision=3):
-            print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
-            print(f"  matrix={src_coords.get_transform().matrix}")
+        # with np.printoptions(precision=3):
+        #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
+        #     print(f"  matrix={src_coords.get_transform().matrix}")
 
         points = src_coords.get_transform().apply_v2(
             src.piece.points[src_fit_pts[0]:src_fit_pts[1]]
@@ -351,9 +385,9 @@ class Autofit:
         d, i = scipy.spatial.KDTree(dst.piece.points).query(points)
         mse = np.sum(d ** 2) / len(d)
 
-        print(f"  MSE={mse:.1f}")
+        # print(f"  MSE={mse:.1f}")
 
-        return (src_coords, src_fit_pts)
+        return (mse, src_coords, src_fit_pts)
     
     def get_tab_succ(self, x, edge):
         pass
@@ -654,6 +688,7 @@ class AlignTk:
     def do_autofit(self):
         print("Autofit!")
         af = Autofit(self.pieces)
+        af.align_border()
         self.render()
         if af.dst_fit_pts:
             c = puzzler.render.Renderer(self.canvas)
