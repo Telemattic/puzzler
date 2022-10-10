@@ -149,6 +149,11 @@ class AffineTransform:
         self.angle = angle
         self.dxdy  = np.array(xy, dtype=np.float64)
 
+    def invert_matrix(m):
+        angle = math.atan2(m[1,0], m[0,0])
+        x, y = m[0,2], m[1,2]
+        return AffineTransform(angle, (x,y))
+
     def get_transform(self):
         return (puzzler.render.Transform()
                 .translate(self.dxdy)
@@ -286,71 +291,19 @@ class Autofit:
 
         anchor = self.choose_anchor()
 
-        fp = self.align_edges(self.pieces[0], self.pieces[1])
-        self.dst_fit_pts = fp[0]
-        self.src_fit_pts = fp[1]
+        dst = self.pieces[0]
+        src = self.pieces[1]
+        
+        src_coords, src_fit_pts = self.align_edge_src_to_dst(dst, src)
+        dst_m = dst.coords.get_transform().matrix
+        src_m = src_coords.get_transform().matrix
+        src.coords = AffineTransform.invert_matrix(dst_m @ src_m)
+        self.dst_fit_pts = None
+        self.src_fit_pts = src_fit_pts
 
         for src in self.pieces[1:]:
-            self.align_edge_src_to_dst(self.pieces[0], src)
+            self.align_edge_src_to_dst(dst, src)
         
-    def align_edges(self, dst, src):
-
-        dst_edge = dst.piece.edges[-1]
-
-        dst_edge_vec = dst_edge.line.pts[1] - dst_edge.line.pts[0]
-        dst_edge_angle = dst.coords.angle + np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
-
-        src_edge = src.piece.edges[0]
-
-        src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
-        src_edge_angle = src.coords.angle + np.arctan2(src_edge_vec[1], src_edge_vec[0])
-
-        src.coords.angle += dst_edge_angle - src_edge_angle
-
-        dst_line = dst.coords.get_transform().apply_v2(dst_edge.line.pts)
-        src_point = src.coords.get_transform().apply_v2(src_edge.line.pts[0])
-        
-        src.coords.dxdy = src.coords.dxdy + puzzler.math.vector_to_line(src_point, dst_line)
-
-        dst_fit_pts = None
-        src_fit_pts = None
-        if dst.info and src.info:
-            pts = dst.coords.get_transform().apply_v2(dst_edge.line.pts)
-            edge_vec = puzzler.math.unit_vector(pts[1] - pts[0])
-            dst_center = dst.coords.get_transform().apply_v2(
-                dst.info.tab_next.tab.ellipse.center)
-            src_center = src.coords.get_transform().apply_v2(
-                src.info.tab_prev.tab.ellipse.center)
-            d = np.dot(edge_vec, (dst_center - src_center))
-            with np.printoptions(precision=1):
-                print(f"{dst_center=}")
-                print(f"{src_center=}")
-                print(f"tabs are {d=:.1f} units apart")
-            src.coords.dxdy = src.coords.dxdy + edge_vec * d
-
-            dst_fit_pts = (dst.info.edge[-1].fit_indexes[1],
-                           dst.info.tab_next.tab.tangent_indexes[1])
-            src_fit_pts = (src.info.tab_prev.tab.tangent_indexes[0],
-                           src.info.edge[0].fit_indexes[0])
-
-        dst_matrix = dst.coords.get_transform().matrix
-        src_matrix = src.coords.get_transform().matrix
-
-        matrix_b = np.linalg.inv(dst_matrix) @ src_matrix
-
-        def dissect(m):
-            angle = math.atan2(m[1,0], m[0,0])
-            x, y = m[0,2], m[1,2]
-            return f"{angle=:.3f} {x=:.1f} {y=:.1f}"
-
-        with np.printoptions(precision=3):
-            print(f"{dst_matrix=} {dissect(dst_matrix)}")
-            print(f"{src_matrix=} {dissect(src_matrix)}")
-            print(f"{matrix_b=} {dissect(matrix_b)}")
-            print(f"{dst_matrix @ matrix_b=}")
-
-        return (dst_fit_pts, src_fit_pts)
-
     def align_edge_src_to_dst(self, dst, src):
 
         print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
