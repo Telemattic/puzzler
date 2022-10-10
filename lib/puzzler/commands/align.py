@@ -257,6 +257,9 @@ class BorderInfo:
 
 def make_border_info(piece):
 
+    if piece.label == "I1":
+        piece.edges = piece.edges[::-1]
+        
     edges = piece.edges
 
     tab_next = piece.tabs[0]
@@ -288,6 +291,10 @@ class Autofit:
     def __init__(self, pieces):
 
         self.pieces = pieces
+        self.dst_fit_pts = None
+        self.src_fit_pts = None
+
+        return
 
         anchor = self.choose_anchor()
 
@@ -298,7 +305,6 @@ class Autofit:
         dst_m = dst.coords.get_transform().matrix
         src_m = src_coords.get_transform().matrix
         src.coords = AffineTransform.invert_matrix(dst_m @ src_m)
-        self.dst_fit_pts = None
         self.src_fit_pts = src_fit_pts
 
         for src in self.pieces[1:]:
@@ -309,9 +315,11 @@ class Autofit:
         borders = []
         edges = []
         corners = []
+        piece_dict = dict()
         for i in self.pieces:
             if isinstance(i.info, BorderInfo):
                 borders.append(i)
+                piece_dict[i.piece.label] = i
                 if len(i.piece.edges) == 2:
                     corners.append(i)
                 elif len(i.piece.edges) == 1:
@@ -337,7 +345,49 @@ class Autofit:
         for dst in borders:
             for src, score in dst.info.scores.items():
                 print(f"{dst.piece.label},{src},{score[0]:.1f}")
+
+        dst = None
+        if corners:
+            dst = corners[0].piece.label
+        elif edges:
+            dst = edges[0].piece.label
+
+        for p in self.pieces:
+            c = p.coords
+            with np.printoptions(precision=1):
+                print(f"{p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
+
+        mapped = set()
+        while dst not in mapped:
+
+            mapped.add(dst)
+
+            best_src = None
+            best_score = None
+            for k, v in piece_dict[dst].info.scores.items():
+                if k in mapped:
+                    continue
+                if math.isnan(v[0]):
+                    continue
+                if best_score is None or v[0] < best_score[0]:
+                    best_src = k
+                    best_score = v
+
+            if best_src is not None:
+                print(f"Fit {best_src} to follow {dst}")
+                src = piece_dict[best_src]
+                dst_m = piece_dict[dst].coords.get_transform().matrix
+                src_m = best_score[1].get_transform().matrix
+                src.coords = AffineTransform.invert_matrix(dst_m @ src_m)
+                dst = best_src
+            else:
+                print(f"No piece found to follow {dst}!")
         
+        for p in self.pieces:
+            c = p.coords
+            with np.printoptions(precision=1):
+                print(f"{p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
+
     def align_edge_src_to_dst(self, dst, src):
 
         # print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
@@ -370,8 +420,6 @@ class Autofit:
         d = np.dot(dst_edge_vec, (dst_center - src_center))
         src_coords.dxdy = src_coords.dxdy + dst_edge_vec * d
 
-        dst_fit_pts = (dst.info.edge[-1].fit_indexes[1],
-                       dst.info.tab_next.tab.tangent_indexes[1])
         src_fit_pts = (src.info.tab_prev.tab.tangent_indexes[0],
                        src.info.edge[0].fit_indexes[0])
 
@@ -379,9 +427,13 @@ class Autofit:
         #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
         #     print(f"  matrix={src_coords.get_transform().matrix}")
 
-        points = src_coords.get_transform().apply_v2(
-            src.piece.points[src_fit_pts[0]:src_fit_pts[1]]
-        )
+        points = src.piece.points
+        if src_fit_pts[0] < src_fit_pts[1]:
+            points = points[src_fit_pts[0]:src_fit_pts[1]]
+        else:
+            points = np.vstack((points[src_fit_pts[0]:],points[:src_fit_pts[1]]))
+
+        points = src_coords.get_transform().apply_v2(points)
         d, i = scipy.spatial.KDTree(dst.piece.points).query(points)
         mse = np.sum(d ** 2) / len(d)
 
@@ -506,6 +558,8 @@ class AlignTk:
 
             r.draw_polygon(p.piece.points, outline=color, fill='', width=2, tag=tag)
 
+            r.draw_text(np.array((0,0)), p.piece.label)
+
     def draw_rotate_handles(self, piece_id):
 
         p = self.pieces[piece_id]
@@ -533,9 +587,10 @@ class AlignTk:
                 c.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
 
         if p.info:
-            with puzzler.render.save_matrix(c.transform):
-                c.draw_text(p.info.tab_next.tab.ellipse.center, "n")
-                c.draw_text(p.info.tab_prev.tab.ellipse.center, "p")
+            c.draw_text(p.info.tab_next.tab.ellipse.center, "n")
+            c.draw_text(p.info.tab_prev.tab.ellipse.center, "p")
+            for i, e in enumerate(p.info.edge):
+                c.draw_text(np.mean(e.line.pts, axis=0), f"e{i}")
 
     @staticmethod
     def umeyama(P, Q):
@@ -705,7 +760,8 @@ class AlignTk:
             src = self.pieces[1]
             a, b = af.src_fit_pts
             pts = src.piece.points[a:b]
-            c.draw_lines(src.coords.get_transform().apply_v2(pts), fill='cyan', width=3)
+            if len(pts):
+                c.draw_lines(src.coords.get_transform().apply_v2(pts), fill='cyan', width=3)
 
     def mouse_wheel(self, event):
         f = pow(1.05, 1 if event.delta > 0 else -1)
@@ -790,6 +846,7 @@ def align_ui(args):
     for piece in pieces:
         if piece.piece.edges:
             piece.info = make_border_info(piece.piece)
+            print(f"{piece.piece.label}: {piece.info}")
 
     root = Tk()
     ui = AlignTk(root, pieces)
