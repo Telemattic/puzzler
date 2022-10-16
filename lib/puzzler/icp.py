@@ -5,18 +5,18 @@ class IteratedClosestPoint:
 
     class RigidBody:
 
-        def __init__(self, i, fixed, angle, center):
+        def __init__(self, i, angle, center, fixed):
             self.index  = i
-            self.fixed  = fixed
-            self.angle  = angle,
+            self.angle  = angle
             self.center = center
+            self.fixed  = fixed
 
     def __init__(self):
         self.n_cols = 0
         self.bodies = []
         self.data = []
 
-    def make_rigid_body(self, angle, center, fixed=False):
+    def make_rigid_body(self, angle, center=(0.,0.), fixed=False):
 
         i = None
         if not fixed:
@@ -24,15 +24,15 @@ class IteratedClosestPoint:
             self.n_cols += 3
             center = np.array((0, 0))
             
-        body = MatrixBody.RigidBody(i, angle, center, fixed)
+        body = IteratedClosestPoint.RigidBody(i, angle, center, fixed)
         self.bodies.append(body)
 
         return body
         
-    def add_correspondence(self, src, dst, src_vertex, dst_vertex, dst_normal):
+    def add_correspondence(self, src, src_vertex, dst, dst_vertex, dst_normal):
 
-        assert isinstance(src, MatrixBuilder.RigidBody)
-        assert isinstance(dst, MatrixBuilder.RigidBody)
+        assert isinstance(src, IteratedClosestPoint.RigidBody)
+        assert isinstance(dst, IteratedClosestPoint.RigidBody)
         assert not (src is dst)
         assert not src.fixed
 
@@ -68,18 +68,21 @@ class IteratedClosestPoint:
         for v in self.data:
             
             i, j, a_ij, n, b_ij = v
+
+            k = len(a_ij)
+            assert k == len(n) == len(b_ij)
             
             A[r:r+k,i] = a_ij
-            A[r:r+k,i+1:i+2] = n
+            A[r:r+k,i+1:i+3] = n
 
             if j is not None:
                 A[r:r+k,j] = -a_ij
-                A[r:r+k,j+1:j+2] = -n
+                A[r:r+k,j+1:j+3] = -n
 
             b[r:r+k] = b_ij
 
         # minimize (Ax-b)**2
-        x = np.lingalg.lstsq(A, b, rcond=None)[0]
+        x = np.linalg.lstsq(A, b, rcond=None)[0]
 
         for body in self.bodies:
 

@@ -294,22 +294,6 @@ class Autofit:
         self.dst_fit_pts = None
         self.src_fit_pts = None
 
-        return
-
-        anchor = self.choose_anchor()
-
-        dst = self.pieces[0]
-        src = self.pieces[1]
-        
-        mse, src_coords, src_fit_pts = self.align_edge_src_to_dst(dst, src)
-        dst_m = dst.coords.get_transform().matrix
-        src_m = src_coords.get_transform().matrix
-        src.coords = AffineTransform.invert_matrix(dst_m @ src_m)
-        self.src_fit_pts = src_fit_pts
-
-        for src in self.pieces[1:]:
-            self.align_edge_src_to_dst(dst, src)
-
     def align_border(self):
 
         borders = []
@@ -357,6 +341,7 @@ class Autofit:
             with np.printoptions(precision=1):
                 print(f"{p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
 
+        pairs = []
         mapped = set()
         while dst not in mapped:
 
@@ -379,6 +364,7 @@ class Autofit:
                 dst_m = piece_dict[dst].coords.get_transform().matrix
                 src_m = best_score[1].get_transform().matrix
                 src.coords = AffineTransform.invert_matrix(dst_m @ src_m)
+                pairs.append((best_src, dst))
                 dst = best_src
             else:
                 print(f"No piece found to follow {dst}!")
@@ -387,6 +373,70 @@ class Autofit:
             c = p.coords
             with np.printoptions(precision=1):
                 print(f"{p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
+
+        return pairs
+
+    def global_icp(self, pairs):
+
+        icp = puzzler.icp.IteratedClosestPoint()
+
+        pieces_dict = dict((i.piece.label, i) for i in self.pieces)
+            
+        def add_correspondence(dst, src, src_coords, src_fit_points):
+
+            src_indexes, dst_indexes = self.get_correspondence(
+                dst, src, src_coords, src_fit_points)
+
+            src_vertex = src.piece.points[src_indexes]
+            dst_vertex = dst.piece.points[dst_indexes]
+            dst_normal = np.array((dst.approx.normal_at_index(i) for i in dst_indexes))
+
+            if bodies.get(src.piece.label) is None:
+                bodies[src.piece.label] = icp.make_rigid_body(src.coords.angle)
+            src_body = bodies[src.piece.label]
+                
+            if bodies.get(dst.piece.label) is None:
+                bodies[dst.piece.label] = icp.make_rigid_body(dst.coords.angle)
+            dst_body = bodies[dst.piece.label]
+
+            icp.add_correspondence(src_body, src_vertex, dst_body, dst_vertex, dst_normal)
+
+        bodies = dict()
+
+        for i, j in pairs:
+
+            src = pieces_dict[i]
+            dst = pieces_dict[j]
+
+            _, src_coords, src_fit_indexes = self.align_edge_src_to_dst(dst, src)
+
+            add_correspondence(dst, src, src_coords, src_fit_indexes)
+            
+            _, dst_coords, dst_fit_indexes = self.align_edge_src_to_dst(src, dst)
+
+            add_correspondence(src, dst, dst_coords, dst_fit_indexes)
+
+        icp.solve()
+
+    def get_correspondence(self, dst, src, src_coords, src_fit_indexes):
+
+        a, b = src_fit_indexes
+
+        n = len(src.piece.points)
+        if a < b:
+            src_indexes = list(range(a,b))
+        else:
+            src_indexes = list(range(a,n)) + list(range(0,b))
+
+        n = len(src_indexes)
+        src_indexes = [i for i in range(n // 10, n // 5)]
+        
+        src_points = src.piece.points[src_indexes]
+        dst_kdtree = scipy.spatial.KDTree(dst.piece.points)
+
+        _, dst_indexes = dst_kdtree.query(src_coords.get_transform().apply_v2(src_points))
+
+        return (src_indexes, dst_indexes)
 
     def align_edge_src_to_dst(self, dst, src):
 
@@ -743,7 +793,8 @@ class AlignTk:
     def do_autofit(self):
         print("Autofit!")
         af = Autofit(self.pieces)
-        af.align_border()
+        pairs = af.align_border()
+        af.global_icp(pairs)
         self.render()
         if af.dst_fit_pts:
             c = puzzler.render.Renderer(self.canvas)
