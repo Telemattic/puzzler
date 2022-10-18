@@ -291,8 +291,8 @@ class Autofit:
     def __init__(self, pieces):
 
         self.pieces = pieces
-        self.dst_fit_pts = None
-        self.src_fit_pts = None
+        self.src_fit_indexes = None
+        self.dst_fit_indexes = None
 
     def align_border(self):
 
@@ -404,6 +404,8 @@ class Autofit:
 
             icp.add_correspondence(src_body, src_vertex, dst_body, dst_vertex, dst_normal)
 
+            return (src_indexes, dst_indexes)
+
         bodies = dict()
 
         dst = pieces_dict[pairs[0][1]]
@@ -416,12 +418,15 @@ class Autofit:
             dst = pieces_dict[j]
 
             _, src_coords, src_fit_indexes = self.align_edge_src_to_dst(dst, src)
-            add_correspondence(dst, src, src_coords, src_fit_indexes)
+            s, d = add_correspondence(dst, src, src_coords, src_fit_indexes)
+
+            self.src_fit_indexes = s
+            self.dst_fit_indexes = d
 
             _, dst_coords, dst_fit_indexes = self.align_edge_src_to_dst(src, dst)
             add_correspondence(src, dst, dst_coords, dst_fit_indexes)
 
-            # break
+            break
 
         icp.solve()
 
@@ -440,8 +445,8 @@ class Autofit:
             src_indexes = list(range(a,n)) + list(range(0,b))
 
         n = len(src_indexes)
-        src_indexes = [i for i in range(n // 10, n, n // 5)]
-        
+        src_indexes = [src_indexes[i] for i in range(n // 10, n, n // 5)]
+
         src_points = src.piece.points[src_indexes]
         dst_kdtree = scipy.spatial.KDTree(dst.piece.points)
 
@@ -809,23 +814,21 @@ class AlignTk:
         pairs = af.align_border()
         af.global_icp(pairs)
         self.render()
-        if af.dst_fit_pts:
+
+        pieces_dict = dict((i.piece.label, i) for i in self.pieces)
+
+        if af.src_fit_indexes is not None and af.dst_fit_indexes is not None:
+            src, dst = pairs[0]
             c = puzzler.render.Renderer(self.canvas)
             c.transform.multiply(self.camera.matrix)
 
-            dst = self.pieces[0]
-            a, b = af.dst_fit_pts
-            pts = dst.piece.points[a:b]
-            c.draw_lines(dst.coords.get_transform().apply_v2(pts), fill='pink', width=3)
-        if af.src_fit_pts:
-            c = puzzler.render.Renderer(self.canvas)
-            c.transform.multiply(self.camera.matrix)
+            src = pieces_dict[src]
+            src_points = src.piece.points[af.src_fit_indexes]
+            c.draw_points(src.coords.get_transform().apply_v2(src_points), fill='pink', radius=6)
 
-            src = self.pieces[1]
-            a, b = af.src_fit_pts
-            pts = src.piece.points[a:b]
-            if len(pts):
-                c.draw_lines(src.coords.get_transform().apply_v2(pts), fill='cyan', width=3)
+            dst = pieces_dict[dst]
+            dst_points = dst.piece.points[af.dst_fit_indexes]
+            c.draw_points(dst.coords.get_transform().apply_v2(dst_points), fill='purple', radius=3)
 
     def mouse_wheel(self, event):
         f = pow(1.05, 1 if event.delta > 0 else -1)
