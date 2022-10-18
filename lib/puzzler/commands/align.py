@@ -336,10 +336,10 @@ class Autofit:
         elif edges:
             dst = edges[0].piece.label
 
-        for p in self.pieces:
-            c = p.coords
-            with np.printoptions(precision=1):
-                print(f"{p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
+        with np.printoptions(precision=1):
+            for p in self.pieces:
+                c = p.coords
+                print(f"align_border: {p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
 
         pairs = []
         mapped = set()
@@ -369,10 +369,10 @@ class Autofit:
             else:
                 print(f"No piece found to follow {dst}!")
         
-        for p in self.pieces:
-            c = p.coords
-            with np.printoptions(precision=1):
-                print(f"{p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
+        with np.printoptions(precision=1):
+            for p in self.pieces:
+                c = p.coords
+                print(f"align_border: {p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
 
         return pairs
 
@@ -394,6 +394,9 @@ class Autofit:
             if bodies.get(src.piece.label) is None:
                 bodies[src.piece.label] = icp.make_rigid_body(src.coords.angle)
             src_body = bodies[src.piece.label]
+
+            if src_body.fixed:
+                return
                 
             if bodies.get(dst.piece.label) is None:
                 bodies[dst.piece.label] = icp.make_rigid_body(dst.coords.angle)
@@ -403,20 +406,28 @@ class Autofit:
 
         bodies = dict()
 
+        dst = pieces_dict[pairs[0][1]]
+        bodies[dst.piece.label] = icp.make_rigid_body(
+            dst.coords.angle, dst.coords.dxdy, fixed=True)
+
         for i, j in pairs:
 
             src = pieces_dict[i]
             dst = pieces_dict[j]
 
             _, src_coords, src_fit_indexes = self.align_edge_src_to_dst(dst, src)
-
             add_correspondence(dst, src, src_coords, src_fit_indexes)
-            
-            _, dst_coords, dst_fit_indexes = self.align_edge_src_to_dst(src, dst)
 
+            _, dst_coords, dst_fit_indexes = self.align_edge_src_to_dst(src, dst)
             add_correspondence(src, dst, dst_coords, dst_fit_indexes)
 
+            # break
+
         icp.solve()
+
+        with np.printoptions(precision=1):
+            for k, v in bodies.items():
+                print(f"global_icp:  {k}: angle={v.angle:.3f} xy={v.center}")
 
     def get_correspondence(self, dst, src, src_coords, src_fit_indexes):
 
@@ -429,12 +440,14 @@ class Autofit:
             src_indexes = list(range(a,n)) + list(range(0,b))
 
         n = len(src_indexes)
-        src_indexes = [i for i in range(n // 10, n // 5)]
+        src_indexes = [i for i in range(n // 10, n, n // 5)]
         
         src_points = src.piece.points[src_indexes]
         dst_kdtree = scipy.spatial.KDTree(dst.piece.points)
 
-        _, dst_indexes = dst_kdtree.query(src_coords.get_transform().apply_v2(src_points))
+        dst_dist, dst_indexes = dst_kdtree.query(src_coords.get_transform().apply_v2(src_points))
+        with np.printoptions(precision=1):
+            print(f"{dst_dist=} {dst_indexes=}")
 
         return (src_indexes, dst_indexes)
 

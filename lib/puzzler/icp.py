@@ -81,8 +81,13 @@ class IteratedClosestPoint:
 
             b[r:r+k] = b_ij
 
+        print(f"{A.shape=} {A=}")
+        print(f"{b.shape=} {b=}")
+
         # minimize (Ax-b)**2
         x = np.linalg.lstsq(A, b, rcond=None)[0]
+
+        print(f"{x.shape=} {x=}")
 
         for body in self.bodies:
 
