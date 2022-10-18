@@ -291,7 +291,9 @@ class Autofit:
     def __init__(self, pieces):
 
         self.pieces = pieces
+        self.src_fit_piece = None
         self.src_fit_indexes = None
+        self.dst_fit_piece = None
         self.dst_fit_indexes = None
 
     def align_border(self):
@@ -389,14 +391,14 @@ class Autofit:
 
             src_vertex = src.piece.points[src_indexes]
             dst_vertex = dst.piece.points[dst_indexes]
-            dst_normal = np.array((dst.approx.normal_at_index(i) for i in dst_indexes))
+            dst_normal = np.array(list(dst.approx.normal_at_index(i) for i in dst_indexes))
 
             if bodies.get(src.piece.label) is None:
                 bodies[src.piece.label] = icp.make_rigid_body(src.coords.angle)
             src_body = bodies[src.piece.label]
 
             if src_body.fixed:
-                return
+                return (None, None)
                 
             if bodies.get(dst.piece.label) is None:
                 bodies[dst.piece.label] = icp.make_rigid_body(dst.coords.angle)
@@ -420,13 +422,17 @@ class Autofit:
             _, src_coords, src_fit_indexes = self.align_edge_src_to_dst(dst, src)
             s, d = add_correspondence(dst, src, src_coords, src_fit_indexes)
 
+            self.src_fit_piece   = i
             self.src_fit_indexes = s
+            self.dst_fit_piece   = j
             self.dst_fit_indexes = d
 
-            _, dst_coords, dst_fit_indexes = self.align_edge_src_to_dst(src, dst)
-            add_correspondence(src, dst, dst_coords, dst_fit_indexes)
+            if False:
+                _, dst_coords, dst_fit_indexes = self.align_edge_src_to_dst(src, dst)
+                add_correspondence(src, dst, dst_coords, dst_fit_indexes)
 
-            break
+            if j == 'A2':
+                break
 
         icp.solve()
 
@@ -818,15 +824,14 @@ class AlignTk:
         pieces_dict = dict((i.piece.label, i) for i in self.pieces)
 
         if af.src_fit_indexes is not None and af.dst_fit_indexes is not None:
-            src, dst = pairs[0]
             c = puzzler.render.Renderer(self.canvas)
             c.transform.multiply(self.camera.matrix)
 
-            src = pieces_dict[src]
+            src = pieces_dict[af.src_fit_piece]
             src_points = src.piece.points[af.src_fit_indexes]
             c.draw_points(src.coords.get_transform().apply_v2(src_points), fill='pink', radius=6)
 
-            dst = pieces_dict[dst]
+            dst = pieces_dict[af.dst_fit_piece]
             dst_points = dst.piece.points[af.dst_fit_indexes]
             c.draw_points(dst.coords.get_transform().apply_v2(dst_points), fill='purple', radius=3)
 

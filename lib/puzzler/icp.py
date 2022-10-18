@@ -36,6 +36,9 @@ class IteratedClosestPoint:
         assert not (src is dst)
         assert not src.fixed
 
+        with np.printoptions(precision=3):
+            print(f"add_correspondence: {src_vertex=} {dst_vertex=} {dst_normal=}")
+
         def rotation_matrix(angle):
             c, s = math.cos(angle), math.sin(angle)
             return np.array(((c, -s), (s, c)))
@@ -47,7 +50,7 @@ class IteratedClosestPoint:
         dst_vertex = dst_vertex @ dst_matrix.T
         if dst.fixed:
             dst_vertex += dst.center
-        dst_normal = dst_vertex @ dst_matrix.T
+        dst_normal = dst_normal @ dst_matrix.T
             
         a_ij = np.cross(src_vertex, dst_normal)
         # row-wise dot product
@@ -80,15 +83,21 @@ class IteratedClosestPoint:
                 A[r:r+k,j+1:j+3] = -n
 
             b[r:r+k] = b_ij
+            r += k
 
-        print(f"{A.shape=} {A=}")
-        print(f"{b.shape=} {b=}")
+        assert r == n_rows
+
+        with np.printoptions(precision=3, linewidth=100):
+            print(f"{A.shape=} {A=}")
+            print(f"{b.shape=} {b=}")
 
         # minimize (Ax-b)**2
         x = np.linalg.lstsq(A, b, rcond=None)[0]
 
-        print(f"{x.shape=} {x=}")
+        with np.printoptions(precision=3, linewidth=100):
+            print(f"{x.shape=} {x=}")
 
+        i = 0
         for body in self.bodies:
 
             if body.fixed:
@@ -96,3 +105,6 @@ class IteratedClosestPoint:
 
             body.angle += x[i]
             body.center = np.array((x[i+1], x[i+2]))
+            i += 3
+
+        assert i == n_cols
