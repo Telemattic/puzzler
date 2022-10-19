@@ -448,11 +448,17 @@ class Autofit:
                 self.dst_fit_piece   = j
                 self.dst_fit_indexes = s
 
-        icp.solve()
+        for _ in range(2):
+            icp.solve()
 
         with np.printoptions(precision=1):
             for k, v in bodies.items():
                 print(f"global_icp:  {k}: angle={v.angle:.3f} xy={v.center}")
+
+        for k, v in bodies.items():
+            p = pieces_dict[k]
+            p.coords.angle = v.angle
+            p.coords.dxdy = v.center
 
     def get_correspondence(self, dst, src, src_coords, src_fit_indexes):
 
@@ -851,7 +857,7 @@ class AlignTk:
             c.draw_points(dst.coords.get_transform().apply_v2(dst_points), fill='purple', radius=3)
 
     def mouse_wheel(self, event):
-        f = pow(1.05, 1 if event.delta > 0 else -1)
+        f = pow(1.2, 1 if event.delta > 0 else -1)
         xy = (event.x, event.y)
         self.camera.fixed_point_zoom(f, xy)
         self.motion(event)

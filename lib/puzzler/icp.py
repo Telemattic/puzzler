@@ -15,7 +15,7 @@ class IteratedClosestPoint:
         self.n_cols = 0
         self.bodies = []
         self.data = []
-        self.verbose = False
+        self.verbose = True
 
     def make_rigid_body(self, angle, center=(0.,0.), fixed=False):
 
@@ -37,10 +37,10 @@ class IteratedClosestPoint:
         assert not (src is dst)
         assert not src.fixed
 
-        if self.verbose:
-            with np.printoptions(precision=3):
-                print(f"add_correspondence: {src_vertex=} {dst_vertex=} {dst_normal=}")
+        self.data.append((src, src_vertex.copy(), dst, dst_vertex.copy(), dst_normal.copy()))
 
+    def data_to_A_b(self, src, src_vertex, dst, dst_vertex, dst_normal):
+        
         def rotation_matrix(angle):
             c, s = math.cos(angle), math.sin(angle)
             return np.array(((c, -s), (s, c)))
@@ -53,17 +53,18 @@ class IteratedClosestPoint:
         if dst.fixed:
             dst_vertex += dst.center
         dst_normal = dst_normal @ dst_matrix.T
-            
+        
         a_ij = np.cross(src_vertex, dst_normal)
+        a_ji = np.cross(dst_vertex, dst_normal)
         # row-wise dot product
         b_ij = np.sum((src_vertex - dst_vertex) * dst_normal, axis=1)
-        n_ij = dst_normal.copy()
+        n_ij = dst_normal
 
-        self.data.append((src.index, dst.index, a_ij, n_ij, b_ij))
+        return (src.index, dst.index, a_ij, a_ji, n_ij, b_ij)
 
     def solve(self):
 
-        n_rows = sum(len(i[2]) for i in self.data)
+        n_rows = sum(len(i[1]) for i in self.data)
         n_cols = self.n_cols
 
         A = np.zeros((n_rows, n_cols))
@@ -72,17 +73,17 @@ class IteratedClosestPoint:
         r = 0
         for v in self.data:
             
-            i, j, a_ij, n, b_ij = v
+            i, j, a_ij, a_ji, n_ij, b_ij = self.data_to_A_b(*v)
 
             k = len(a_ij)
-            assert k == len(n) == len(b_ij)
+            assert k == len(n_ij) == len(b_ij)
             
             A[r:r+k,i] = a_ij
-            A[r:r+k,i+1:i+3] = n
+            A[r:r+k,i+1:i+3] = n_ij
 
             if j is not None:
-                A[r:r+k,j] = -a_ij
-                A[r:r+k,j+1:j+3] = -n
+                A[r:r+k,j] = -a_ji
+                A[r:r+k,j+1:j+3] = -n_ij
 
             b[r:r+k] = b_ij
             r += k
@@ -101,14 +102,14 @@ class IteratedClosestPoint:
             with np.printoptions(precision=3, linewidth=120):
                 print(f"{x.shape=} {x=}")
 
-        i = 0
+        c = 0
         for body in self.bodies:
 
             if body.fixed:
                 continue
 
-            body.angle += x[i]
-            body.center = np.array((x[i+1], x[i+2]))
-            i += 3
+            body.angle  = body.angle - x[c]
+            body.center = - np.array((x[c+1], x[c+2]))
+            c += 3
 
-        assert i == n_cols
+        assert c == n_cols
