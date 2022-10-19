@@ -15,6 +15,7 @@ class IteratedClosestPoint:
         self.n_cols = 0
         self.bodies = []
         self.data = []
+        self.verbose = False
 
     def make_rigid_body(self, angle, center=(0.,0.), fixed=False):
 
@@ -36,8 +37,9 @@ class IteratedClosestPoint:
         assert not (src is dst)
         assert not src.fixed
 
-        with np.printoptions(precision=3):
-            print(f"add_correspondence: {src_vertex=} {dst_vertex=} {dst_normal=}")
+        if self.verbose:
+            with np.printoptions(precision=3):
+                print(f"add_correspondence: {src_vertex=} {dst_vertex=} {dst_normal=}")
 
         def rotation_matrix(angle):
             c, s = math.cos(angle), math.sin(angle)
@@ -87,15 +89,17 @@ class IteratedClosestPoint:
 
         assert r == n_rows
 
-        with np.printoptions(precision=3, linewidth=100):
-            print(f"{A.shape=} {A=}")
-            print(f"{b.shape=} {b=}")
+        if self.verbose:
+            with np.printoptions(precision=2, linewidth=120):
+                print(f"{A.shape=} {A=}")
+                print(f"{b.shape=} {b=}")
 
         # minimize (Ax-b)**2
         x = np.linalg.lstsq(A, b, rcond=None)[0]
 
-        with np.printoptions(precision=3, linewidth=100):
-            print(f"{x.shape=} {x=}")
+        if self.verbose:
+            with np.printoptions(precision=3, linewidth=120):
+                print(f"{x.shape=} {x=}")
 
         i = 0
         for body in self.bodies:

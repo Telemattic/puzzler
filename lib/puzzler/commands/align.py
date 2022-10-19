@@ -370,6 +370,9 @@ class Autofit:
                 dst = best_src
             else:
                 print(f"No piece found to follow {dst}!")
+                best_src = pairs[0][1]
+                print(f"Assume {best_src} follows {dst}")
+                pairs.append((best_src, dst))
         
         with np.printoptions(precision=1):
             for p in self.pieces:
@@ -419,20 +422,31 @@ class Autofit:
             src = pieces_dict[i]
             dst = pieces_dict[j]
 
-            _, src_coords, src_fit_indexes = self.align_edge_src_to_dst(dst, src)
+            _, src_coords, src_fit_indexes, dst_fit_indexes = self.align_edge_src_to_dst(dst, src)
             s, d = add_correspondence(dst, src, src_coords, src_fit_indexes)
-
-            self.src_fit_piece   = i
-            self.src_fit_indexes = s
-            self.dst_fit_piece   = j
-            self.dst_fit_indexes = d
-
-            if False:
-                _, dst_coords, dst_fit_indexes = self.align_edge_src_to_dst(src, dst)
-                add_correspondence(src, dst, dst_coords, dst_fit_indexes)
-
-            if j == 'A2':
-                break
+            if s is not None and d is not None:
+                self.src_fit_piece   = i
+                self.src_fit_indexes = s
+                self.dst_fit_piece   = j
+                self.dst_fit_indexes = d
+            else:
+                m1 = src_coords.get_transform().matrix
+                m2 = np.linalg.inv(m1)
+                with np.printoptions(precision=3):
+                    print(f"{m1=}")
+                    print(f"{m2=}")
+                dst_coords = AffineTransform(
+                    np.arctan2(m2[1][0], m2[0][0]),
+                    np.array((m2[0][2], m2[1][2])))
+                with np.printoptions(precision=3):
+                    print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
+                    print(f"dst_coords: angle={dst_coords.angle:.3f} xy={dst_coords.dxdy}")
+                # dst_coords = AffineTransform(-src_coords.angle, -src_coords.dxdy)
+                s, d = add_correspondence(src, dst, dst_coords, dst_fit_indexes)
+                self.src_fit_piece   = i
+                self.src_fit_indexes = d
+                self.dst_fit_piece   = j
+                self.dst_fit_indexes = s
 
         icp.solve()
 
@@ -457,8 +471,6 @@ class Autofit:
         dst_kdtree = scipy.spatial.KDTree(dst.piece.points)
 
         dst_dist, dst_indexes = dst_kdtree.query(src_coords.get_transform().apply_v2(src_points))
-        with np.printoptions(precision=1):
-            print(f"{dst_dist=} {dst_indexes=}")
 
         return (src_indexes, dst_indexes)
 
@@ -497,6 +509,9 @@ class Autofit:
         src_fit_pts = (src.info.tab_prev.tab.tangent_indexes[0],
                        src.info.edge[0].fit_indexes[0])
 
+        dst_fit_pts = (dst.info.edge[-1].fit_indexes[1],
+                       dst.info.tab_next.tab.tangent_indexes[1])
+
         # with np.printoptions(precision=3):
         #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
         #     print(f"  matrix={src_coords.get_transform().matrix}")
@@ -513,7 +528,7 @@ class Autofit:
 
         # print(f"  MSE={mse:.1f}")
 
-        return (mse, src_coords, src_fit_pts)
+        return (mse, src_coords, src_fit_pts, dst_fit_pts)
     
     def get_tab_succ(self, x, edge):
         pass
