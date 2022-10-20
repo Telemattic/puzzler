@@ -244,15 +244,9 @@ class Piece:
 @dataclass
 class BorderInfo:
 
-    @dataclass
-    class TabInfo:
-        
-        tab: puzzler.feature.Tab
-        dist: float
-
     edge: puzzler.feature.Edge
-    tab_prev: TabInfo
-    tab_next: TabInfo
+    tab_prev: puzzler.feature.Tab
+    tab_next: puzzler.feature.Tab
     scores: dict[str,float] = field(default_factory=dict)
 
 def make_border_info(piece):
@@ -273,16 +267,6 @@ def make_border_info(piece):
         if edges[0].fit_indexes < tab.fit_indexes:
             break
         tab_prev = tab
-
-    dist_next = puzzler.math.distance_to_line(
-        tab_next.ellipse.center, edges[-1].line.pts)        
-    tab_next = BorderInfo.TabInfo(tab_next, dist_next)
-
-    dist_prev = puzzler.math.distance_to_line(
-        tab_prev.ellipse.center, edges[0].line.pts)
-    tab_prev = BorderInfo.TabInfo(tab_prev, dist_prev)
-
-    print(f"{piece.label}: {dist_prev=:.1f} {dist_next=:.1f}")
 
     return BorderInfo(edges, tab_prev, tab_next)
 
@@ -323,7 +307,7 @@ class Autofit:
                 
                 # tabs have to be complementary (one indent and one
                 # outdent)
-                if dst.info.tab_next.tab.indent == src.info.tab_prev.tab.indent:
+                if dst.info.tab_next.indent == src.info.tab_prev.indent:
                     continue
 
                 dst.info.scores[src.piece.label] = self.align_edge_src_to_dst(dst, src)
@@ -504,19 +488,19 @@ class Autofit:
         
         src_coords.dxdy = puzzler.math.vector_to_line(src_point, dst_line)
 
-        dst_center = dst.info.tab_next.tab.ellipse.center
+        dst_center = dst.info.tab_next.ellipse.center
         src_center = src_coords.get_transform().apply_v2(
-            src.info.tab_prev.tab.ellipse.center)
+            src.info.tab_prev.ellipse.center)
 
         dst_edge_vec = puzzler.math.unit_vector(dst_edge_vec)
         d = np.dot(dst_edge_vec, (dst_center - src_center))
         src_coords.dxdy = src_coords.dxdy + dst_edge_vec * d
 
-        src_fit_pts = (src.info.tab_prev.tab.tangent_indexes[0],
+        src_fit_pts = (src.info.tab_prev.tangent_indexes[0],
                        src.info.edge[0].fit_indexes[0])
 
         dst_fit_pts = (dst.info.edge[-1].fit_indexes[1],
-                       dst.info.tab_next.tab.tangent_indexes[1])
+                       dst.info.tab_next.tangent_indexes[1])
 
         # with np.printoptions(precision=3):
         #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
@@ -682,8 +666,8 @@ class AlignTk:
                 c.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
 
         if p.info:
-            c.draw_text(p.info.tab_next.tab.ellipse.center, "n")
-            c.draw_text(p.info.tab_prev.tab.ellipse.center, "p")
+            c.draw_text(p.info.tab_next.ellipse.center, "n")
+            c.draw_text(p.info.tab_prev.ellipse.center, "p")
             for i, e in enumerate(p.info.edge):
                 c.draw_text(np.mean(e.line.pts, axis=0), f"e{i}")
 
