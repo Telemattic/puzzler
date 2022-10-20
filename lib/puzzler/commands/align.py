@@ -919,6 +919,9 @@ def align_ui(args):
     for p in puzzle.pieces:
         by_label[p.label] = p
 
+    if not args.labels:
+        args.labels = 'A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 B1 B11 C1 C11 D1 D11 E1 E12 F1 F11 G1 G11 H1 H11 I1 I2 I3 I4 I5 I6 I7 I8 I9 I10 I11'.split()
+
     pieces = [Piece(by_label[l]) for l in args.labels]
     for piece in pieces:
         if piece.piece.edges:
@@ -935,5 +938,5 @@ def align_ui(args):
 def add_parser(commands):
 
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
-    parser_align.add_argument("labels", nargs='+')
+    parser_align.add_argument("labels", nargs='*')
     parser_align.set_defaults(func=align_ui)
