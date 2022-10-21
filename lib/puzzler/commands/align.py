@@ -464,6 +464,38 @@ class Autofit:
 
         return (src_indexes, dst_indexes)
 
+    @staticmethod
+    def align_tabs_src_to_dst(dst, dst_tab_no, src, src_tab_no):
+
+        def get_tab_points(piece, tab_no):
+
+            tab = piece.tabs[tab_no]
+            ti = list(tab.tangent_indexes)
+            l, r = piece.points[ti if tab.indent else ti[::-1]]
+            c = tab.ellipse.center
+            return np.array([l, c, r])
+
+        dst_points = get_tab_points(dst.piece, dst_tab_no)
+        src_points = get_tab_points(src.piece, src_tab_no)
+
+        ret = AlignTk.eldridge(dst_points, src_points)
+
+        with np.printoptions(precision=3):
+            print(f"dst={dst.piece.label} {dst_points=}")
+            print(f"src={src.piece.label} {src_points=}")
+            print(f"{ret=}")
+
+        rad, x, y = ret[0]
+        new_points = puzzler.render.Transform().rotate(rad).translate((-x, -y)).apply_v2(src_points)
+        with np.printoptions(precision=3):
+            print(f"{new_points=}")
+
+        t = dst.coords.get_transform()
+        m = t.rotate(-rad).translate((-x, -y)).matrix
+
+        src.coords.angle = np.arctan2(m[1][0], m[0][0])
+        src.coords.dxdy = np.array([m[0][2], m[1][2]])
+
     def align_edge_src_to_dst(self, dst, src):
 
         # print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
@@ -735,6 +767,20 @@ class AlignTk:
 
         return np.linalg.lstsq(A, v, rcond=None)
 
+    def do_fit_tabs(self):
+
+        piece_dict = dict((i.piece.label, i) for i in self.pieces)
+
+        dst_piece = piece_dict.get("B2")
+        dst_tab_no = 2
+        
+        src_piece = piece_dict.get("B3")
+        src_tab_no = 0
+
+        if dst_piece and src_piece:
+            Autofit.align_tabs_src_to_dst(dst_piece, dst_tab_no, src_piece, src_tab_no)
+            self.render()
+
     def do_fit(self):
         
         print("Fit!")
@@ -907,9 +953,12 @@ class AlignTk:
         b3 = ttk.Button(self.controls, text='Autofit', command=self.do_autofit)
         b3.grid(column=3, row=0, sticky=W)
 
+        b4 = ttk.Button(self.controls, text='Fit Tabs', command=self.do_fit_tabs)
+        b4.grid(column=4, row=0, sticky=W)
+
         self.var_label = StringVar(value="x,y")
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=40)
-        l1.grid(column=4, row=0, sticky=(E))
+        l1.grid(column=5, row=0, sticky=(E))
 
         self.render()
                 
