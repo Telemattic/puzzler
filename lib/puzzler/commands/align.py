@@ -742,10 +742,10 @@ class AlignTk:
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
-        points0 = piece0.get_transform().apply_v2(piece0.piece.points)
+        points0 = piece0.coords.get_transform().apply_v2(piece0.piece.points)
         kdtree0 = scipy.spatial.KDTree(points0)
         
-        points1 = piece1.get_transform().apply_v2(piece1.piece.points)
+        points1 = piece1.coords.get_transform().apply_v2(piece1.piece.points)
         kdtree1 = scipy.spatial.KDTree(points1)
 
         indexes = kdtree0.query_ball_tree(kdtree1, r=15)
@@ -784,8 +784,8 @@ class AlignTk:
         piece0 = self.pieces[0]
         piece1 = self.pieces[1]
 
-        points0 = piece0.get_transform().apply_v2(piece0.piece.points)
-        points1 = piece1.get_transform().apply_v2(piece1.piece.points)
+        points0 = piece0.coords.get_transform().apply_v2(piece0.piece.points)
+        points1 = piece1.coords.get_transform().apply_v2(piece1.piece.points)
 
         # we're solving with an assumption that the rotation is about
         # the center of piece, so make that the origin
@@ -919,14 +919,18 @@ def align_ui(args):
     for p in puzzle.pieces:
         by_label[p.label] = p
 
-    if not args.labels:
-        args.labels = 'A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 B1 B11 C1 C11 D1 D11 E1 E12 F1 F11 G1 G11 H1 H11 I1 I2 I3 I4 I5 I6 I7 I8 I9 I10 I11'.split()
+    labels = set(args.labels)
 
-    pieces = [Piece(by_label[l]) for l in args.labels]
+    if args.edges:
+        labels |= set('A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 B1 B11 C1 C11 D1 D11 E1 E12 F1 F11 G1 G11 H1 H11 I1 I2 I3 I4 I5 I6 I7 I8 I9 I10 I11'.split())
+
+    if not labels:
+        labels |= set(by_label.keys())
+
+    pieces = [Piece(by_label[l]) for l in sorted(labels)]
     for piece in pieces:
         if piece.piece.edges:
             piece.info = make_border_info(piece.piece)
-            print(f"{piece.piece.label}: {piece.info}")
 
     root = Tk()
     ui = AlignTk(root, pieces)
@@ -939,4 +943,5 @@ def add_parser(commands):
 
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
     parser_align.add_argument("labels", nargs='*')
+    parser_align.add_argument("-e", "--edges", help="add all edges", action='store_true')
     parser_align.set_defaults(func=align_ui)
