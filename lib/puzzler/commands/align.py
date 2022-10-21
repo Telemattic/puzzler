@@ -876,7 +876,9 @@ class AlignTk:
 
     def _init_ui(self, parent):
 
-        viewport = (1024, 1024)
+        w, h = parent.winfo_screenwidth(), parent.winfo_screenheight()
+        viewport = (min(w-32,1024), min(h-128,1024))
+        
         self.camera = Camera(np.array((0,0), dtype=np.float64), 1/3, viewport)
         
         self.frame = ttk.Frame(parent, padding=5)
