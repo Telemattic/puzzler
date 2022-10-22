@@ -478,7 +478,7 @@ class Autofit:
         dst_points = get_tab_points(dst.piece, dst_tab_no)
         src_points = get_tab_points(src.piece, src_tab_no)
 
-        ret = AlignTk.eldridge(dst_points, src_points)
+        ret = AlignTk.eldridge(src_points, dst_points)
 
         with np.printoptions(precision=3):
             print(f"dst={dst.piece.label} {dst_points=}")
@@ -491,10 +491,34 @@ class Autofit:
             print(f"{new_points=}")
 
         t = dst.coords.get_transform()
-        m = t.rotate(-rad).translate((-x, -y)).matrix
+        m = t.translate((x, y)).rotate(rad).matrix
 
         src.coords.angle = np.arctan2(m[1][0], m[0][0])
         src.coords.dxdy = np.array([m[0][2], m[1][2]])
+
+        with np.printoptions(precision=3):
+            print(f"src: angle={src.coords.angle:.3f} xy={src.coords.dxdy}")
+
+        dst_kdtree= scipy.spatial.KDTree(dst.piece.points)
+        d, i = dst_kdtree.query(AffineTransform(rad, (x,y)).get_transform().apply_v2(src.piece.points))
+
+        l, r = src.piece.tabs[src_tab_no].tangent_indexes
+
+        n = len(src.piece.points)
+
+        thresh = 5
+        
+        for j in range(l+n//2, l+n, 1):
+            if d[j%n] < thresh:
+                break
+        l = j % n
+
+        for j in range(r+n//2, r, -1):
+            if d[j%n] < thresh:
+                break
+        r = j %n
+
+        return (l, r)
 
     def align_edge_src_to_dst(self, dst, src):
 
@@ -778,8 +802,15 @@ class AlignTk:
         src_tab_no = 0
 
         if dst_piece and src_piece:
-            Autofit.align_tabs_src_to_dst(dst_piece, dst_tab_no, src_piece, src_tab_no)
+            (l, r) = Autofit.align_tabs_src_to_dst(dst_piece, dst_tab_no, src_piece, src_tab_no)
             self.render()
+
+            c = puzzler.render.Renderer(self.canvas)
+            c.transform.multiply(self.camera.matrix)
+
+            src_points = src_piece.coords.get_transform().apply_v2(
+                src_piece.piece.points[[l,r]])
+            c.draw_points(src_points, fill='pink', radius=6)
 
     def do_fit(self):
         
