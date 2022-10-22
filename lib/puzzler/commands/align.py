@@ -351,7 +351,85 @@ class TabAligner:
         l, r = piece.points[ti if tab.indent else ti[::-1]]
         c = tab.ellipse.center
         return np.array([l, c, r])
+
+class EdgeAligner:
+
+    def __init__(self, dst):
+        assert isinstance(dst.info, BorderInfo)
+        self.dst = dst
+        self.kdtree = scipy.spatial.KDTree(dst.piece.points)
+
+    def compute_alignment(self, src):
         
+        # print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
+
+        assert isinstance(src.info, BorderInfo)
+
+        dst_edge = self.dst.piece.edges[-1]
+
+        dst_edge_vec = dst_edge.line.pts[1] - dst_edge.line.pts[0]
+        dst_edge_angle = np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
+
+        src_edge = src.piece.edges[0]
+
+        src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
+        src_edge_angle = np.arctan2(src_edge_vec[1], src_edge_vec[0])
+
+        src_coords = AffineTransform()
+        src_coords.angle = dst_edge_angle - src_edge_angle
+
+        dst_line = dst_edge.line.pts
+        src_point = src_coords.get_transform().apply_v2(src_edge.line.pts[0])
+        
+        src_coords.dxdy = puzzler.math.vector_to_line(src_point, dst_line)
+
+        dst_center = self.dst.info.tab_next.ellipse.center
+        src_center = src_coords.get_transform().apply_v2(
+            src.info.tab_prev.ellipse.center)
+
+        dst_edge_vec = puzzler.math.unit_vector(dst_edge_vec)
+        d = np.dot(dst_edge_vec, (dst_center - src_center))
+        src_coords.dxdy = src_coords.dxdy + dst_edge_vec * d
+
+        src_fit_pts = (src.info.tab_prev.tangent_indexes[0],
+                       src.info.edge[0].fit_indexes[0])
+
+        dst_fit_pts = (self.dst.info.edge[-1].fit_indexes[1],
+                       self.dst.info.tab_next.tangent_indexes[1])
+
+        # with np.printoptions(precision=3):
+        #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
+        #     print(f"  matrix={src_coords.get_transform().matrix}")
+
+        points = ring_slice(src.piece.points, *src_fit_pts)
+
+        d, _ = self.kdtree.query(src_coords.get_transform().apply_v2(points))
+
+        mse = np.sum(d ** 2) / len(d)
+
+        # print(f"  MSE={mse:.1f}")
+
+        return (mse, src_coords, src_fit_pts, dst_fit_pts)
+        
+    def get_correspondence(self, src, src_coords, src_fit_indexes):
+
+        a, b = src_fit_indexes
+
+        n = len(src.piece.points)
+        if a < b:
+            src_indexes = list(range(a,b))
+        else:
+            src_indexes = list(range(a,n)) + list(range(0,b))
+
+        n = len(src_indexes)
+        src_indexes = [src_indexes[i] for i in range(n // 10, n, n // 5)]
+
+        src_points = src.piece.points[src_indexes]
+
+        dst_dist, dst_indexes = self.kdtree.query(src_coords.get_transform().apply_v2(src_points))
+
+        return (src_indexes, dst_indexes)
+
 class Autofit:
 
     def __init__(self, pieces):
@@ -380,6 +458,9 @@ class Autofit:
         print(f"{len(corners)} corners and {len(edges)} edges")
 
         for dst in borders:
+
+            edge_aligner = EdgeAligner(dst)
+            
             for src in borders:
                 
                 # while the fit might be excellent, this would prove
@@ -392,7 +473,7 @@ class Autofit:
                 if dst.info.tab_next.indent == src.info.tab_prev.indent:
                     continue
 
-                dst.info.scores[src.piece.label] = self.align_edge_src_to_dst(dst, src)
+                dst.info.scores[src.piece.label] = edge_aligner.compute_alignment(src)
 
         for dst in borders:
             for src, score in dst.info.scores.items():
@@ -455,8 +536,8 @@ class Autofit:
             
         def add_correspondence(dst, src, src_coords, src_fit_points):
 
-            src_indexes, dst_indexes = self.get_correspondence(
-                dst, src, src_coords, src_fit_points)
+            src_indexes, dst_indexes = EdgeAligner(dst).get_correspondence(
+                src, src_coords, src_fit_points)
 
             src_vertex = src.piece.points[src_indexes]
             dst_vertex = dst.piece.points[dst_indexes]
@@ -488,7 +569,9 @@ class Autofit:
             src = pieces_dict[i]
             dst = pieces_dict[j]
 
-            _, src_coords, src_fit_indexes, dst_fit_indexes = self.align_edge_src_to_dst(dst, src)
+            _, src_coords, src_fit_indexes, dst_fit_indexes = \
+                dst.info.scores[src.piece.label]
+            
             s, d = add_correspondence(dst, src, src_coords, src_fit_indexes)
             if s is not None and d is not None:
                 self.src_fit_piece   = i
@@ -525,84 +608,6 @@ class Autofit:
             p = pieces_dict[k]
             p.coords.angle = v.angle
             p.coords.dxdy = v.center
-
-    def get_correspondence(self, dst, src, src_coords, src_fit_indexes):
-
-        a, b = src_fit_indexes
-
-        n = len(src.piece.points)
-        if a < b:
-            src_indexes = list(range(a,b))
-        else:
-            src_indexes = list(range(a,n)) + list(range(0,b))
-
-        n = len(src_indexes)
-        src_indexes = [src_indexes[i] for i in range(n // 10, n, n // 5)]
-
-        src_points = src.piece.points[src_indexes]
-        dst_kdtree = scipy.spatial.KDTree(dst.piece.points)
-
-        dst_dist, dst_indexes = dst_kdtree.query(src_coords.get_transform().apply_v2(src_points))
-
-        return (src_indexes, dst_indexes)
-
-    def align_edge_src_to_dst(self, dst, src):
-
-        # print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
-
-        assert isinstance(dst.info, BorderInfo) and isinstance(src.info, BorderInfo)
-
-        dst_edge = dst.piece.edges[-1]
-
-        dst_edge_vec = dst_edge.line.pts[1] - dst_edge.line.pts[0]
-        dst_edge_angle = np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
-
-        src_edge = src.piece.edges[0]
-
-        src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
-        src_edge_angle = np.arctan2(src_edge_vec[1], src_edge_vec[0])
-
-        src_coords = AffineTransform()
-        src_coords.angle = dst_edge_angle - src_edge_angle
-
-        dst_line = dst_edge.line.pts
-        src_point = src_coords.get_transform().apply_v2(src_edge.line.pts[0])
-        
-        src_coords.dxdy = puzzler.math.vector_to_line(src_point, dst_line)
-
-        dst_center = dst.info.tab_next.ellipse.center
-        src_center = src_coords.get_transform().apply_v2(
-            src.info.tab_prev.ellipse.center)
-
-        dst_edge_vec = puzzler.math.unit_vector(dst_edge_vec)
-        d = np.dot(dst_edge_vec, (dst_center - src_center))
-        src_coords.dxdy = src_coords.dxdy + dst_edge_vec * d
-
-        src_fit_pts = (src.info.tab_prev.tangent_indexes[0],
-                       src.info.edge[0].fit_indexes[0])
-
-        dst_fit_pts = (dst.info.edge[-1].fit_indexes[1],
-                       dst.info.tab_next.tangent_indexes[1])
-
-        # with np.printoptions(precision=3):
-        #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
-        #     print(f"  matrix={src_coords.get_transform().matrix}")
-
-        points = ring_slice(src.piece.points, *src_fit_pts)
-
-        points = src_coords.get_transform().apply_v2(points)
-        d, i = scipy.spatial.KDTree(dst.piece.points).query(points)
-        mse = np.sum(d ** 2) / len(d)
-
-        # print(f"  MSE={mse:.1f}")
-
-        return (mse, src_coords, src_fit_pts, dst_fit_pts)
-    
-    def get_tab_succ(self, x, edge):
-        pass
-
-    def get_tab_prev(self, x, edge):
-        pass
 
     def choose_anchor(self):
 
