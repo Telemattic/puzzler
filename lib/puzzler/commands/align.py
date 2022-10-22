@@ -1,4 +1,5 @@
 import bisect
+import csv
 import cv2 as cv
 import math
 import numpy as np
@@ -316,14 +317,15 @@ class TabAligner:
 
     def measure_fit(self, src, src_tab_no, src_coords):
         
-        d, i = self.kdtree.query(src_coords.get_transform().apply_v2(src.piece.points))
+        thresh = 5
+
+        src_points = src_coords.get_transform().apply_v2(src.piece.points)
+        d, i = self.kdtree.query(src_points, distance_upper_bound=thresh+1)
 
         l, r = src.piece.tabs[src_tab_no].tangent_indexes
 
         n = len(src.piece.points)
 
-        thresh = 5
-        
         for j in range(l+n//2, l+n, 1):
             if d[j%n] < thresh:
                 break
@@ -334,7 +336,7 @@ class TabAligner:
                 break
         r = j % n
 
-        d = ring_slice(d, l, r)
+        d, _ = self.kdtree.query(ring_slice(src_points, l, r))
 
         mse = np.sum(d ** 2) / len(d)
 
@@ -939,8 +941,51 @@ class AlignTk:
         for i, xy in enumerate(data1):
             c.draw_lines(np.array((xy, xy+normal1[i]*50)), fill='green', width=1, arrow='last')
 
+    def do_tab_alignment(self):
+
+        print("Tab alignment!")
+
+        num_indents = 0
+        num_outdents = 0
+        for p in self.pieces:
+            for t in p.piece.tabs:
+                if t.indent:
+                    num_indents += 1
+                else:
+                    num_outdents += 1
+        
+        print(f"{len(self.pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
+
+        with open('tab_alignment.csv', 'w', newline='') as f:
+            field_names = 'dst_label dst_tab_no src_label src_tab_no mse'.split()
+            writer = csv.DictWriter(f, field_names)
+            writer.writeheader()
+
+            for dst in self.pieces:
+                rows = []
+                tab_aligner = TabAligner(dst)
+                for src in self.pieces:
+                    if src is dst:
+                        continue
+                    for dst_tab_no, dst_tab in enumerate(dst.piece.tabs):
+                        for src_tab_no, src_tab in enumerate(src.piece.tabs):
+                            if dst_tab.indent == src_tab.indent:
+                                continue
+                            mse = tab_aligner.compute_alignment(dst_tab_no, src, src_tab_no)[0]
+                            rows.append({'dst_label': dst.piece.label,
+                                         'dst_tab_no': dst_tab_no,
+                                         'src_label': src.piece.label,
+                                         'src_tab_no': src_tab_no,
+                                         'mse': mse})
+                print(f"{dst.piece.label}: {len(rows)} rows")
+                writer.writerows(rows)
+
     def do_autofit(self):
+
         print("Autofit!")
+
+        self.do_tab_alignment()
+        
         af = Autofit(self.pieces)
         pairs = af.align_border()
         af.global_icp(pairs)
