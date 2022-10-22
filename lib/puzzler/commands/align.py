@@ -546,57 +546,6 @@ class Autofit:
 
         return (src_indexes, dst_indexes)
 
-    @staticmethod
-    def align_tabs_src_to_dst(dst, dst_tab_no, src, src_tab_no):
-
-        def get_tab_points(piece, tab_no):
-
-            tab = piece.tabs[tab_no]
-            ti = list(tab.tangent_indexes)
-            l, r = piece.points[ti if tab.indent else ti[::-1]]
-            c = tab.ellipse.center
-            return np.array([l, c, r])
-
-        src_points = get_tab_points(src.piece, src_tab_no)
-        dst_points = get_tab_points(dst.piece, dst_tab_no)
-
-        r, x, y = compute_rigid_transform(src_points, dst_points)
-
-        with np.printoptions(precision=3):
-            print(f"dst={dst.piece.label} {dst_points=}")
-            print(f"src={src.piece.label} {src_points=}")
-            print(f"{r=:.3f} {x=:.3f} {y=:.3f}")
-
-        t = dst.coords.get_transform()
-        m = t.translate((x, y)).rotate(r).matrix
-
-        src.coords.angle = np.arctan2(m[1][0], m[0][0])
-        src.coords.dxdy = np.array([m[0][2], m[1][2]])
-
-        with np.printoptions(precision=3):
-            print(f"src: angle={src.coords.angle:.3f} xy={src.coords.dxdy}")
-
-        dst_kdtree= scipy.spatial.KDTree(dst.piece.points)
-        d, i = dst_kdtree.query(AffineTransform(r, (x,y)).get_transform().apply_v2(src.piece.points))
-
-        l, r = src.piece.tabs[src_tab_no].tangent_indexes
-
-        n = len(src.piece.points)
-
-        thresh = 5
-        
-        for j in range(l+n//2, l+n, 1):
-            if d[j%n] < thresh:
-                break
-        l = j % n
-
-        for j in range(r+n//2, r, -1):
-            if d[j%n] < thresh:
-                break
-        r = j %n
-
-        return (l, r)
-
     def align_edge_src_to_dst(self, dst, src):
 
         # print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
@@ -874,16 +823,32 @@ class AlignTk:
         src_piece = piece_dict.get("B3")
         src_tab_no = 0
 
-        if dst_piece and src_piece:
-            (l, r) = Autofit.align_tabs_src_to_dst(dst_piece, dst_tab_no, src_piece, src_tab_no)
-            self.render()
+        if not dst_piece or not src_piece:
+            return
+        
+        tab_aligner = TabAligner(dst_piece)
+        
+        (mse, src_coords, sfp, dfp) = tab_aligner.compute_alignment(
+            dst_tab_no, src_piece, src_tab_no)
+        
+        t = dst_piece.coords.get_transform()
+        m = t.translate(src_coords.dxdy).rotate(src_coords.angle).matrix
+        
+        src_piece.coords.angle = np.arctan2(m[1][0], m[0][0])
+        src_piece.coords.dxdy = np.array([m[0][2], m[1][2]])
 
-            c = puzzler.render.Renderer(self.canvas)
-            c.transform.multiply(self.camera.matrix)
+        self.render()
 
-            src_points = src_piece.coords.get_transform().apply_v2(
-                src_piece.piece.points[[l,r]])
-            c.draw_points(src_points, fill='pink', radius=6)
+        c = puzzler.render.Renderer(self.canvas)
+        c.transform.multiply(self.camera.matrix)
+
+        src_points = src_piece.coords.get_transform().apply_v2(
+            src_piece.piece.points[list(sfp)])
+        c.draw_points(src_points, fill='pink', radius=6)
+
+        dst_points = dst_piece.coords.get_transform().apply_v2(
+            dst_piece.piece.points[list(dfp)])
+        c.draw_points(src_points, fill='purple', radius=3)
 
     def do_fit(self):
         
