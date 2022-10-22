@@ -226,6 +226,11 @@ class ApproxPoly:
         assert a * x2 + b * y2 + c == 0
 
         return (a * inv_l, b * inv_l, c * inv_l)
+
+def ring_slice(a, begin, end):
+    if begin < end:
+        return a[begin:end]
+    return np.concatenate((a[begin:], a[:end]))
         
 class Piece:
 
@@ -562,11 +567,7 @@ class Autofit:
         #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
         #     print(f"  matrix={src_coords.get_transform().matrix}")
 
-        points = src.piece.points
-        if src_fit_pts[0] < src_fit_pts[1]:
-            points = points[src_fit_pts[0]:src_fit_pts[1]]
-        else:
-            points = np.vstack((points[src_fit_pts[0]:],points[:src_fit_pts[1]]))
+        points = ring_slice(src.piece.points, *src_fit_pts)
 
         points = src_coords.get_transform().apply_v2(points)
         d, i = scipy.spatial.KDTree(dst.piece.points).query(points)
