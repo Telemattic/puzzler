@@ -275,6 +275,83 @@ def make_border_info(piece):
 
     return BorderInfo(edges, tab_prev, tab_next)
 
+def compute_rigid_transform(P, Q):
+        
+    m = P.shape[0]
+    assert P.shape == Q.shape == (m, 2)
+
+    # want the optimized rotation and translation to map P -> Q
+
+    Px, Py = np.sum(P, axis=0)
+    Qx, Qy = np.sum(Q, axis=0)
+
+    A00 =np.sum(np.square(P))
+    A = np.array([[A00, -Py, Px], 
+                  [-Py,  m , 0.],
+                  [ Px,  0., m ]], dtype=np.float64)
+
+    u0 = np.sum(P[:,0]*Q[:,1]) - np.sum(P[:,1]*Q[:,0])
+    u = np.array([u0, Qx-Px, Qy-Py], dtype=np.float64)
+
+    return np.linalg.lstsq(A, u, rcond=None)[0]
+
+class TabAligner:
+
+    def __init__(self, dst):
+        self.dst = dst
+        self.kdtree = scipy.spatial.KDTree(dst.piece.points)
+
+    def compute_alignment(self, dst_tab_no, src, src_tab_no):
+
+        src_points = self.get_tab_points(src.piece, src_tab_no)
+        dst_points = self.get_tab_points(self.dst.piece, dst_tab_no)
+
+        r, x, y = compute_rigid_transform(src_points, dst_points)
+
+        src_coords = AffineTransform(r, (x,y))
+
+        mse, sfp, dfp = self.measure_fit(src, src_tab_no, src_coords)
+
+        return (mse, src_coords, sfp, dfp)
+
+    def measure_fit(self, src, src_tab_no, src_coords):
+        
+        d, i = self.kdtree.query(src_coords.get_transform().apply_v2(src.piece.points))
+
+        l, r = src.piece.tabs[src_tab_no].tangent_indexes
+
+        n = len(src.piece.points)
+
+        thresh = 5
+        
+        for j in range(l+n//2, l+n, 1):
+            if d[j%n] < thresh:
+                break
+        l = j % n
+
+        for j in range(r+n//2, r, -1):
+            if d[j%n] < thresh:
+                break
+        r = j % n
+
+        d = ring_slice(d, l, r)
+
+        mse = np.sum(d ** 2) / len(d)
+
+        src_fit_points = (l, r)
+        dst_fit_points = (i[r], i[l])
+
+        return (mse, src_fit_points, dst_fit_points)
+
+    @staticmethod
+    def get_tab_points(piece, tab_no):
+
+        tab = piece.tabs[tab_no]
+        ti = list(tab.tangent_indexes)
+        l, r = piece.points[ti if tab.indent else ti[::-1]]
+        c = tab.ellipse.center
+        return np.array([l, c, r])
+        
 class Autofit:
 
     def __init__(self, pieces):
@@ -480,23 +557,18 @@ class Autofit:
             c = tab.ellipse.center
             return np.array([l, c, r])
 
-        dst_points = get_tab_points(dst.piece, dst_tab_no)
         src_points = get_tab_points(src.piece, src_tab_no)
+        dst_points = get_tab_points(dst.piece, dst_tab_no)
 
-        ret = AlignTk.eldridge(src_points, dst_points)
+        r, x, y = compute_rigid_transform(src_points, dst_points)
 
         with np.printoptions(precision=3):
             print(f"dst={dst.piece.label} {dst_points=}")
             print(f"src={src.piece.label} {src_points=}")
-            print(f"{ret=}")
-
-        rad, x, y = ret[0]
-        new_points = puzzler.render.Transform().rotate(rad).translate((-x, -y)).apply_v2(src_points)
-        with np.printoptions(precision=3):
-            print(f"{new_points=}")
+            print(f"{r=:.3f} {x=:.3f} {y=:.3f}")
 
         t = dst.coords.get_transform()
-        m = t.translate((x, y)).rotate(rad).matrix
+        m = t.translate((x, y)).rotate(r).matrix
 
         src.coords.angle = np.arctan2(m[1][0], m[0][0])
         src.coords.dxdy = np.array([m[0][2], m[1][2]])
@@ -505,7 +577,7 @@ class Autofit:
             print(f"src: angle={src.coords.angle:.3f} xy={src.coords.dxdy}")
 
         dst_kdtree= scipy.spatial.KDTree(dst.piece.points)
-        d, i = dst_kdtree.query(AffineTransform(rad, (x,y)).get_transform().apply_v2(src.piece.points))
+        d, i = dst_kdtree.query(AffineTransform(r, (x,y)).get_transform().apply_v2(src.piece.points))
 
         l, r = src.piece.tabs[src_tab_no].tangent_indexes
 
