@@ -1260,11 +1260,24 @@ def align_ui(args):
         if piece.piece.edges:
             piece.info = make_border_info(piece.piece)
 
-    w = int(math.sqrt(len(pieces)))
-    for i, piece in enumerate(pieces):
-        x = (i % w) * 1000.
-        y = (i // w) * -1000.
-        piece.coords.dxdy = np.array((x, y))
+    rows = set()
+    cols = set()
+    for piece in pieces:
+        m = re.fullmatch("([a-zA-Z]+)(\d+)", piece.piece.label)
+        if m:
+            rows.add(m[1])
+            cols.add(int(m[2]))
+
+    rows = dict((r, i) for i, r in enumerate(sorted(rows)))
+    cols = dict((c, i) for i, c in enumerate(sorted(cols)))
+
+    for piece in pieces:
+        m = re.fullmatch("([a-zA-Z]+)(\d+)", piece.piece.label)
+        if m:
+            row, col = m[1], int(m[2])
+            x = cols[col] * 1000.
+            y = rows[row] * -1000.
+            piece.coords.dxdy = np.array((x, y))
 
     root = Tk()
     ui = AlignTk(root, pieces)
