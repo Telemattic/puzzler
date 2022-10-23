@@ -1,4 +1,5 @@
 import bisect
+import collections
 import csv
 import cv2 as cv
 import math
@@ -317,6 +318,8 @@ class DistanceImage:
 
     def query(self, points):
 
+        # could consider scipy.interpolate.RegularGridInterpolator,
+        # either with nearest or linear interpolation
         h, w = self.dist_image.shape
         rows = np.int32(np.clip(points[:,1] - self.ll[1], a_min=0, a_max=h-1))
         cols = np.int32(np.clip(points[:,0] - self.ll[0], a_min=0, a_max=w-1))
@@ -324,10 +327,14 @@ class DistanceImage:
 
 class TabAligner:
 
-    def __init__(self, dst):
+    def __init__(self, dst, slow=False):
         self.dst = dst
-        self.kdtree = scipy.spatial.KDTree(dst.piece.points)
-        self.distance_image = DistanceImage(dst.piece)
+        self.kdtree = None
+        self.distance_image = None
+        if slow:
+            self.kdtree = scipy.spatial.KDTree(dst.piece.points)
+        else:
+            self.distance_image = DistanceImage(dst.piece)
 
     def compute_alignment(self, dst_tab_no, src, src_tab_no):
 
@@ -347,20 +354,19 @@ class TabAligner:
         sl, sr = src.piece.tabs[src_tab_no].tangent_indexes
 
         src_points = src_coords.get_transform().apply_v2(ring_slice(src.piece.points, sl, sr))
+
+        src_fit_points = (sl, sr)
         
-        d, i = self.kdtree.query(src_points)
+        if self.kdtree:
+            d, i = self.kdtree.query(src_points)
+            dst_fit_points = (i[-1], i[0])
+        else:
+            d = self.distance_image.query(src_points)
+            dst_fit_points = (None, None)
 
         mse = np.sum(d ** 2) / len(d)
 
-        src_fit_points = (sl, sr)
-        dst_fit_points = (i[-1], i[0])
-
-        d2 = self.distance_image.query(src_points)
-        mse2 = np.sum(d2 ** 2) / len(d2)
-
-        # print(f"measure_fit_fast:\n{d=}\n{mse=}\n{d2=}\n{mse2=}")
-
-        return ((mse, mse2), src_fit_points, dst_fit_points)
+        return (mse, src_fit_points, dst_fit_points)
 
     def measure_fit(self, src, src_tab_no, src_coords):
         
@@ -401,6 +407,51 @@ class TabAligner:
         c = tab.ellipse.center
         return np.array([l, c, r])
 
+class MultiAligner:
+
+    def __init__(self, targets):
+        self.targets = targets
+
+        dst_points = []
+        for dst_piece, dst_tab_no in self.targets:
+            pt = dst_piece.piece.tabs[dst_tab_no].ellipse.center
+            dst_points.append(dst_piece.coords.get_transform().apply_v2(pt))
+
+        self.dst_points = np.array(dst_points)
+
+    def compute_alignment(self, src_piece, source_tabs):
+
+        src_points = np.array([src_piece.piece.tabs[s].ellipse.center for s in source_tabs])
+
+        r, x, y = compute_rigid_transform(src_points, self.dst_points)
+
+        return AffineTransform(r, (x,y))
+
+    def measure_fit(self, src_piece, source_tabs, src_coords):
+
+        sse = 0
+        n = 0
+
+        for i, src_tab_no in enumerate(source_tabs):
+
+            dst_piece, _ = self.targets[i] 
+            distance_image = DistanceImage(dst_piece.piece)
+
+            dst_coords = dst_piece.coords
+            
+            transform = puzzler.render.Transform()
+            transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
+            transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+
+            l, r = src_piece.piece.tabs[src_tab_no].tangent_indexes
+            src_points = transform.apply_v2(ring_slice(src_piece.piece.points, l, r))
+
+            d = distance_image.query(src_points)
+            sse += np.sum(d ** 2)
+            n += len(d)
+
+        return sse /n
+    
 class EdgeAligner:
 
     def __init__(self, dst):
@@ -1004,7 +1055,7 @@ class AlignTk:
         print(f"{len(self.pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
         with open('tab_alignment.csv', 'w', newline='') as f:
-            field_names = 'dst_label dst_tab_no src_label src_tab_no mse mse2'.split()
+            field_names = 'dst_label dst_tab_no src_label src_tab_no mse'.split()
             writer = csv.DictWriter(f, field_names)
             writer.writeheader()
 
@@ -1023,17 +1074,73 @@ class AlignTk:
                                          'dst_tab_no': dst_tab_no,
                                          'src_label': src.piece.label,
                                          'src_tab_no': src_tab_no,
-                                         'mse': mse[0],
-                                         'mse2': mse[1]})
+                                         'mse': mse})
                 print(f"{dst.piece.label}: {len(rows)} rows")
                 writer.writerows(rows)
 
+    def do_tab_alignment_B2(self):
+
+        dsts = [("A2", 2), ("B1", 1)]
+        scores = []
+
+        piece_dict = dict((i.piece.label, i) for i in self.pieces)
+
+        for dst_label, dst_tab_no in dsts:
+
+            dst_piece = piece_dict[dst_label]
+            dst_tab   = dst_piece.piece.tabs[dst_tab_no]
+
+            the_scores = dict()
+            tab_aligner = TabAligner(dst_piece)
+            
+            for src_piece in self.pieces:
+                if src_piece is dst_piece:
+                    continue
+                src_label = src_piece.piece.label
+                for src_tab_no, src_tab in enumerate(src_piece.piece.tabs):
+                    if dst_tab.indent == src_tab.indent:
+                        continue
+                    mse = tab_aligner.compute_alignment(dst_tab_no, src_piece, src_tab_no)[0]
+                    the_scores[(src_label,src_tab_no)] = mse
+
+            scores.append(the_scores)
+
+        n1 = len(scores[0])
+        n2 = len(scores[1])
+
+        allways = []
+        for k0, v0 in scores[0].items():
+            for k1, v1 in scores[1].items():
+                if k1[0] == k0[0]:
+                    allways.append((v0 + v1, k0, k1))
+
+        allways.sort()
+
+        aligner = MultiAligner([(piece_dict[i], j) for i, j in dsts])
+
+        for i, j in enumerate(allways):
+            
+            print(i, j)
+            if i == 20:
+                break
+
+            _, ii, jj = j
+
+            src_piece = piece_dict[ii[0]]
+            src_tabs  = [ii[1], jj[1]]
+            
+            src_coords = aligner.compute_alignment(src_piece, src_tabs)
+
+            mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
+
+            print(f"  fit: angle={src_coords.angle:3f} xy={src_coords.dxdy} {mse=:.1f}")
+            
+        print(f"{len(scores[0])=} {len(scores[1])=} {len(allways)=}")
+                
     def do_autofit(self):
 
         print("Autofit!")
 
-        self.do_tab_alignment()
-        
         af = Autofit(self.pieces)
         pairs = af.align_border()
         af.global_icp(pairs)
@@ -1123,9 +1230,12 @@ class AlignTk:
         b4 = ttk.Button(self.controls, text='Fit Tabs', command=self.do_fit_tabs)
         b4.grid(column=4, row=0, sticky=W)
 
+        b5 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment_B2)
+        b5.grid(column=5, row=0, sticky=W)
+
         self.var_label = StringVar(value="x,y")
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=40)
-        l1.grid(column=5, row=0, sticky=(E))
+        l1.grid(column=6, row=0, sticky=(E))
 
         self.render()
                 
@@ -1149,6 +1259,12 @@ def align_ui(args):
     for piece in pieces:
         if piece.piece.edges:
             piece.info = make_border_info(piece.piece)
+
+    w = int(math.sqrt(len(pieces)))
+    for i, piece in enumerate(pieces):
+        x = (i % w) * 1000.
+        y = (i // w) * -1000.
+        piece.coords.dxdy = np.array((x, y))
 
     root = Tk()
     ui = AlignTk(root, pieces)
