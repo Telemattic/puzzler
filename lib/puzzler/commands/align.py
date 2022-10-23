@@ -311,9 +311,24 @@ class TabAligner:
 
         src_coords = AffineTransform(r, (x,y))
 
-        mse, sfp, dfp = self.measure_fit(src, src_tab_no, src_coords)
+        mse, sfp, dfp = self.measure_fit_fast(src, src_tab_no, src_coords)
 
         return (mse, src_coords, sfp, dfp)
+
+    def measure_fit_fast(self, src, src_tab_no, src_coords):
+        
+        sl, sr = src.piece.tabs[src_tab_no].tangent_indexes
+
+        d, i = self.kdtree.query(
+            src_coords.get_transform().apply_v2(ring_slice(src.piece.points, sl, sr))
+        )
+
+        mse = np.sum(d ** 2) / len(d)
+
+        src_fit_points = (sl, sr)
+        dst_fit_points = (i[-1], i[0])
+
+        return (mse, src_fit_points, dst_fit_points)
 
     def measure_fit(self, src, src_tab_no, src_coords):
         
