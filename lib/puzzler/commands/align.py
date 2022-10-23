@@ -296,11 +296,38 @@ def compute_rigid_transform(P, Q):
 
     return np.linalg.lstsq(A, u, rcond=None)[0]
 
+class DistanceImage:
+
+    def __init__(self, piece):
+
+        pp = piece.points
+        
+        self.ll = np.min(pp, axis=0) - 256
+        self.ur = np.max(pp, axis=0) + 256
+
+        w, h = self.ur + 1 - self.ll
+        cols = pp[:,0] - self.ll[0]
+        rows = pp[:,1] - self.ll[1]
+
+        piece_image = np.ones((h, w), dtype=np.uint8)
+        piece_image[rows, cols] = 0
+
+        self.dist_image = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
+        # self.dist_image = np.uint8(self.dist_image.clip(max=255))
+
+    def query(self, points):
+
+        h, w = self.dist_image.shape
+        rows = np.int32(np.clip(points[:,1] - self.ll[1], a_min=0, a_max=h-1))
+        cols = np.int32(np.clip(points[:,0] - self.ll[0], a_min=0, a_max=w-1))
+        return self.dist_image[rows, cols]
+
 class TabAligner:
 
     def __init__(self, dst):
         self.dst = dst
         self.kdtree = scipy.spatial.KDTree(dst.piece.points)
+        self.distance_image = DistanceImage(dst.piece)
 
     def compute_alignment(self, dst_tab_no, src, src_tab_no):
 
@@ -319,16 +346,21 @@ class TabAligner:
         
         sl, sr = src.piece.tabs[src_tab_no].tangent_indexes
 
-        d, i = self.kdtree.query(
-            src_coords.get_transform().apply_v2(ring_slice(src.piece.points, sl, sr))
-        )
+        src_points = src_coords.get_transform().apply_v2(ring_slice(src.piece.points, sl, sr))
+        
+        d, i = self.kdtree.query(src_points)
 
         mse = np.sum(d ** 2) / len(d)
 
         src_fit_points = (sl, sr)
         dst_fit_points = (i[-1], i[0])
 
-        return (mse, src_fit_points, dst_fit_points)
+        d2 = self.distance_image.query(src_points)
+        mse2 = np.sum(d2 ** 2) / len(d2)
+
+        # print(f"measure_fit_fast:\n{d=}\n{mse=}\n{d2=}\n{mse2=}")
+
+        return ((mse, mse2), src_fit_points, dst_fit_points)
 
     def measure_fit(self, src, src_tab_no, src_coords):
         
@@ -972,7 +1004,7 @@ class AlignTk:
         print(f"{len(self.pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
         with open('tab_alignment.csv', 'w', newline='') as f:
-            field_names = 'dst_label dst_tab_no src_label src_tab_no mse'.split()
+            field_names = 'dst_label dst_tab_no src_label src_tab_no mse mse2'.split()
             writer = csv.DictWriter(f, field_names)
             writer.writeheader()
 
@@ -991,7 +1023,8 @@ class AlignTk:
                                          'dst_tab_no': dst_tab_no,
                                          'src_label': src.piece.label,
                                          'src_tab_no': src_tab_no,
-                                         'mse': mse})
+                                         'mse': mse[0],
+                                         'mse2': mse[1]})
                 print(f"{dst.piece.label}: {len(rows)} rows")
                 writer.writerows(rows)
 
