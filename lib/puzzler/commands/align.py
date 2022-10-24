@@ -952,26 +952,6 @@ class AlignTk:
             self.draggable = None
             self.render()
 
-    def render_impl(self):
-
-        canvas = self.canvas
-        canvas.delete('all')
-
-        r = puzzler.render.Renderer(canvas)
-        r.transform.multiply(self.camera.matrix)
-
-        colors = ['red', 'green', 'blue']
-        for i, piece in enumerate(self.pieces):
-
-            color = colors[i%len(colors)]
-            self.draw_piece(r, piece, color, f"piece_{i}")
-
-        if self.selection is not None:
-            self.draw_rotate_handles(self.selection)
-
-        if self.frontier:
-            self.draw_frontier(r, self.frontier)
-
     def render(self):
         
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
@@ -993,80 +973,6 @@ class AlignTk:
         r.render(False)
 
         self.render_full = 0
-
-    def draw_frontier(self, r, frontier):
-
-        piece_dict = dict((i.piece.label, i) for i in self.pieces)
-        for l, a, b in frontier:
-            p = piece_dict[l]
-            with puzzler.render.save_matrix(r.transform):
-                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
-                r.draw_points(p.piece.points[a], fill='pink', radius=8)
-                
-        for l, a, b in frontier:
-            p = piece_dict[l]
-            with puzzler.render.save_matrix(r.transform):
-                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
-                r.draw_points(p.piece.points[b], fill='purple', radius=5)
-            
-    def draw_piece(self, r, p, color, tag):
-            
-        with puzzler.render.save_matrix(r.transform):
-                
-            r.transform.translate(p.coords.dxdy)
-            r.transform.rotate(p.coords.angle)
-            
-            if p.piece.edges and False:
-                for edge in p.piece.edges:
-                    r.draw_lines(edge.line.pts, fill='pink', width=8)
-                    r.draw_points(edge.line.pts[0], fill='purple', radius=8)
-                    r.draw_points(edge.line.pts[1], fill='green', radius=8)
-
-            if p.piece.tabs and False:
-                for tab in p.piece.tabs:
-                    pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
-                    r.draw_polygon(pts, fill='cyan', outline='')
-
-            if -1 == self.render_full:
-                points = p.piece.points
-            else:
-                points = p.perimeter.points[p.approx.indexes]
-                
-            r.draw_polygon(points, outline=color, fill='', width=2, tag=tag)
-
-            r.draw_text(np.array((0,0)), p.piece.label)
-
-    def draw_rotate_handles(self, piece_id):
-
-        p = self.pieces[piece_id]
-
-        c = puzzler.render.Renderer(self.canvas)
-        c.transform.multiply(self.camera.matrix)
-            
-        c.transform.translate(p.coords.dxdy)
-        c.transform.rotate(p.coords.angle)
-
-        r1  = 250
-        r2  = 300
-        phi = np.linspace(0, math.pi/2, num=20)
-        cos = np.cos(phi)
-        sin = np.sin(phi)
-        x   = np.concatenate((r1 * cos, r2 * np.flip(cos)))
-        y   = np.concatenate((r1 * sin, r2 * np.flip(sin)))
-        points = np.vstack((x, y)).T
-        # print(f"{points=}")
-        tags = ('rotate', f'piece_{piece_id}')
-
-        for i in range(4):
-            with puzzler.render.save_matrix(c.transform):
-                c.transform.rotate(i * math.pi / 2)
-                c.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
-
-        if p.info:
-            c.draw_text(p.info.tab_next.ellipse.center, "n")
-            c.draw_text(p.info.tab_prev.ellipse.center, "p")
-            for i, e in enumerate(p.info.edge):
-                c.draw_text(np.mean(e.line.pts, axis=0), f"e{i}")
 
     @staticmethod
     def umeyama(P, Q):
