@@ -790,6 +790,114 @@ class Autofit:
     def find_field(self):
         return [p for p in self.pieces if len(p.piece.edges) == 0]
 
+class PuzzleRenderer:
+
+    def __init__(self, canvas, camera, pieces):
+        self.canvas = canvas
+        self.camera = camera
+        self.pieces = pieces
+        self.selection = None
+        self.frontier = []
+        self.renderer = None
+        self.render_fast = None
+
+    def render(self, render_fast):
+        
+        self.canvas.delete('all')
+        self.renderer = puzzler.render.Renderer(self.canvas)
+        self.renderer.transform.multiply(self.camera.matrix)
+
+        self.render_fast = render_fast
+
+        colors = ['red', 'green', 'blue']
+        for i, piece in enumerate(self.pieces):
+
+            color = colors[i%len(colors)]
+            self.draw_piece(piece, color, f"piece_{i}")
+
+        if self.selection is not None:
+            self.draw_rotate_handles(self.selection)
+
+        if self.frontier:
+            self.draw_frontier(self.frontier)
+
+    def draw_piece(self, p, color, tag):
+
+        r = self.renderer
+            
+        with puzzler.render.save_matrix(r.transform):
+                
+            r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+            
+            if p.piece.edges and False:
+                for edge in p.piece.edges:
+                    r.draw_lines(edge.line.pts, fill='pink', width=8)
+                    r.draw_points(edge.line.pts[0], fill='purple', radius=8)
+                    r.draw_points(edge.line.pts[1], fill='green', radius=8)
+
+            if p.piece.tabs and False:
+                for tab in p.piece.tabs:
+                    pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
+                    r.draw_polygon(pts, fill='cyan', outline='')
+
+            if self.render_fast:
+                points = p.perimeter.points[p.approx.indexes]
+            else:
+                points = p.piece.points
+                
+            r.draw_polygon(points, outline=color, fill='', width=2, tag=tag)
+
+            r.draw_text(np.array((0,0)), p.piece.label)
+
+    def draw_rotate_handles(self, piece_id):
+
+        p = self.pieces[piece_id]
+
+        r = self.renderer
+        with puzzler.render.save_matrix(r.transform):
+
+            r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+
+            r1  = 250
+            r2  = 300
+            phi = np.linspace(0, math.pi/2, num=20)
+            cos = np.cos(phi)
+            sin = np.sin(phi)
+            x   = np.concatenate((r1 * cos, r2 * np.flip(cos)))
+            y   = np.concatenate((r1 * sin, r2 * np.flip(sin)))
+            points = np.vstack((x, y)).T
+            tags = ('rotate', f'piece_{piece_id}')
+
+            for i in range(4):
+                with puzzler.render.save_matrix(r.transform):
+                    r.transform.rotate(i * math.pi / 2)
+                    r.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
+
+            if p.info:
+                r.draw_text(p.info.tab_next.ellipse.center, "n")
+                r.draw_text(p.info.tab_prev.ellipse.center, "p")
+                for i, e in enumerate(p.info.edge):
+                    r.draw_text(np.mean(e.line.pts, axis=0), f"e{i}")
+                    
+    def draw_frontier(self, frontier):
+
+        r = self.renderer
+
+        piece_dict = dict((i.piece.label, i) for i in self.pieces)
+        for l, a, b in frontier:
+            p = piece_dict[l]
+            with puzzler.render.save_matrix(r.transform):
+                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+                r.draw_points(p.piece.points[a], fill='pink', radius=8)
+                
+        for l, a, b in frontier:
+            p = piece_dict[l]
+            with puzzler.render.save_matrix(r.transform):
+                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+                r.draw_points(p.piece.points[b], fill='purple', radius=5)
+            
+
+
 class AlignTk:
 
     def __init__(self, parent, pieces):
@@ -865,14 +973,25 @@ class AlignTk:
             self.draw_frontier(r, self.frontier)
 
     def render(self):
-        self.render_impl()
+        
+        r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
+        r.selection = self.selection
+        r.frontier = self.frontier
+        r.render(True)
+
         self.render_full += 1
         if 1 == self.render_full:
             self.parent.after_idle(self.full_render)
 
     def full_render(self):
+        
         self.render_full = -1
-        self.render_impl()
+
+        r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
+        r.selection = self.selection
+        r.frontier = self.frontier
+        r.render(False)
+
         self.render_full = 0
 
     def draw_frontier(self, r, frontier):
