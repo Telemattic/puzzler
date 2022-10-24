@@ -2,6 +2,7 @@ import bisect
 import collections
 import csv
 import cv2 as cv
+import itertools
 import math
 import numpy as np
 import re
@@ -229,11 +230,12 @@ class ApproxPoly:
 
         return (a * inv_l, b * inv_l, c * inv_l)
 
-def ring_slice(a, begin, end):
-    if begin < end:
-        return a[begin:end]
-    return np.concatenate((a[begin:], a[:end]))
-        
+def ring_slice(data, a, b):
+    return np.concatenate((data[a:], data[:b])) if a >= b else data[a:b]
+
+def ring_range(a, b, n):
+    return itertools.chain(range(a, n), range(0, b)) if a >= b else range(a, b)
+
 class Piece:
 
     def __init__(self, piece):
@@ -324,6 +326,64 @@ class DistanceImage:
         rows = np.int32(np.clip(points[:,1] - self.ll[1], a_min=0, a_max=h-1))
         cols = np.int32(np.clip(points[:,0] - self.ll[0], a_min=0, a_max=w-1))
         return self.dist_image[rows, cols]
+
+class FrontierComputer:
+
+    def __init__(self, pieces):
+        self.pieces = pieces
+
+    def compute_from_border(self, border):
+
+        assert self.is_valid_border(border)
+
+        n = len(border)
+        start = [None] * n
+        end = [None] * n
+        for i in range(n):
+            end[i-1], start[i] = self.find_cut(border[i-1], border[i])
+
+        return list(zip(border, start, end))[::-1]
+
+    def is_valid_border(self, border):
+
+        for i in border:
+            p = self.pieces.get(i)
+            assert p and isinstance(p.info, BorderInfo)
+
+        # should also check that each piece's tab_next connects to the
+        # tab_prev on the next piece
+        
+        return True
+
+    def find_cut(self, prev_label, curr_label):
+
+        prev, curr = self.pieces[prev_label], self.pieces[curr_label]
+
+        di = DistanceImage(prev.piece)
+
+        t = puzzler.render.Transform()
+        t.rotate(-prev.coords.angle).translate(-prev.coords.dxdy)
+        t.translate(curr.coords.dxdy).rotate(curr.coords.angle)
+
+        curr_points = t.apply_v2(curr.piece.points)
+        # with np.printoptions(precision=1):
+        #    print(f"{curr.piece.points}")
+        #    print(f"{curr_points=}")
+            
+        d = di.query(curr_points)
+
+        a, b = curr.info.tab_next.tangent_indexes[1], curr.info.tab_prev.tangent_indexes[0]
+        n = len(curr_points)
+
+        thresh = 5
+
+        print(f"{prev_label=} {curr_label=}")
+        print(f"  {a=} {b=} {n=}")
+        curr_start = next(itertools.dropwhile(lambda i: d[i] > thresh, ring_range(a, b, n)), b)
+        prev_end = np.argmin(np.linalg.norm(prev.piece.points - curr_points[curr_start], axis=1))
+        print(f"  {prev_end=} {curr_start=}")
+
+        return (prev_end, curr_start)
 
 class TabAligner:
 
@@ -741,6 +801,8 @@ class AlignTk:
         self.keep0 = None
         self.keep1 = None
 
+        self.frontier = None
+
         self._init_ui(parent)
 
     def canvas_press(self, event):
@@ -782,23 +844,51 @@ class AlignTk:
             self.draggable = None
             self.render()
 
-    def render(self):
+    def render_impl(self):
 
         canvas = self.canvas
         canvas.delete('all')
+
+        r = puzzler.render.Renderer(canvas)
+        r.transform.multiply(self.camera.matrix)
 
         colors = ['red', 'green', 'blue']
         for i, piece in enumerate(self.pieces):
 
             color = colors[i%len(colors)]
-
-            r = puzzler.render.Renderer(canvas)
-            r.transform.multiply(self.camera.matrix)
-
             self.draw_piece(r, piece, color, f"piece_{i}")
 
         if self.selection is not None:
             self.draw_rotate_handles(self.selection)
+
+        if self.frontier:
+            self.draw_frontier(r, self.frontier)
+
+    def render(self):
+        self.render_impl()
+        self.render_full += 1
+        if 1 == self.render_full:
+            self.parent.after_idle(self.full_render)
+
+    def full_render(self):
+        self.render_full = -1
+        self.render_impl()
+        self.render_full = 0
+
+    def draw_frontier(self, r, frontier):
+
+        piece_dict = dict((i.piece.label, i) for i in self.pieces)
+        for l, a, b in frontier:
+            p = piece_dict[l]
+            with puzzler.render.save_matrix(r.transform):
+                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+                r.draw_points(p.piece.points[a], fill='pink', radius=8)
+                
+        for l, a, b in frontier:
+            p = piece_dict[l]
+            with puzzler.render.save_matrix(r.transform):
+                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+                r.draw_points(p.piece.points[b], fill='purple', radius=5)
             
     def draw_piece(self, r, p, color, tag):
             
@@ -818,7 +908,12 @@ class AlignTk:
                     pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
                     r.draw_polygon(pts, fill='cyan', outline='')
 
-            r.draw_polygon(p.piece.points, outline=color, fill='', width=2, tag=tag)
+            if -1 == self.render_full:
+                points = p.piece.points
+            else:
+                points = p.perimeter.points[p.approx.indexes]
+                
+            r.draw_polygon(points, outline=color, fill='', width=2, tag=tag)
 
             r.draw_text(np.array((0,0)), p.piece.label)
 
@@ -1100,19 +1195,19 @@ class AlignTk:
                 for src_tab_no, src_tab in enumerate(src_piece.piece.tabs):
                     if dst_tab.indent == src_tab.indent:
                         continue
-                    mse = tab_aligner.compute_alignment(dst_tab_no, src_piece, src_tab_no)[0]
-                    the_scores[(src_label,src_tab_no)] = mse
+                    mse, _, sfp, _ = tab_aligner.compute_alignment(dst_tab_no, src_piece, src_tab_no)
+                    a, b = sfp
+                    n = b-a if b > a else len(src_piece.piece.points)-a+b
+                    the_scores[(src_label,src_tab_no)] = (mse, n)
 
             scores.append(the_scores)
-
-        n1 = len(scores[0])
-        n2 = len(scores[1])
 
         allways = []
         for k0, v0 in scores[0].items():
             for k1, v1 in scores[1].items():
                 if k1[0] == k0[0]:
-                    allways.append((v0 + v1, k0, k1))
+                    mse = (v0[0] * v0[1] + v1[0] * v1[1]) / (v0[1] + v1[1])
+                    allways.append((mse, (*k0, *v0), (*k1, *v1)))
 
         allways.sort()
 
@@ -1147,6 +1242,12 @@ class AlignTk:
         self.render()
 
         pieces_dict = dict((i.piece.label, i) for i in self.pieces)
+
+        border = [i for i, _ in pairs]
+        
+        fc = FrontierComputer(pieces_dict)
+
+        self.frontier = fc.compute_from_border(border)
 
         if af.src_fit_indexes is not None and af.dst_fit_indexes is not None:
             c = puzzler.render.Renderer(self.canvas)
@@ -1198,7 +1299,8 @@ class AlignTk:
 
         w, h = parent.winfo_screenwidth(), parent.winfo_screenheight()
         viewport = (min(w-32,1024), min(h-128,1024))
-        
+
+        self.parent = parent
         self.camera = Camera(np.array((0,0), dtype=np.float64), 1/3, viewport)
         
         self.frame = ttk.Frame(parent, padding=5)
@@ -1237,6 +1339,7 @@ class AlignTk:
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=40)
         l1.grid(column=6, row=0, sticky=(E))
 
+        self.render_full = False
         self.render()
                 
 def align_ui(args):
