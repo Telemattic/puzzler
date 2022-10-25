@@ -240,7 +240,8 @@ class Piece:
 
     def __init__(self, piece):
 
-        self.piece  = piece
+        self.piece = piece
+        self.bbox = (np.min(self.piece.points, axis=0), np.max(self.piece.points, axis=0))
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
@@ -800,6 +801,8 @@ class PuzzleRenderer:
         self.frontier = []
         self.renderer = None
         self.render_fast = None
+        self.canvas_w = int(self.canvas.cget('width'))
+        self.canvas_h = int(self.canvas.cget('height'))
 
     def render(self, render_fast):
         
@@ -821,6 +824,25 @@ class PuzzleRenderer:
         if self.frontier:
             self.draw_frontier(self.frontier)
 
+    def test_bbox(self, bbox):
+
+        ll, ur = bbox
+        x0, y0 = ll
+        x1, y1 = ur
+        points = np.array([(x0,y0), (x1,y0), (x1,y1), (x0,y1)])
+
+        screen = self.renderer.transform.apply_v2(points)
+        x = screen[:,0]
+        y = screen[:,1]
+
+        if np.all(x < 0) or np.all(x > self.canvas_w):
+            return False
+
+        if np.all(y < 0) or np.all(y > self.canvas_h):
+            return False
+
+        return True
+
     def draw_piece(self, p, color, tag):
 
         r = self.renderer
@@ -828,6 +850,9 @@ class PuzzleRenderer:
         with puzzler.render.save_matrix(r.transform):
                 
             r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+
+            if not self.test_bbox(p.bbox):
+                return
             
             if p.piece.edges and False:
                 for edge in p.piece.edges:
