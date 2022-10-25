@@ -1264,7 +1264,6 @@ class AlignTk:
         af = Autofit(self.pieces)
         pairs = af.align_border()
         af.global_icp(pairs)
-        self.render()
 
         pieces_dict = dict((i.piece.label, i) for i in self.pieces)
 
@@ -1274,18 +1273,8 @@ class AlignTk:
 
         self.frontier = fc.compute_from_border(border)
 
-        if af.src_fit_indexes is not None and af.dst_fit_indexes is not None:
-            c = puzzler.render.Renderer(self.canvas)
-            c.transform.multiply(self.camera.matrix)
-
-            src = pieces_dict[af.src_fit_piece]
-            src_points = src.piece.points[af.src_fit_indexes]
-            c.draw_points(src.coords.get_transform().apply_v2(src_points), fill='pink', radius=6)
-
-            dst = pieces_dict[af.dst_fit_piece]
-            dst_points = dst.piece.points[af.dst_fit_indexes]
-            c.draw_points(dst.coords.get_transform().apply_v2(dst_points), fill='purple', radius=3)
-
+        self.render()
+        
     def mouse_wheel(self, event):
         f = pow(1.2, 1 if event.delta > 0 else -1)
         xy = (event.x, event.y)
@@ -1302,23 +1291,6 @@ class AlignTk:
 
     def keypress(self, event):
         print(event)
-
-        dx = dy = 0
-        if event.keycode == 38:
-            dy = 1
-        elif event.keycode == 40:
-            dy = -1
-        elif event.keycode == 37:
-            dx = -1
-        elif event.keycode == 39:
-            dx = 1
-
-        if dx or dy:
-            dx *= 100 * self.camera.zoom
-            dy *= 100 * self.camera.zoom
-
-            self.camera.center = self.camera.center + np.array((dx, dy))
-            self.render()
 
     def _init_ui(self, parent):
 
