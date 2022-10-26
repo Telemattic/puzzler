@@ -230,6 +230,21 @@ class ApproxPoly:
 
         return (a * inv_l, b * inv_l, c * inv_l)
 
+class RingRange:
+
+    def __init__(self, a, b, n):
+        self.a = a
+        self.b = b
+        self.n = n
+
+    def __iter__(self):
+        a, b = self.a, self.b
+        return itertools.chain(range(a, self.n), range(0, b)) if a >= b else range(a, b)
+
+    def __contains__(self, i):
+        a, b = self.a, self.b
+        return (a <= i < self.n or 0 <= i < b) if a >= b else (a <= i < b)
+        
 def ring_slice(data, a, b):
     return np.concatenate((data[a:], data[:b])) if a >= b else data[a:b]
 
@@ -341,7 +356,7 @@ class FrontierComputer:
         start = [None] * n
         end = [None] * n
         for i in range(n):
-            end[i-1], start[i] = self.find_cut(border[i-1], border[i])
+            start[i-1], end[i] = self.find_cut(border[i-1], border[i])
 
         return list(zip(border, start, end))[::-1]
 
@@ -385,6 +400,43 @@ class FrontierComputer:
         print(f"  {prev_end=} {curr_start=}")
 
         return (prev_end, curr_start)
+
+class FrontierExplorer:
+
+    def __init__(self, pieces):
+        self.pieces = pieces
+
+    def find_tabs(self, frontier):
+
+        retval = []
+        
+        for l, a, b in frontier:
+            p = self.pieces[l].piece
+            rr = RingRange(a, b, len(p.points))
+            for i, tab in enumerate(p.tabs):
+                if all(j in rr for j in tab.tangent_indexes):
+                    retval.append((l, i))
+
+        return retval
+
+    def find_interesting_corners(self, frontier):
+
+        tabs = self.find_tabs(frontier)
+        dirs = [self.get_tab_direction(tab) for tab in tabs]
+        scores = [np.dot(dirs[i-1], curr_dir) for i, curr_dir in enumerate(dirs)]
+        return [(scores[i], tabs[i-1], tabs[i]) for i in range(len(tabs))]
+
+    def get_tab_direction(self, tab, rotate=True):
+
+        p = self.pieces[tab[0]]
+        t = p.piece.tabs[tab[1]]
+        v = p.piece.points[np.array(t.tangent_indexes)] - t.ellipse.center
+        v = v / np.linalg.norm(v, axis=1)
+        v = np.sum(v, axis=0)
+        v = v / np.linalg.norm(v)
+        if not t.indent:
+            v = -v
+        return puzzler.math.rotate(v, p.coords.angle) if rotate else v
 
 class TabAligner:
 
@@ -835,10 +887,10 @@ class PuzzleRenderer:
         x = screen[:,0]
         y = screen[:,1]
 
-        if np.all(x < 0) or np.all(x > self.canvas_w):
+        if np.max(x) < 0 or np.min(x) > self.canvas_w:
             return False
 
-        if np.all(y < 0) or np.all(y > self.canvas_h):
+        if np.max(y) < 0 or np.min(y) > self.canvas_h:
             return False
 
         return True
@@ -906,9 +958,26 @@ class PuzzleRenderer:
                     
     def draw_frontier(self, frontier):
 
-        r = self.renderer
-
         piece_dict = dict((i.piece.label, i) for i in self.pieces)
+        
+        fe = FrontierExplorer(piece_dict)
+
+        tabs = collections.defaultdict(list)
+        for label, tab_no in fe.find_tabs(frontier):
+            tabs[label].append(tab_no)
+
+        r = self.renderer
+        
+        for l, tab_nos in tabs.items():
+            p = piece_dict[l]
+            with puzzler.render.save_matrix(r.transform):
+                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+                for tab_no in tab_nos:
+                    v = fe.get_tab_direction((l, tab_no), False)
+                    p0 = p.piece.tabs[tab_no].ellipse.center
+                    p1 = p0 + v * 100
+                    r.draw_lines(np.array((p0, p1)), fill='red', width=1, arrow='last')
+
         for l, a, b in frontier:
             p = piece_dict[l]
             with puzzler.render.save_matrix(r.transform):
@@ -1297,6 +1366,11 @@ class AlignTk:
         fc = FrontierComputer(pieces_dict)
 
         self.frontier = fc.compute_from_border(border)
+
+        fe = FrontierExplorer(pieces_dict)
+        corners = fe.find_interesting_corners(self.frontier)
+        for s, t0, t1 in sorted(corners, key=lambda x: abs(x[0])):
+            print(f"{t0}, {t1}: {s:.3f}")
 
         self.render()
         
