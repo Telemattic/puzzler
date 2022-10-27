@@ -257,6 +257,7 @@ class Piece:
 
         self.piece = piece
         self.bbox = (np.min(self.piece.points, axis=0), np.max(self.piece.points, axis=0))
+        self.radius = np.max(np.linalg.norm(self.piece.points, axis=1))
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
@@ -672,7 +673,7 @@ class Autofit:
 
         for dst in borders:
 
-            edge_aligner = EdgeAligner(dst)
+            edge_aligner = puzzler.align.EdgeAligner(dst.piece)
             
             for src in borders:
                 
@@ -686,7 +687,14 @@ class Autofit:
                 if dst.info.tab_next.indent == src.info.tab_prev.indent:
                     continue
 
-                dst.info.scores[src.piece.label] = edge_aligner.compute_alignment(src)
+                dst_desc = (dst.piece.edges.index(dst.info.edge[-1]),
+                            dst.piece.tabs.index(dst.info.tab_next))
+
+                src_desc = (src.piece.edges.index(src.info.edge[0]),
+                            src.piece.tabs.index(src.info.tab_prev))
+
+                dst.info.scores[src.piece.label] = edge_aligner.compute_alignment(
+                    dst_desc, src.piece, src_desc)
 
         for dst in borders:
             for src, score in dst.info.scores.items():
@@ -749,8 +757,8 @@ class Autofit:
             
         def add_correspondence(dst, src, src_coords, src_fit_points):
 
-            src_indexes, dst_indexes = EdgeAligner(dst).get_correspondence(
-                src, src_coords, src_fit_points)
+            src_indexes, dst_indexes = puzzler.align.EdgeAligner(dst.piece).get_correspondence(
+                src.piece, src_coords, src_fit_points)
 
             src_vertex = src.piece.points[src_indexes]
             dst_vertex = dst.piece.points[dst_indexes]
