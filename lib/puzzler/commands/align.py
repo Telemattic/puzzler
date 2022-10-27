@@ -296,54 +296,6 @@ def make_border_info(piece):
 
     return BorderInfo(edges, tab_prev, tab_next)
 
-def compute_rigid_transform(P, Q):
-        
-    m = P.shape[0]
-    assert P.shape == Q.shape == (m, 2)
-
-    # want the optimized rotation and translation to map P -> Q
-
-    Px, Py = np.sum(P, axis=0)
-    Qx, Qy = np.sum(Q, axis=0)
-
-    A00 =np.sum(np.square(P))
-    A = np.array([[A00, -Py, Px], 
-                  [-Py,  m , 0.],
-                  [ Px,  0., m ]], dtype=np.float64)
-
-    u0 = np.sum(P[:,0]*Q[:,1]) - np.sum(P[:,1]*Q[:,0])
-    u = np.array([u0, Qx-Px, Qy-Py], dtype=np.float64)
-
-    return np.linalg.lstsq(A, u, rcond=None)[0]
-
-class DistanceImage:
-
-    def __init__(self, piece):
-
-        pp = piece.points
-        
-        self.ll = np.min(pp, axis=0) - 256
-        self.ur = np.max(pp, axis=0) + 256
-
-        w, h = self.ur + 1 - self.ll
-        cols = pp[:,0] - self.ll[0]
-        rows = pp[:,1] - self.ll[1]
-
-        piece_image = np.ones((h, w), dtype=np.uint8)
-        piece_image[rows, cols] = 0
-
-        self.dist_image = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
-        # self.dist_image = np.uint8(self.dist_image.clip(max=255))
-
-    def query(self, points):
-
-        # could consider scipy.interpolate.RegularGridInterpolator,
-        # either with nearest or linear interpolation
-        h, w = self.dist_image.shape
-        rows = np.int32(np.clip(points[:,1] - self.ll[1], a_min=0, a_max=h-1))
-        cols = np.int32(np.clip(points[:,0] - self.ll[0], a_min=0, a_max=w-1))
-        return self.dist_image[rows, cols]
-
 class FrontierComputer:
 
     def __init__(self, pieces):
@@ -376,7 +328,7 @@ class FrontierComputer:
 
         prev, curr = self.pieces[prev_label], self.pieces[curr_label]
 
-        di = DistanceImage(prev.piece)
+        di = puzzler.align.DistanceImage(prev.piece)
 
         t = puzzler.render.Transform()
         t.rotate(-prev.coords.angle).translate(-prev.coords.dxdy)
@@ -438,211 +390,6 @@ class FrontierExplorer:
         if not t.indent:
             v = -v
         return puzzler.math.rotate(v, p.coords.angle) if rotate else v
-
-class TabAligner:
-
-    def __init__(self, dst, slow=False):
-        self.dst = dst
-        self.kdtree = None
-        self.distance_image = None
-        if slow:
-            self.kdtree = scipy.spatial.KDTree(dst.piece.points)
-        else:
-            self.distance_image = DistanceImage(dst.piece)
-
-    def compute_alignment(self, dst_tab_no, src, src_tab_no):
-
-        src_points = self.get_tab_points(src.piece, src_tab_no)
-        dst_points = self.get_tab_points(self.dst.piece, dst_tab_no)
-
-        r, x, y = compute_rigid_transform(src_points, dst_points)
-
-        src_coords = AffineTransform(r, (x,y))
-
-        mse, sfp, dfp = self.measure_fit_fast(src, src_tab_no, src_coords)
-
-        return (mse, src_coords, sfp, dfp)
-
-    def measure_fit_fast(self, src, src_tab_no, src_coords):
-        
-        sl, sr = src.piece.tabs[src_tab_no].tangent_indexes
-
-        src_points = src_coords.get_transform().apply_v2(ring_slice(src.piece.points, sl, sr))
-
-        src_fit_points = (sl, sr)
-        
-        if self.kdtree:
-            d, i = self.kdtree.query(src_points)
-            dst_fit_points = (i[-1], i[0])
-        else:
-            d = self.distance_image.query(src_points)
-            dst_fit_points = (None, None)
-
-        mse = np.sum(d ** 2) / len(d)
-
-        return (mse, src_fit_points, dst_fit_points)
-
-    def measure_fit(self, src, src_tab_no, src_coords):
-        
-        thresh = 5
-
-        src_points = src_coords.get_transform().apply_v2(src.piece.points)
-        d, i = self.kdtree.query(src_points, distance_upper_bound=thresh+1)
-
-        l, r = src.piece.tabs[src_tab_no].tangent_indexes
-
-        n = len(src.piece.points)
-
-        for j in range(l+n//2, l+n, 1):
-            if d[j%n] < thresh:
-                break
-        l = j % n
-
-        for j in range(r+n//2, r, -1):
-            if d[j%n] < thresh:
-                break
-        r = j % n
-
-        d, _ = self.kdtree.query(ring_slice(src_points, l, r))
-
-        mse = np.sum(d ** 2) / len(d)
-
-        src_fit_points = (l, r)
-        dst_fit_points = (i[r], i[l])
-
-        return (mse, src_fit_points, dst_fit_points)
-
-    @staticmethod
-    def get_tab_points(piece, tab_no):
-
-        tab = piece.tabs[tab_no]
-        ti = list(tab.tangent_indexes)
-        l, r = piece.points[ti if tab.indent else ti[::-1]]
-        c = tab.ellipse.center
-        return np.array([l, c, r])
-
-class MultiAligner:
-
-    def __init__(self, targets):
-        self.targets = targets
-
-        dst_points = []
-        for dst_piece, dst_tab_no in self.targets:
-            pt = dst_piece.piece.tabs[dst_tab_no].ellipse.center
-            dst_points.append(dst_piece.coords.get_transform().apply_v2(pt))
-
-        self.dst_points = np.array(dst_points)
-
-    def compute_alignment(self, src_piece, source_tabs):
-
-        src_points = np.array([src_piece.piece.tabs[s].ellipse.center for s in source_tabs])
-
-        r, x, y = compute_rigid_transform(src_points, self.dst_points)
-
-        return AffineTransform(r, (x,y))
-
-    def measure_fit(self, src_piece, source_tabs, src_coords):
-
-        sse = 0
-        n = 0
-
-        for i, src_tab_no in enumerate(source_tabs):
-
-            dst_piece, _ = self.targets[i] 
-            distance_image = DistanceImage(dst_piece.piece)
-
-            dst_coords = dst_piece.coords
-            
-            transform = puzzler.render.Transform()
-            transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
-            transform.translate(src_coords.dxdy).rotate(src_coords.angle)
-
-            l, r = src_piece.piece.tabs[src_tab_no].tangent_indexes
-            src_points = transform.apply_v2(ring_slice(src_piece.piece.points, l, r))
-
-            d = distance_image.query(src_points)
-            sse += np.sum(d ** 2)
-            n += len(d)
-
-        return sse /n
-    
-class EdgeAligner:
-
-    def __init__(self, dst):
-        assert isinstance(dst.info, BorderInfo)
-        self.dst = dst
-        self.kdtree = scipy.spatial.KDTree(dst.piece.points)
-
-    def compute_alignment(self, src):
-        
-        # print(f"align_edge_src_to_dst: dst={dst.piece.label} src={src.piece.label}")
-
-        assert isinstance(src.info, BorderInfo)
-
-        dst_edge = self.dst.piece.edges[-1]
-
-        dst_edge_vec = dst_edge.line.pts[1] - dst_edge.line.pts[0]
-        dst_edge_angle = np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
-
-        src_edge = src.piece.edges[0]
-
-        src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
-        src_edge_angle = np.arctan2(src_edge_vec[1], src_edge_vec[0])
-
-        src_coords = AffineTransform()
-        src_coords.angle = dst_edge_angle - src_edge_angle
-
-        dst_line = dst_edge.line.pts
-        src_point = src_coords.get_transform().apply_v2(src_edge.line.pts[0])
-        
-        src_coords.dxdy = puzzler.math.vector_to_line(src_point, dst_line)
-
-        dst_center = self.dst.info.tab_next.ellipse.center
-        src_center = src_coords.get_transform().apply_v2(
-            src.info.tab_prev.ellipse.center)
-
-        dst_edge_vec = puzzler.math.unit_vector(dst_edge_vec)
-        d = np.dot(dst_edge_vec, (dst_center - src_center))
-        src_coords.dxdy = src_coords.dxdy + dst_edge_vec * d
-
-        src_fit_pts = (src.info.tab_prev.tangent_indexes[0],
-                       src.info.edge[0].fit_indexes[0])
-
-        dst_fit_pts = (self.dst.info.edge[-1].fit_indexes[1],
-                       self.dst.info.tab_next.tangent_indexes[1])
-
-        # with np.printoptions(precision=3):
-        #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
-        #     print(f"  matrix={src_coords.get_transform().matrix}")
-
-        points = ring_slice(src.piece.points, *src_fit_pts)
-
-        d, _ = self.kdtree.query(src_coords.get_transform().apply_v2(points))
-
-        mse = np.sum(d ** 2) / len(d)
-
-        # print(f"  MSE={mse:.1f}")
-
-        return (mse, src_coords, src_fit_pts, dst_fit_pts)
-        
-    def get_correspondence(self, src, src_coords, src_fit_indexes):
-
-        a, b = src_fit_indexes
-
-        n = len(src.piece.points)
-        if a < b:
-            src_indexes = list(range(a,b))
-        else:
-            src_indexes = list(range(a,n)) + list(range(0,b))
-
-        n = len(src_indexes)
-        src_indexes = [src_indexes[i] for i in range(n // 10, n, n // 5)]
-
-        src_points = src.piece.points[src_indexes]
-
-        dst_dist, dst_indexes = self.kdtree.query(src_coords.get_transform().apply_v2(src_points))
-
-        return (src_indexes, dst_indexes)
 
 class Autofit:
 
@@ -1153,10 +900,10 @@ class AlignTk:
         if not dst_piece or not src_piece:
             return
         
-        tab_aligner = TabAligner(dst_piece)
+        tab_aligner = puzzler.align.TabAligner(dst_piece.piece)
         
         (mse, src_coords, sfp, dfp) = tab_aligner.compute_alignment(
-            dst_tab_no, src_piece, src_tab_no)
+            dst_tab_no, src_piece.piece, src_tab_no)
         
         t = dst_piece.coords.get_transform()
         m = t.translate(src_coords.dxdy).rotate(src_coords.angle).matrix
@@ -1172,6 +919,8 @@ class AlignTk:
         src_points = src_piece.coords.get_transform().apply_v2(
             src_piece.piece.points[list(sfp)])
         c.draw_points(src_points, fill='pink', radius=6)
+
+        print(f"{sfp=} {dfp=}")
 
         dst_points = dst_piece.coords.get_transform().apply_v2(
             dst_piece.piece.points[list(dfp)])
@@ -1283,7 +1032,7 @@ class AlignTk:
 
             for dst in self.pieces:
                 rows = []
-                tab_aligner = TabAligner(dst)
+                tab_aligner = puzzler.align.TabAligner(dst.piece)
                 for src in self.pieces:
                     if src is dst:
                         continue
@@ -1291,7 +1040,7 @@ class AlignTk:
                         for src_tab_no, src_tab in enumerate(src.piece.tabs):
                             if dst_tab.indent == src_tab.indent:
                                 continue
-                            mse = tab_aligner.compute_alignment(dst_tab_no, src, src_tab_no)[0]
+                            mse = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no)[0]
                             rows.append({'dst_label': dst.piece.label,
                                          'dst_tab_no': dst_tab_no,
                                          'src_label': src.piece.label,
@@ -1313,7 +1062,7 @@ class AlignTk:
             dst_tab   = dst_piece.piece.tabs[dst_tab_no]
 
             the_scores = dict()
-            tab_aligner = TabAligner(dst_piece)
+            tab_aligner = puzzler.align.TabAligner(dst_piece.piece)
             
             for src_piece in self.pieces:
                 if src_piece is dst_piece:
@@ -1322,7 +1071,7 @@ class AlignTk:
                 for src_tab_no, src_tab in enumerate(src_piece.piece.tabs):
                     if dst_tab.indent == src_tab.indent:
                         continue
-                    mse, _, sfp, _ = tab_aligner.compute_alignment(dst_tab_no, src_piece, src_tab_no)
+                    mse, _, sfp, _ = tab_aligner.compute_alignment(dst_tab_no, src_piece.piece, src_tab_no)
                     a, b = sfp
                     n = b-a if b > a else len(src_piece.piece.points)-a+b
                     the_scores[(src_label,src_tab_no)] = (mse, n)
@@ -1338,7 +1087,7 @@ class AlignTk:
 
         allways.sort()
 
-        aligner = MultiAligner([(piece_dict[i], j) for i, j in dsts])
+        aligner = puzzler.align.MultiAligner([(piece_dict[i].piece, j, piece_dict[i].coords) for i, j in dsts])
 
         for i, j in enumerate(allways):
             
@@ -1351,9 +1100,9 @@ class AlignTk:
             src_piece = piece_dict[ii[0]]
             src_tabs  = [ii[1], jj[1]]
             
-            src_coords = aligner.compute_alignment(src_piece, src_tabs)
+            src_coords = aligner.compute_alignment(src_piece.piece, src_tabs)
 
-            mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
+            mse = aligner.measure_fit(src_piece.piece, src_tabs, src_coords)
 
             print(f"  fit: angle={src_coords.angle:3f} xy={src_coords.dxdy} {mse=:.1f}")
             

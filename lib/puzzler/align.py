@@ -30,6 +30,26 @@ class AffineTransform:
 def ring_slice(data, a, b):
     return np.concatenate((data[a:], data[:b])) if a >= b else data[a:b]
 
+def compute_rigid_transform(P, Q):
+        
+    m = P.shape[0]
+    assert P.shape == Q.shape == (m, 2)
+
+    # want the optimized rotation and translation to map P -> Q
+
+    Px, Py = np.sum(P, axis=0)
+    Qx, Qy = np.sum(Q, axis=0)
+
+    A00 =np.sum(np.square(P))
+    A = np.array([[A00, -Py, Px], 
+                  [-Py,  m , 0.],
+                  [ Px,  0., m ]], dtype=np.float64)
+
+    u0 = np.sum(P[:,0]*Q[:,1]) - np.sum(P[:,1]*Q[:,0])
+    u = np.array([u0, Qx-Px, Qy-Py], dtype=np.float64)
+
+    return np.linalg.lstsq(A, u, rcond=None)[0]
+
 class DistanceImage:
 
     def __init__(self, piece):
