@@ -270,9 +270,8 @@ class Piece:
 @dataclass
 class BorderInfo:
 
-    edge: puzzler.feature.Edge
-    tab_prev: puzzler.feature.Tab
-    tab_next: puzzler.feature.Tab
+    pred: tuple
+    succ: tuple
     scores: dict[str,float] = field(default_factory=dict)
 
 def make_border_info(piece):
@@ -282,19 +281,21 @@ def make_border_info(piece):
         
     edges = piece.edges
 
-    tab_next = piece.tabs[0]
-    for tab in piece.tabs:
-        if edges[-1].fit_indexes < tab.fit_indexes:
-            tab_next = tab
+    edge_next = len(edges) - 1
+    tab_next = 0
+    for i, tab in enumerate(piece.tabs):
+        if edges[edge_next].fit_indexes < tab.fit_indexes:
+            tab_next = i
             break
 
-    tab_prev = piece.tabs[-1]
-    for tab in piece.tabs:
-        if edges[0].fit_indexes < tab.fit_indexes:
+    edge_prev = 0
+    tab_prev = len(piece.tabs) - 1
+    for i, tab in enumerate(piece.tabs):
+        if edges[edge_prev].fit_indexes < tab.fit_indexes:
             break
-        tab_prev = tab
+        tab_prev = i
 
-    return BorderInfo(edges, tab_prev, tab_next)
+    return BorderInfo((edge_prev, tab_prev), (edge_next, tab_next))
 
 class FrontierComputer:
 
@@ -341,7 +342,8 @@ class FrontierComputer:
             
         d = di.query(curr_points)
 
-        a, b = curr.info.tab_next.tangent_indexes[1], curr.info.tab_prev.tangent_indexes[0]
+        a, b = curr.info.succ[1], curr.info.pred[1]
+        a, b = curr.piece.tabs[a].tangent_indexes[1], curr.piece.tabs[b].tangent_indexes[0]
         n = len(curr_points)
 
         thresh = 5
@@ -429,16 +431,13 @@ class Autofit:
                 if dst is src:
                     continue
                 
+                dst_desc = dst.info.succ
+                src_desc = src.info.pred
+
                 # tabs have to be complementary (one indent and one
                 # outdent)
-                if dst.info.tab_next.indent == src.info.tab_prev.indent:
+                if dst.piece.tabs[dst_desc[1]].indent == src.piece.tabs[src_desc[1]].indent:
                     continue
-
-                dst_desc = (dst.piece.edges.index(dst.info.edge[-1]),
-                            dst.piece.tabs.index(dst.info.tab_next))
-
-                src_desc = (src.piece.edges.index(src.info.edge[0]),
-                            src.piece.tabs.index(src.info.tab_prev))
 
                 dst.info.scores[src.piece.label] = edge_aligner.compute_alignment(
                     dst_desc, src.piece, src_desc)
@@ -706,10 +705,15 @@ class PuzzleRenderer:
                     r.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
 
             if p.info:
-                r.draw_text(p.info.tab_next.ellipse.center, "n")
-                r.draw_text(p.info.tab_prev.ellipse.center, "p")
-                for i, e in enumerate(p.info.edge):
-                    r.draw_text(np.mean(e.line.pts, axis=0), f"e{i}")
+                tabs = p.piece.tabs
+                edges = p.piece.edges
+                r.draw_text(tabs[p.info.succ[1]].ellipse.center, "n")
+                r.draw_text(tabs[p.info.pred[1]].ellipse.center, "p")
+                if p.info.succ[0] != p.info.pred[0]:
+                    r.draw_text(np.mean(edges[p.info.succ[0]].line.pts, axis=0), "en")
+                    r.draw_text(np.mean(edges[p.info.pred[0]].line.pts, axis=0), "ep")
+                else:
+                    r.draw_text(np.mean(edges[p.info.succ[0]].line.pts, axis=0), "e")
                     
     def draw_frontier(self, frontier):
 
