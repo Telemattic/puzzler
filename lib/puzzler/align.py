@@ -9,6 +9,9 @@ class AffineTransform:
         self.angle = angle
         self.dxdy  = np.array(xy, dtype=np.float64)
 
+    def __repr__(self):
+        return f"AffineTransform({self.angle!r}, {self.dxdy!r})"
+
     def invert_matrix(m):
         angle = math.atan2(m[1,0], m[0,0])
         x, y = m[0,2], m[1,2]

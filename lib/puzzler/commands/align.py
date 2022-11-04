@@ -9,6 +9,7 @@ import re
 import scipy
 import puzzler.feature
 import puzzler
+import puzzler.solver
 
 from tkinter import *
 from tkinter import font
@@ -442,9 +443,10 @@ class Autofit:
                 dst.info.scores[src.piece.label] = edge_aligner.compute_alignment(
                     dst_desc, src.piece, src_desc)
 
-        for dst in borders:
-            for src, score in dst.info.scores.items():
-                print(f"{dst.piece.label},{src},{score[0]:.1f}")
+        if False:
+            for dst in borders:
+                for src, score in dst.info.scores.items():
+                    print(f"{dst.piece.label},{src},{score[0]:.1f}")
 
         dst = None
         if corners:
@@ -452,10 +454,11 @@ class Autofit:
         elif edges:
             dst = edges[0].piece.label
 
-        with np.printoptions(precision=1):
-            for p in self.pieces:
-                c = p.coords
-                print(f"align_border: {p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
+        if False:
+            with np.printoptions(precision=1):
+                for p in self.pieces:
+                    c = p.coords
+                    print(f"align_border: {p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
 
         pairs = []
         mapped = set()
@@ -487,11 +490,12 @@ class Autofit:
                 best_src = pairs[0][1]
                 print(f"Assume {best_src} follows {dst}")
                 pairs.append((best_src, dst))
-        
-        with np.printoptions(precision=1):
-            for p in self.pieces:
-                c = p.coords
-                print(f"align_border: {p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
+
+        if False:
+            with np.printoptions(precision=1):
+                for p in self.pieces:
+                    c = p.coords
+                    print(f"align_border: {p.piece.label}: angle={c.angle:.3f} xy={c.dxdy}")
 
         return pairs
 
@@ -1114,6 +1118,14 @@ class AlignTk:
                 
     def do_autofit(self):
 
+        pieces_dict = dict((i.piece.label, i) for i in self.pieces)
+        
+        bs = puzzler.solver.BorderSolver({i.piece.label: i.piece for i in self.pieces})
+
+        scores = bs.score_matches()
+        pairs = bs.link_pieces(scores)
+        print(f"{pairs=}")
+
         print("Autofit!")
 
         af = Autofit(self.pieces)
@@ -1189,7 +1201,7 @@ class AlignTk:
         b4 = ttk.Button(self.controls, text='Fit Tabs', command=self.do_fit_tabs)
         b4.grid(column=4, row=0, sticky=W)
 
-        b5 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment_B2)
+        b5 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment)
         b5.grid(column=5, row=0, sticky=W)
 
         self.var_label = StringVar(value="x,y")
