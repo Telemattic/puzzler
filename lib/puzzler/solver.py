@@ -1,5 +1,6 @@
 import puzzler
 import collections
+import numpy as np
 
 class BorderSolver:
 
@@ -77,20 +78,20 @@ class BorderSolver:
         for label in border:
             p = self.pieces[label]
 
-            pred_tab = p.tabs[self.pred[label][0]]
-            succ_tab = p.tabs[self.succ[label][0]]
+            pred_tab = p.tabs[self.pred[label][1]]
+            succ_tab = p.tabs[self.succ[label][1]]
 
-            pred_edge = p.edges[self.pred[label][1]]
-            succ_edge = p.edges[self.succ[label][1]]
+            pred_edge = p.edges[self.pred[label][0]]
+            succ_edge = p.edges[self.succ[label][0]]
             
             if len(p.edges) == 2:
                 size[axis] += puzzler.math.distance_to_line(
-                    pred_tab.ellipse.center, succ_edge.line)
+                    pred_tab.ellipse.center, succ_edge.line.pts)
                 axis = (axis + 1) % 4
                 size[axis] += puzzler.math.distance_to_line(
-                    succ_tab.ellipse.center, pred_edge.line)
+                    succ_tab.ellipse.center, pred_edge.line.pts)
             else:
-                vec = puzzler.math.unit_vector(edge.line[0] - edge.line[1])
+                vec = puzzler.math.unit_vector(pred_edge.line.pts[1] - pred_edge.line.pts[0])
                 size[axis] += np.dot(vec, succ_tab.ellipse.center - pred_tab.ellipse.center)
 
         with np.printoptions(precision=1):
@@ -125,7 +126,13 @@ class BorderSolver:
 
         assert visited == used == set(pairs.keys())
 
-        return pairs
+        retval = ["H1"]
+        curr = pairs[retval[0]]
+        while curr != retval[0]:
+            retval.append(curr)
+            curr = pairs[curr]
+
+        return retval[::-1]
 
     def score_matches(self):
 

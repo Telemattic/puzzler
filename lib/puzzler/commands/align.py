@@ -1123,8 +1123,9 @@ class AlignTk:
         bs = puzzler.solver.BorderSolver({i.piece.label: i.piece for i in self.pieces})
 
         scores = bs.score_matches()
-        pairs = bs.link_pieces(scores)
-        print(f"{pairs=}")
+        border = bs.link_pieces(scores)
+        print(f"{border=}")
+        bs.estimate_puzzle_size(border)
 
         print("Autofit!")
 
