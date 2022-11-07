@@ -505,7 +505,7 @@ class Autofit:
 
         pieces_dict = dict((i.piece.label, i) for i in self.pieces)
             
-        def add_correspondence(dst, src, src_coords, src_fit_points):
+        def add_body_correspondence(dst, src, src_coords, src_fit_points):
 
             src_indexes, dst_indexes = puzzler.align.EdgeAligner(dst.piece).get_correspondence(
                 src.piece, src_coords, src_fit_points)
@@ -531,10 +531,6 @@ class Autofit:
 
         bodies = dict()
 
-        dst = pieces_dict[pairs[0][1]]
-        bodies[dst.piece.label] = icp.make_rigid_body(
-            dst.coords.angle, dst.coords.dxdy, fixed=True)
-
         for i, j in pairs:
 
             src = pieces_dict[i]
@@ -543,44 +539,7 @@ class Autofit:
             _, src_coords, src_fit_indexes, dst_fit_indexes = \
                 dst.info.scores[src.piece.label]
             
-            s, d = add_correspondence(dst, src, src_coords, src_fit_indexes)
-            if s is not None and d is not None:
-                self.src_fit_piece   = i
-                self.src_fit_indexes = s
-                self.dst_fit_piece   = j
-                self.dst_fit_indexes = d
-            else:
-                m1 = src_coords.get_transform().matrix
-                m2 = np.linalg.inv(m1)
-                with np.printoptions(precision=3):
-                    print(f"{m1=}")
-                    print(f"{m2=}")
-                dst_coords = AffineTransform(
-                    np.arctan2(m2[1][0], m2[0][0]),
-                    np.array((m2[0][2], m2[1][2])))
-                with np.printoptions(precision=3):
-                    print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
-                    print(f"dst_coords: angle={dst_coords.angle:.3f} xy={dst_coords.dxdy}")
-                # dst_coords = AffineTransform(-src_coords.angle, -src_coords.dxdy)
-                s, d = add_correspondence(src, dst, dst_coords, dst_fit_indexes)
-                self.src_fit_piece   = i
-                self.src_fit_indexes = d
-                self.dst_fit_piece   = j
-                self.dst_fit_indexes = s
-
-        for _ in range(2):
-            icp.solve()
-
-        with np.printoptions(precision=1):
-            for k, v in bodies.items():
-                print(f"global_icp:  {k}: angle={v.angle:.3f} xy={v.center}")
-
-        for k, v in bodies.items():
-            p = pieces_dict[k]
-            p.coords.angle = v.angle
-            p.coords.dxdy = v.center
-
-        # return
+            add_body_correspondence(dst, src, src_coords, src_fit_indexes)
 
         axes = [
             icp.make_axis(np.array((0, -1), dtype=np.float), 0., True),
@@ -601,13 +560,6 @@ class Autofit:
                 dst = axes[q]
 
                 icp.add_axis_correspondence(src, src_vertex, dst)
-
-        # make the initially fixed rigid body float, so that the fixed
-        # axes are the only fixed constraints
-        fixed_piece = pairs[0][1]
-        bodies[fixed_piece].fixed = False
-        bodies[fixed_piece].index = icp.n_cols
-        icp.n_cols += 3
 
         for p in pieces_dict.values():
             add_axis_correspondence(p)
@@ -974,6 +926,9 @@ class AlignTk:
         c.draw_points(src_points, fill='pink', radius=6)
 
         print(f"{sfp=} {dfp=}")
+
+        if any(i is None for i in dfp):
+            return
 
         dst_points = dst_piece.coords.get_transform().apply_v2(
             dst_piece.piece.points[list(dfp)])
