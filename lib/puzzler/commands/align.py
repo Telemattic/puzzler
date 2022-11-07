@@ -525,7 +525,7 @@ class Autofit:
                 bodies[dst.piece.label] = icp.make_rigid_body(dst.coords.angle)
             dst_body = bodies[dst.piece.label]
 
-            icp.add_correspondence(src_body, src_vertex, dst_body, dst_vertex, dst_normal)
+            icp.add_body_correspondence(src_body, src_vertex, dst_body, dst_vertex, dst_normal)
 
             return (src_indexes, dst_indexes)
 
@@ -574,6 +574,51 @@ class Autofit:
         with np.printoptions(precision=1):
             for k, v in bodies.items():
                 print(f"global_icp:  {k}: angle={v.angle:.3f} xy={v.center}")
+
+        for k, v in bodies.items():
+            p = pieces_dict[k]
+            p.coords.angle = v.angle
+            p.coords.dxdy = v.center
+
+        # return
+
+        axes = [
+            icp.make_axis(np.array((0, -1), dtype=np.float), 0., True),
+            icp.make_axis(np.array((1, 0), dtype=np.float)),
+            icp.make_axis(np.array((0, 1), dtype=np.float)),
+            icp.make_axis(np.array((-1, 0), dtype=np.float), 0., True)
+        ]
+
+        def add_axis_correspondence(p):
+            for edge in p.piece.edges:
+                v = edge.line.pts[0] - edge.line.pts[1]
+                angle = np.arctan2(v[1], v[0]) - p.coords.angle
+                q = int((angle + 2 * math.pi) * 2 / math.pi + .5) % 4
+                print(f"{p.piece.label}: {angle=:.3f} {q=}")
+
+                src = bodies[p.piece.label]
+                src_vertex = p.piece.points[np.array(edge.fit_indexes)]
+                dst = axes[q]
+
+                icp.add_axis_correspondence(src, src_vertex, dst)
+
+        # make the initially fixed rigid body float, so that the fixed
+        # axes are the only fixed constraints
+        fixed_piece = pairs[0][1]
+        bodies[fixed_piece].fixed = False
+        bodies[fixed_piece].index = icp.n_cols
+        icp.n_cols += 3
+
+        for p in pieces_dict.values():
+            add_axis_correspondence(p)
+
+        icp.solve()
+
+        with np.printoptions(precision=1):
+            for k, v in bodies.items():
+                print(f"global_icp2: {k}: angle={v.angle:.3f} xy={v.center}")
+            for i, v in enumerate(axes):
+                print(f"global_icp2: axis={i}: value={v.value:.1f} fixed={v.fixed}")
 
         for k, v in bodies.items():
             p = pieces_dict[k]

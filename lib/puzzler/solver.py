@@ -1,6 +1,27 @@
 import puzzler
 import collections
 import numpy as np
+from dataclasses import dataclass
+
+@dataclass
+class BorderConstraint:
+    """BorderConstraint associates an edge, identified by a (label, edge_no) tuple,
+with an axis"""
+    edge: tuple[str,int]
+    axis: int
+
+@dataclass
+class TabConstraint:
+    """TabConstraint associates a pair of tabs, each identified by a (piece_label, tab_no) tuple"""
+    tabs: list[tuple[str,int]]
+
+AffineTransform = puzzler.align.AffineTransform
+
+@dataclass
+class Geometry:
+    width: float
+    height: float
+    coords: dict[str,AffineTransform]
 
 class BorderSolver:
 
@@ -25,23 +46,7 @@ class BorderSolver:
             elif n == 1:
                 self.edges.append(p.label)
 
-    def init_placement(self, start, border, scores):
-
-        coords = collections.defaultdict(AffineTransform)
-
-        assert 2 == len(self.pieces[border[0]].edges)
-        
-
-        for dst, src in pairwise_circular(border):
-
-            dst_m = coords[dst].get_transform().matrix
-            src_m = scores[dst][src][1].get_transform().matrix
-
-            coords[src] = AffineTransform.invert_matrix(dst_m @ src_m)
-
-        return coords
-
-    def init_placement_and_constraints(self, border):
+    def init_constraints(self, border):
 
         # assuming a rectangular puzzle, the edges are as shown:
         #
@@ -52,24 +57,44 @@ class BorderSolver:
         #    v          |
         #    +--- 0 --->+
         #
-        #  0 and 3 are fixed, coincident the X and Y axes
+        #  0 and 3 are fixed, coincident to the X and Y axes
         #  1 and 2 are floating, parallel to their respective axes
 
         axis = 3
+        constraints = []
         for label in border:
 
-            self.add_edge_constraint(label, self.pred[label].edge, axis)
+            constraints.append(EdgeConstraint((label, self.succ[label][0]), axis))
             if self.is_corner(label):
                 axis = (axis + 1) % 4
-                self.add_edge_constraint(label, self.succ[label].edge, axis)
-
-            coords[label] = self.align_edge_to_axis(label, self.succ[label].edge, axis)
+                constraints.append(EdgeConstraint((label, self.pred[label][0]), axis))
 
         for a, b in pairwise_circular(border):
-            self.add_piece_constraint(self.succ[a], self.pred[b])
+            constraints.append(TabConstraint([(a, self.pred[a][1]), (b, self.succ[b][1])]))
 
-    def align_edge_to_axis(label, edge_no, axis):
-        pass
+        return constraints
+
+    def init_placement(self, border, scores):
+
+        coords = dict()
+        start = border[0] # "I1"
+
+        p = self.pieces[start]
+        e = p.edges[self.pred[start][0]]
+        v = e.line.pts[0] - e.line.pts[1]
+        angle = -np.arctan2(v[1], v[0])
+
+        coords[start] = AffineTransform(angle)
+        
+        for prev, curr in itertools.pairwise(border):
+            assert prev in coords and curr not in coords
+
+            prev_m = coords[prev].get_transform().matrix
+            curr_m = scores[prev][curr][1].get_transform().matrix
+
+            coords[curr] = AffineTransform.invert_matrix(prev_m @ curr_m)
+
+        return Geometry(0., 0., coords)
 
     def estimate_puzzle_size(self, border):
 

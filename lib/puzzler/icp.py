@@ -11,9 +11,18 @@ class IteratedClosestPoint:
             self.center = center
             self.fixed  = fixed
 
+    class Axis:
+
+        def __init__(self, i, normal, value, fixed):
+            self.index = i
+            self.normal = normal
+            self.value = value
+            self.fixed = fixed
+
     def __init__(self):
         self.n_cols = 0
         self.bodies = []
+        self.axes = []
         self.data = []
         self.verbose = True
 
@@ -29,17 +38,38 @@ class IteratedClosestPoint:
         self.bodies.append(body)
 
         return body
+
+    def make_axis(self, normal, value=0., fixed=False):
+
+        i = None
+        if not fixed:
+            i = self.n_cols
+            self.n_cols += 1
+            value = 0.
+
+        axis = IteratedClosestPoint.Axis(i, normal, value, fixed)
+        self.axes.append(axis)
+
+        return axis
+
+    def add_axis_correspondence(self, src, src_vertex, dst):
+
+        assert isinstance(src, IteratedClosestPoint.RigidBody)
+        assert isinstance(dst, IteratedClosestPoint.Axis)
+        assert not src.fixed
+
+        self.data.append(('axis', src, src_vertex.copy(), dst))
         
-    def add_correspondence(self, src, src_vertex, dst, dst_vertex, dst_normal):
+    def add_body_correspondence(self, src, src_vertex, dst, dst_vertex, dst_normal):
 
         assert isinstance(src, IteratedClosestPoint.RigidBody)
         assert isinstance(dst, IteratedClosestPoint.RigidBody)
         assert not (src is dst)
         assert not src.fixed
 
-        self.data.append((src, src_vertex.copy(), dst, dst_vertex.copy(), dst_normal.copy()))
+        self.data.append(('body', src, src_vertex.copy(), dst, dst_vertex.copy(), dst_normal.copy()))
 
-    def data_to_A_b(self, src, src_vertex, dst, dst_vertex, dst_normal):
+    def body_data_to_A_b(self, src, src_vertex, dst, dst_vertex, dst_normal):
         
         def rotation_matrix(angle):
             c, s = math.cos(angle), math.sin(angle)
@@ -60,11 +90,40 @@ class IteratedClosestPoint:
         b_ij = np.sum((src_vertex - dst_vertex) * dst_normal, axis=1)
         n_ij = dst_normal
 
-        return (src.index, dst.index, a_ij, a_ji, n_ij, b_ij)
+        A_terms = [(src.index, a_ij), (src.index+1, n_ij[:,0]), (src.index+2, n_ij[:,1])]
+        if not dst.fixed:
+            A_terms += [(dst.index, -a_ji), (dst.index+1, -n_ij[:,0]), (dst.index+2, -n_ij[:,1])]
+
+        b_term = b_ij
+
+        return A_terms, b_term
+
+    def axis_data_to_A_b(self, src, src_vertex, dst):
+
+        def rotation_matrix(angle):
+            c, s = math.cos(angle), math.sin(angle)
+            return np.array(((c, -s), (s, c)))
+
+        src_matrix = rotation_matrix(src.angle)
+        src_vertex = src_vertex @ src_matrix.T
+
+        k = len(src_vertex)
+
+        A_terms = [(src.index, np.cross(src_vertex, dst.normal)),
+                   (src.index+1, np.full(k, dst.normal[0])),
+                   (src.index+2, np.full(k, dst.normal[1]))]
+        b_term = np.sum(src_vertex * dst.normal, axis=1)
+        
+        if dst.fixed:
+            b_term -= dst.value
+        else:
+            A_terms += [(dst.index, np.full(k, -1.))]
+
+        return A_terms, b_term
 
     def solve(self):
 
-        n_rows = sum(len(i[1]) for i in self.data)
+        n_rows = sum(len(i[2]) for i in self.data)
         n_cols = self.n_cols
 
         A = np.zeros((n_rows, n_cols))
@@ -72,20 +131,22 @@ class IteratedClosestPoint:
 
         r = 0
         for v in self.data:
-            
-            i, j, a_ij, a_ji, n_ij, b_ij = self.data_to_A_b(*v)
 
-            k = len(a_ij)
-            assert k == len(n_ij) == len(b_ij)
-            
-            A[r:r+k,i] = a_ij
-            A[r:r+k,i+1:i+3] = n_ij
+            if v[0] == 'body':
 
-            if j is not None:
-                A[r:r+k,j] = -a_ji
-                A[r:r+k,j+1:j+3] = -n_ij
+                A_terms, b_term = self.body_data_to_A_b(*v[1:])
 
-            b[r:r+k] = b_ij
+            elif v[0] == 'axis':
+
+                A_terms, b_term = self.axis_data_to_A_b(*v[1:])
+
+            for i, a in A_terms:
+                k = len(a)
+                A[r:r+k,i] = a
+
+            k = len(b_term)
+            b[r:r+k] = b_term
+
             r += k
 
         assert r == n_rows
@@ -102,14 +163,19 @@ class IteratedClosestPoint:
             with np.printoptions(precision=3, linewidth=120):
                 print(f"{x.shape=} {x=}")
 
-        c = 0
         for body in self.bodies:
 
             if body.fixed:
                 continue
 
-            body.angle  = body.angle - x[c]
-            body.center = - np.array((x[c+1], x[c+2]))
-            c += 3
+            body.angle  = body.angle - x[body.index]
+            body.center = - np.array((x[body.index+1], x[body.index+2]))
 
-        assert c == n_cols
+        for axis in self.axes:
+
+            if axis.fixed:
+                continue
+
+            axis.value = - x[axis.index]
+            
+            print(f"{axis.index=} {axis.value=:.3f}")
