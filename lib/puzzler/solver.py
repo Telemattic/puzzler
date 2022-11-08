@@ -189,9 +189,6 @@ class BorderSolver:
                 dst_desc = self.succ[dst]
                 src_desc = self.pred[src]
 
-                if dst in ('I1', 'I2') and src in ('I1', 'I2'):
-                    print(f"{dst=} {dst_desc=} {src=} {src_desc=}")
-
                 # tabs have to be complementary (one indent and one
                 # outdent)
                 if dst_piece.tabs[dst_desc[1]].indent == src_piece.tabs[src_desc[1]].indent:

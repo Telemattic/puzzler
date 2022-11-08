@@ -399,10 +399,6 @@ class Autofit:
     def __init__(self, pieces):
 
         self.pieces = pieces
-        self.src_fit_piece = None
-        self.src_fit_indexes = None
-        self.dst_fit_piece = None
-        self.dst_fit_indexes = None
 
     def align_border(self):
 
@@ -536,7 +532,7 @@ class Autofit:
             src = pieces_dict[i]
             dst = pieces_dict[j]
 
-            _, src_coords, src_fit_indexes, dst_fit_indexes = \
+            _, src_coords, src_fit_indexes, _ = \
                 dst.info.scores[src.piece.label]
             
             add_body_correspondence(dst, src, src_coords, src_fit_indexes)
