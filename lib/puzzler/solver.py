@@ -84,7 +84,7 @@ class BorderSolver:
     def init_placement(self, border, scores):
 
         coords = dict()
-        start = border[-1] # "I1"
+        start = border[0] # "I1"
 
         p = self.pieces[start]
         e = p.edges[self.pred[start][0]]
@@ -93,14 +93,11 @@ class BorderSolver:
 
         coords[start] = AffineTransform(angle)
 
-        reversed_border = border[::-1]
-        
-        for prev, curr in zip(reversed_border, reversed_border[1:]):
+        for prev, curr in zip(border, border[1:]):
             assert prev in coords and curr not in coords
 
             prev_m = coords[prev].get_transform().matrix
-
-            curr_m = scores[prev][curr][1].get_transform().matrix
+            curr_m = scores[curr][prev][1].get_transform().matrix
 
             coords[curr] = AffineTransform.invert_matrix(prev_m @ curr_m)
 
