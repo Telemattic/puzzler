@@ -1127,6 +1127,12 @@ class AlignTk:
         print(f"{border=}")
         bs.estimate_puzzle_size(border)
 
+        constraints = bs.init_constraints(border)
+        geometry = bs.init_placement(border, scores)
+
+        print(f"{constraints=}")
+        print(f"{geometry=}")
+
         print("Autofit!")
 
         af = Autofit(self.pieces)

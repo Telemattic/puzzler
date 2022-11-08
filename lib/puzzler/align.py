@@ -1,4 +1,5 @@
 import puzzler
+import math
 import numpy as np
 import cv2 as cv
 import scipy
@@ -34,7 +35,7 @@ def ring_slice(data, a, b):
     return np.concatenate((data[a:], data[:b])) if a >= b else data[a:b]
 
 def compute_rigid_transform(P, Q):
-        
+
     m = P.shape[0]
     assert P.shape == Q.shape == (m, 2)
 

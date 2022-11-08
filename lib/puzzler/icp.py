@@ -24,7 +24,7 @@ class IteratedClosestPoint:
         self.bodies = []
         self.axes = []
         self.data = []
-        self.verbose = True
+        self.verbose = False
 
     def make_rigid_body(self, angle, center=(0.,0.), fixed=False):
 
@@ -177,5 +177,6 @@ class IteratedClosestPoint:
                 continue
 
             axis.value = - x[axis.index]
-            
-            print(f"{axis.index=} {axis.value=:.3f}")
+
+            if self.verbose:
+                print(f"{axis.index=} {axis.value=:.3f}")

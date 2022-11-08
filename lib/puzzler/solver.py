@@ -1,7 +1,14 @@
 import puzzler
 import collections
+import itertools
 import numpy as np
 from dataclasses import dataclass
+
+def pairwise_circular(iterable):
+    # https://stackoverflow.com/questions/36917042/pairwise-circular-python-for-loop
+    a, b = itertools.tee(iterable)
+    first = next(b, None)
+    return zip(a, itertools.chain(b, (first,)))
 
 @dataclass
 class BorderConstraint:
@@ -64,10 +71,10 @@ class BorderSolver:
         constraints = []
         for label in border:
 
-            constraints.append(EdgeConstraint((label, self.succ[label][0]), axis))
-            if self.is_corner(label):
+            constraints.append(BorderConstraint((label, self.succ[label][0]), axis))
+            if label in self.corners:
                 axis = (axis + 1) % 4
-                constraints.append(EdgeConstraint((label, self.pred[label][0]), axis))
+                constraints.append(BorderConstraint((label, self.pred[label][0]), axis))
 
         for a, b in pairwise_circular(border):
             constraints.append(TabConstraint([(a, self.pred[a][1]), (b, self.succ[b][1])]))
@@ -77,7 +84,7 @@ class BorderSolver:
     def init_placement(self, border, scores):
 
         coords = dict()
-        start = border[0] # "I1"
+        start = border[-1] # "I1"
 
         p = self.pieces[start]
         e = p.edges[self.pred[start][0]]
@@ -85,11 +92,14 @@ class BorderSolver:
         angle = -np.arctan2(v[1], v[0])
 
         coords[start] = AffineTransform(angle)
+
+        reversed_border = border[::-1]
         
-        for prev, curr in itertools.pairwise(border):
+        for prev, curr in zip(reversed_border, reversed_border[1:]):
             assert prev in coords and curr not in coords
 
             prev_m = coords[prev].get_transform().matrix
+
             curr_m = scores[prev][curr][1].get_transform().matrix
 
             coords[curr] = AffineTransform.invert_matrix(prev_m @ curr_m)
@@ -181,6 +191,9 @@ class BorderSolver:
 
                 dst_desc = self.succ[dst]
                 src_desc = self.pred[src]
+
+                if dst in ('I1', 'I2') and src in ('I1', 'I2'):
+                    print(f"{dst=} {dst_desc=} {src=} {src_desc=}")
 
                 # tabs have to be complementary (one indent and one
                 # outdent)
