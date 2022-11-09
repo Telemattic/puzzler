@@ -1124,24 +1124,34 @@ class AlignTk:
         bs.estimate_puzzle_size(border)
 
         constraints = bs.init_constraints(border)
-        geometry = bs.init_placement(border, scores)
+        geometry = bs.init_placement(border)
 
         print(f"{constraints=}")
         print(f"{geometry=}")
 
-        print("Autofit!")
+        for i in self.pieces:
+            coords = geometry.coords.get(i.piece.label)
+            if coords:
+                print(i.piece.label)
+                i.coords = coords
 
-        af = Autofit(self.pieces)
-        pairs = af.align_border()
-        af.global_icp(pairs)
+        # self.render()
+
+        # return
+
+        # print("Autofit!")
+
+        # af = Autofit(self.pieces)
+        # pairs = af.align_border()
+        # af.global_icp(pairs)
 
         pieces_dict = dict((i.piece.label, i) for i in self.pieces)
 
-        border = [i for i, _ in pairs]
+        # border = [i for i, _ in pairs]
         
         fc = FrontierComputer(pieces_dict)
 
-        self.frontier = fc.compute_from_border(border)
+        self.frontier = fc.compute_from_border(border[::-1])
 
         fe = FrontierExplorer(pieces_dict)
         corners = fe.find_interesting_corners(self.frontier)

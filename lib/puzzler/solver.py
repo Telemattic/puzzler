@@ -1,6 +1,7 @@
 import puzzler
 import collections
 import itertools
+import math
 import numpy as np
 from dataclasses import dataclass
 
@@ -81,7 +82,7 @@ class BorderSolver:
 
         return constraints
 
-    def init_placement(self, border, scores):
+    def init_placement_X(self, border, scores):
 
         coords = dict()
         start = border[0] # "I1"
@@ -99,10 +100,61 @@ class BorderSolver:
             prev_m = coords[prev].get_transform().matrix
             curr_m = scores[curr][prev][1].get_transform().matrix
 
-            coords[curr] = AffineTransform.invert_matrix(prev_m @ curr_m)
+            coords[curr] = AffineTransform.invert_matrix(curr_m @ prev_m)
 
         return Geometry(0., 0., coords)
 
+    def init_placement(self, border):
+
+        icp = puzzler.icp.IteratedClosestPoint()
+        
+        axes = [
+            icp.make_axis(np.array((0, -1), dtype=np.float), 0., True),
+            icp.make_axis(np.array((1, 0), dtype=np.float)),
+            icp.make_axis(np.array((0, 1), dtype=np.float)),
+            icp.make_axis(np.array((-1, 0), dtype=np.float), 0., True)
+        ]
+
+        bodies = dict()
+
+        axis_no = 3
+
+        for i in border:
+            
+            p = self.pieces[i]
+
+            e = p.edges[self.succ[i][0]]
+            v = e.line.pts[0] - e.line.pts[1]
+            angle = axis_no * math.pi / 2 - np.arctan2(v[1], v[0])
+            
+            bodies[i] = icp.make_rigid_body(angle)
+            icp.add_axis_correspondence(bodies[i], e.line.pts, axes[axis_no])
+
+            if self.pred[i][0] != self.succ[i][0]:
+                axis_no = (axis_no + 1) % 4
+                e = p.edges[self.pred[i][0]]
+                icp.add_axis_correspondence(bodies[i], e.line.pts, axes[axis_no])
+
+        for prev, curr in pairwise_circular(border):
+
+            p0 = self.pieces[prev]
+            p1 = self.pieces[curr]
+
+            v0 = p0.tabs[self.pred[prev][1]].ellipse.center
+            v1 = p1.tabs[self.succ[curr][1]].ellipse.center
+
+            dst_normal = puzzler.math.unit_vector(v1)
+
+            icp.add_body_correspondence(
+                bodies[prev], np.atleast_2d(v0),
+                bodies[curr], np.atleast_2d(v1), np.atleast_2d(dst_normal))
+
+        icp.solve()
+
+        coords = {k: AffineTransform(v.angle, v.center) for k, v in bodies.items()}
+
+        return Geometry(0., 0., coords)
+    
     def estimate_puzzle_size(self, border):
 
         axis = 3
