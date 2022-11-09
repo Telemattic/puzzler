@@ -2,7 +2,7 @@ import puzzler
 
 import numpy as np
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class Puzzle:
@@ -19,12 +19,18 @@ class Puzzle:
         class Source:
             id: str
             rect: tuple[int, int, int, int]
+
+        def __post_init__(self):
+            self.bbox = (np.min(self.points, axis=0), np.max(self.points, axis=0))
+            self.radius = np.max(np.linalg.norm(self.points, axis=1))
             
         label:  str
         source: Source
         points: np.array
         tabs:   list[puzzler.feature.Tab]
         edges:  list[puzzler.feature.Edge]
+        bbox:   tuple[np.array, np.array] = field(init=False)
+        radius: float = field(init=False)
 
     scans: dict[str, Scan]
     pieces: list[Piece]

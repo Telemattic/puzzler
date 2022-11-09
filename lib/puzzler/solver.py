@@ -3,6 +3,7 @@ import collections
 import itertools
 import math
 import numpy as np
+import operator
 from dataclasses import dataclass
 
 def pairwise_circular(iterable):
@@ -21,7 +22,8 @@ with an axis"""
 @dataclass
 class TabConstraint:
     """TabConstraint associates a pair of tabs, each identified by a (piece_label, tab_no) tuple"""
-    tabs: list[tuple[str,int]]
+    a: tuple[str,int]
+    b: tuple[str,int]
 
 AffineTransform = puzzler.align.AffineTransform
 
@@ -78,7 +80,7 @@ class BorderSolver:
                 constraints.append(BorderConstraint((label, self.pred[label][0]), axis))
 
         for a, b in pairwise_circular(border):
-            constraints.append(TabConstraint([(a, self.pred[a][1]), (b, self.succ[b][1])]))
+            constraints.append(TabConstraint((a, self.pred[a][1]), (b, self.succ[b][1])))
 
         return constraints
 
@@ -271,3 +273,169 @@ class BorderSolver:
             tab_pred = i
 
         return (edge_pred, tab_pred), (edge_succ, tab_succ)
+
+class OverlappingPieces:
+
+    def __init__(self, pieces, coords):
+        labels = []
+        centers = []
+        radii = []
+        for k, v in pieces.items():
+            if k not in coords:
+                continue
+            labels.append(k)
+            centers.append(coords[k].dxdy)
+            radii.append(v.radius)
+
+        self.labels = labels
+        self.centers = np.array(centers)
+        self.radii = np.array(radii)
+
+    def __call__(self, center, radius):
+        dist = np.linalg.norm(center - self.centers, axis=1)
+        ii = np.nonzero(self.radii + radius > dist)[0]
+        return np.take(self.labels, ii)
+                
+class ClosestPieces:
+
+    def __init__(self, pieces, coords):
+        self.pieces = pieces
+        self.coords = coords
+        self.overlaps = OverlappingPieces(pieces, coords)
+        self.max_dist = 50
+
+    def __call__(self, src_label):
+
+        src_piece = self.pieces[src_label]
+        src_coords = self.coords[src_label]
+        num_points = len(src_piece.points)
+        
+        dst_labels = self.overlaps(src_coords.dxdy, src_piece.radius + self.max_dist)
+
+        ret_dist = np.full(num_points, self.max_dist)
+        ret_no = np.full(num_points, len(dst_labels))
+
+        for dst_no, dst_label in enumerate(dst_labels):
+
+            if dst_label == src_label:
+                continue
+
+            dst_piece = self.pieces[dst_label]
+            dst_coords = self.coords[dst_label]
+
+            di = puzzler.align.DistanceImage(dst_piece)
+            
+            transform = puzzler.render.Transform()
+            transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
+            transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+
+            src_points = transform.apply_v2(src_piece.points)
+            dst_dist = di.query(src_points)
+
+            ii = np.nonzero(dst_dist < ret_dist)[0]
+            if 0 == len(ii):
+                continue
+            
+            ret_dist[ii] = dst_dist[ii]
+            ret_no[ii] = dst_no
+
+        retval = dict()
+        for dst_no, dst_label in enumerate(dst_labels):
+
+            ii = np.nonzero(ret_no == dst_no)[0]
+            if 0 == len(ii):
+                continue
+
+            ranges = []
+            for key, group in itertools.groupby(enumerate(ii), lambda x: x[0] - x[1]):
+                group = list(map(operator.itemgetter(1), group))
+                ranges.append((group[0], group[-1]))
+
+            retval[(src_label, dst_label)] = ranges
+
+        return retval
+    
+class ClosestPoints:
+
+    def __init__(self, pieces, coords, kdtrees):
+        self.pieces = pieces
+        self.coords = coords
+        self.kdtrees = kdtrees
+        self.overlaps = OverlappingPieces(pieces, coords)
+        self.max_dist = 50
+
+    def __call__(self, src_label):
+
+        # these are a function of the piece geometry and nothing
+        # external perhaps?
+        src_indexes = self.get_point_indexes(src_label)
+        src_points = self.pieces[src_label].points[src_points]
+        num_points = len(src_points)
+
+        dst_labels = self.overlaps(src_coords.dxdy, src_piece.radius + self.max_dist)
+
+        ret_dist = np.full(num_points, self.max_dist)
+        ret_no = np.full(num_points, len(dst_labels))
+        ret_indexes = np.zeros(num_points)
+
+        for dst_no, dst_label in enumerate(dst_labels):
+
+            if dst_label == src_label:
+                continue
+
+            xform = self.src_to_dst_transform(src_label, dst_label)
+            dst_dist, dst_index = dst_kdtree.query(xform.apply_v2(src_points))
+
+            ii = np.nonzero(dst_dist < ret_dist)
+            if 0 == len(ii):
+                continue
+            
+            ret_dist[ii] = dst_dist[ii]
+            ret_no[ii] = dst_no
+            ret_indexes[ii] = dst_index[ii]
+
+        retval = dict()
+        for dst_no, dst_label in enumerate(dst_labels):
+
+            ii = np.nonzero(ret_no == dst_no)
+            if 0 == len(ii):
+                continue
+
+            retval[(src_label, dst_label)] = (src_indexes[ii], ret_indexes[ii])
+
+        return retval
+    
+class AdjacencyComputer:
+
+    def __init__(self, pieces, constraints, geometry):
+        self.pieces = pieces
+        self.constraints = constraints
+        self.geometry = geometry
+
+        self.border_constraints = collections.defaultdict(list)
+        self.tab_constraints = collections.defaultdict(list)
+
+        for c in self.constraints:
+            if isinstance(c, BorderConstraint):
+                self.border_constraints[c.edge[0]].append(c)
+            elif isinstance(c, TabConstraint):
+                self.tab_constraints[c.a[0]].append(c)
+                self.tab_constraints[c.b[0]].append(TabConstraint(c.b, c.a))
+
+        self.closest = ClosestPieces(self.pieces, self.geometry.coords)
+
+    def compute_adjacency(self, label):
+        
+        retval = []
+        
+        p = self.pieces[label]
+
+        for c in self.border_constraints[label]:
+            
+            edge = p.edges[c.edge[1]]
+            axis = c.axis
+            span = edge.fit_indexes
+            
+            retval.append((span, axis))
+
+        return (retval, self.closest(label))

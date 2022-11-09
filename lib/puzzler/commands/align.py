@@ -257,8 +257,6 @@ class Piece:
     def __init__(self, piece):
 
         self.piece = piece
-        self.bbox = (np.min(self.piece.points, axis=0), np.max(self.piece.points, axis=0))
-        self.radius = np.max(np.linalg.norm(self.piece.points, axis=1))
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
@@ -347,7 +345,7 @@ class FrontierComputer:
         a, b = curr.piece.tabs[a].tangent_indexes[1], curr.piece.tabs[b].tangent_indexes[0]
         n = len(curr_points)
 
-        thresh = 5
+        thresh = 25
 
         print(f"{prev_label=} {curr_label=}")
         print(f"  {a=} {b=} {n=}")
@@ -654,7 +652,7 @@ class PuzzleRenderer:
                 
             r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
 
-            if not self.test_bbox(p.bbox):
+            if not self.test_bbox(p.piece.bbox):
                 return
             
             if p.piece.edges and False:
@@ -1148,6 +1146,10 @@ class AlignTk:
         pieces_dict = dict((i.piece.label, i) for i in self.pieces)
 
         # border = [i for i, _ in pairs]
+
+        # kdtrees = {i.piece.label: scipy.spatial.KDTree(i.piece.points) for i in self.pieces}
+        ac = puzzler.solver.AdjacencyComputer(bs.pieces, constraints, geometry)
+        print(f"{ac.compute_adjacency('A1')=}")
         
         fc = FrontierComputer(pieces_dict)
 
