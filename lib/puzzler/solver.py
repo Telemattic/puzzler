@@ -154,8 +154,10 @@ class BorderSolver:
         icp.solve()
 
         coords = {k: AffineTransform(v.angle, v.center) for k, v in bodies.items()}
+        width = axes[1].value
+        height = axes[2].value
 
-        return Geometry(0., 0., coords)
+        return Geometry(width, height, coords)
     
     def estimate_puzzle_size(self, border):
 
@@ -298,22 +300,24 @@ class OverlappingPieces:
                 
 class ClosestPieces:
 
-    def __init__(self, pieces, coords):
+    def __init__(self, pieces, geometry):
         self.pieces = pieces
-        self.coords = coords
-        self.overlaps = OverlappingPieces(pieces, coords)
+        self.geometry = geometry
+        self.overlaps = OverlappingPieces(pieces, geometry.coords)
         self.max_dist = 50
+
+        print(f"ClosestPieces: width={self.geometry.width:.1f} height={self.geometry.height:.1f}")
 
     def __call__(self, src_label):
 
         src_piece = self.pieces[src_label]
-        src_coords = self.coords[src_label]
+        src_coords = self.geometry.coords[src_label]
         num_points = len(src_piece.points)
         
-        dst_labels = self.overlaps(src_coords.dxdy, src_piece.radius + self.max_dist)
+        dst_labels = self.overlaps(src_coords.dxdy, src_piece.radius + self.max_dist).tolist()
 
         ret_dist = np.full(num_points, self.max_dist)
-        ret_no = np.full(num_points, len(dst_labels))
+        ret_no = np.full(num_points, -1)
 
         for dst_no, dst_label in enumerate(dst_labels):
 
@@ -321,7 +325,7 @@ class ClosestPieces:
                 continue
 
             dst_piece = self.pieces[dst_label]
-            dst_coords = self.coords[dst_label]
+            dst_coords = self.geometry.coords[dst_label]
 
             di = puzzler.align.DistanceImage(dst_piece)
             
@@ -338,6 +342,43 @@ class ClosestPieces:
             
             ret_dist[ii] = dst_dist[ii]
             ret_no[ii] = dst_no
+
+        transform = puzzler.render.Transform()
+        transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+
+        src_points = transform.apply_v2(src_piece.points)
+
+        # axis 0
+        dst_dist = np.abs(src_points[:,1])
+        ii = np.nonzero(dst_dist < ret_dist)[0]
+        if len(ii):
+            ret_dist[ii] = dst_dist[ii]
+            ret_no[ii] = len(dst_labels)
+            dst_labels.append('axis0')
+
+        # axis 1
+        dst_dist = np.abs(src_points[:,0] - self.geometry.width)
+        ii = np.nonzero(dst_dist < ret_dist)[0]
+        if len(ii):
+            ret_dist[ii] = dst_dist[ii]
+            ret_no[ii] = len(dst_labels)
+            dst_labels.append('axis1')
+
+        # axis 2
+        dst_dist = np.abs(src_points[:,1] - self.geometry.height)
+        ii = np.nonzero(dst_dist < ret_dist)[0]
+        if len(ii):
+            ret_dist[ii] = dst_dist[ii]
+            ret_no[ii] = len(dst_labels)
+            dst_labels.append('axis2')
+
+        # axis 3
+        dst_dist = np.abs(src_points[:,0])
+        ii = np.nonzero(dst_dist < ret_dist)[0]
+        if len(ii):
+            ret_dist[ii] = dst_dist[ii]
+            ret_no[ii] = len(dst_labels)
+            dst_labels.append('axis3')
 
         retval = dict()
         for dst_no, dst_label in enumerate(dst_labels):
@@ -422,7 +463,7 @@ class AdjacencyComputer:
                 self.tab_constraints[c.a[0]].append(c)
                 self.tab_constraints[c.b[0]].append(TabConstraint(c.b, c.a))
 
-        self.closest = ClosestPieces(self.pieces, self.geometry.coords)
+        self.closest = ClosestPieces(self.pieces, self.geometry)
 
     def compute_adjacency(self, label):
         
