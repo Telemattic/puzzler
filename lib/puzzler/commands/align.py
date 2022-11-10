@@ -600,6 +600,7 @@ class PuzzleRenderer:
         self.pieces = pieces
         self.selection = None
         self.frontier = []
+        self.adjacency = dict()
         self.renderer = None
         self.render_fast = None
         self.canvas_w = int(self.canvas.cget('width'))
@@ -612,6 +613,9 @@ class PuzzleRenderer:
         self.renderer.transform.multiply(self.camera.matrix)
 
         self.render_fast = render_fast
+
+        if self.adjacency:
+            self.draw_adjacency(self.adjacency)
 
         colors = ['red', 'green', 'blue']
         for i, piece in enumerate(self.pieces):
@@ -743,8 +747,30 @@ class PuzzleRenderer:
             with puzzler.render.save_matrix(r.transform):
                 r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
                 r.draw_points(p.piece.points[b], fill='purple', radius=5)
-            
 
+    def draw_adjacency(self, adjacency):
+        
+        self.piece_dict = dict((i.piece.label, i) for i in self.pieces)
+        
+        fills = ['purple', 'pink', 'yellow', 'orange', 'cyan']
+        i = 0
+        
+        for k, v in adjacency.items():
+            self.draw_adjacency_list(k, v, fills[i])
+            i = (i + 1) % len(fills)
+
+    def draw_adjacency_list(self, k, v, fill):
+
+        src, dst = k
+        p = self.piece_dict[src]
+
+        tag = src + ":" + dst
+
+        r = self.renderer
+        with puzzler.render.save_matrix(r.transform):
+            r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+            for a, b in v:
+                r.draw_lines(p.piece.points[a:b+1], fill=fill, width=8, tag=tag)
 
 class AlignTk:
 
@@ -758,6 +784,7 @@ class AlignTk:
         self.keep1 = None
 
         self.frontier = None
+        self.adjacency = None
 
         self._init_ui(parent)
 
@@ -805,6 +832,7 @@ class AlignTk:
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
         r.frontier = self.frontier
+        r.adjacency = self.adjacency
         r.render(True)
 
         self.render_full += 1
@@ -818,6 +846,7 @@ class AlignTk:
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
         r.frontier = self.frontier
+        r.adjacency = self.adjacency
         r.render(False)
 
         self.render_full = 0
@@ -1149,7 +1178,8 @@ class AlignTk:
 
         # kdtrees = {i.piece.label: scipy.spatial.KDTree(i.piece.points) for i in self.pieces}
         ac = puzzler.solver.AdjacencyComputer(bs.pieces, constraints, geometry)
-        print(f"{ac.compute_adjacency('A1')=}")
+        self.adjacency = ac.compute_adjacency('A1') | ac.compute_adjacency('A2')
+        print(self.adjacency)
         
         fc = FrontierComputer(pieces_dict)
 

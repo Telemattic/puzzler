@@ -466,6 +466,8 @@ class AdjacencyComputer:
         self.closest = ClosestPieces(self.pieces, self.geometry)
 
     def compute_adjacency(self, label):
+
+        return self.closest(label)
         
         retval = []
         
