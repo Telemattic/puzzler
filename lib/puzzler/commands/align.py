@@ -197,40 +197,6 @@ class ApproxPoly:
         self.perimeter = perimeter
         self.indexes = poly
 
-    def normal_at_index(self, perimeter_index):
-
-        j = bisect.bisect_left(self.indexes, perimeter_index)
-
-        n = len(self.indexes)
-        a = self.indexes[j-1]
-        b = self.indexes[j%n]
-
-        # print(f"normal_at_index: {perimeter_index=} -> {j=} {n=} {a=} {b=}")
-        
-        p1 = self.perimeter.points[a]
-        p2 = self.perimeter.points[b]
-        uv = p2 - p1
-        # print(f"{p1=} {p2=} {uv=} {np.linalg.norm(uv)=} {uv / np.linalg.norm(uv)=}")
-        uv = uv / np.linalg.norm(uv)
-        return uv @ np.array(((0., 1.), (-1., 0.)))
-
-    def distance_to_line_equation(self, perimeter_index):
-
-        j = bisect.bisect_left(self.indexes, i)
-        
-        x1, y1 = self.perimeter.points[j]
-        x2, y2 = self.perimeter.points[(j+1) % len(self.indexes)]
-
-        a = y1 - y2
-        b = x2 - x1
-        c = x1 * y2 - x2 * y1
-        inv_l = 1. / math.hypot(a, b)
-
-        assert a * x1 + b * y1 + c == 0
-        assert a * x2 + b * y2 + c == 0
-
-        return (a * inv_l, b * inv_l, c * inv_l)
-
 class RingRange:
 
     def __init__(self, a, b, n):
@@ -264,10 +230,6 @@ class Piece:
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
-
-    def normal_at_index(self, i):
-        uv = self.approx.normal_at_index(i)
-        return uv @ self.coords.rot_matrix().T
 
 class FrontierExplorer:
 
@@ -485,12 +447,10 @@ class AlignTk:
 
     def __init__(self, parent, pieces):
         self.pieces = pieces
+        self.geometry = None
 
         self.draggable = None
         self.selection = None
-
-        self.keep0 = None
-        self.keep1 = None
 
         self.frontier = None
         self.adjacency = None
