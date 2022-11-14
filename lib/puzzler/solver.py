@@ -392,7 +392,14 @@ class ClosestPieces:
                 group = list(map(operator.itemgetter(1), group))
                 ranges.append((group[0], group[-1]))
 
-            retval[(src_label, dst_label)] = ranges
+            if len(ranges) >= 2:
+                head = ranges[0]
+                tail = ranges[-1]
+                if 0 == head[0] and len(src_points)-1 == tail[1]:
+                    ranges[0] = (tail[0], head[1])
+                    ranges.pop()
+
+            retval[dst_label] = ranges
 
         return retval
     

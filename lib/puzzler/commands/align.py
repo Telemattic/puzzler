@@ -755,9 +755,10 @@ class PuzzleRenderer:
         fills = ['purple', 'pink', 'yellow', 'orange', 'cyan']
         i = 0
         
-        for k, v in adjacency.items():
-            self.draw_adjacency_list(k, v, fills[i])
-            i = (i + 1) % len(fills)
+        for k1, v1 in adjacency.items():
+            for k2, v2 in v1.items():
+                self.draw_adjacency_list((k1, k2), v2, fills[i])
+                i = (i + 1) % len(fills)
 
     def draw_adjacency_list(self, k, v, fill):
 
@@ -770,7 +771,12 @@ class PuzzleRenderer:
         with puzzler.render.save_matrix(r.transform):
             r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
             for a, b in v:
-                r.draw_lines(p.piece.points[a:b+1], fill=fill, width=8, tag=tag)
+                points = ring_slice(p.piece.points, a, b+1)
+                if len(points) < 2:
+                    # print(f"{src=} {dst=} {a=} {b=} {points=}")
+                    r.draw_points(points, fill=fill, radius=8, tag=tag)
+                else:
+                    r.draw_lines(points, fill=fill, width=8, tag=tag)
 
 class AlignTk:
 
@@ -1178,7 +1184,9 @@ class AlignTk:
 
         # kdtrees = {i.piece.label: scipy.spatial.KDTree(i.piece.points) for i in self.pieces}
         ac = puzzler.solver.AdjacencyComputer(bs.pieces, constraints, geometry)
-        self.adjacency = ac.compute_adjacency('A1') | ac.compute_adjacency('A2')
+        self.adjacency = dict()
+        for label in geometry.coords:
+            self.adjacency[label] = ac.compute_adjacency(label)
         print(self.adjacency)
         
         fc = FrontierComputer(pieces_dict)
