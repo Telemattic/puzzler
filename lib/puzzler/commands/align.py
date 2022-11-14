@@ -245,6 +245,10 @@ class RingRange:
     def __contains__(self, i):
         a, b = self.a, self.b
         return (a <= i < self.n or 0 <= i < b) if a >= b else (a <= i < b)
+
+    def __len__(self):
+        a, b = self.a, self.b
+        return (b - a) if b > a else (b + self.n - a)
         
 def ring_slice(data, a, b):
     return np.concatenate((data[a:], data[:b])) if a >= b else data[a:b]
@@ -260,100 +264,10 @@ class Piece:
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
         self.coords = AffineTransform()
-        self.info   = None
 
     def normal_at_index(self, i):
         uv = self.approx.normal_at_index(i)
         return uv @ self.coords.rot_matrix().T
-
-@dataclass
-class BorderInfo:
-
-    pred: tuple
-    succ: tuple
-    scores: dict[str,float] = field(default_factory=dict)
-
-def make_border_info(piece):
-
-    if piece.label == "I1":
-        piece.edges = piece.edges[::-1]
-        
-    edges = piece.edges
-
-    edge_next = len(edges) - 1
-    tab_next = 0
-    for i, tab in enumerate(piece.tabs):
-        if edges[edge_next].fit_indexes < tab.fit_indexes:
-            tab_next = i
-            break
-
-    edge_prev = 0
-    tab_prev = len(piece.tabs) - 1
-    for i, tab in enumerate(piece.tabs):
-        if edges[edge_prev].fit_indexes < tab.fit_indexes:
-            break
-        tab_prev = i
-
-    return BorderInfo((edge_prev, tab_prev), (edge_next, tab_next))
-
-class FrontierComputer:
-
-    def __init__(self, pieces):
-        self.pieces = pieces
-
-    def compute_from_border(self, border):
-
-        assert self.is_valid_border(border)
-
-        n = len(border)
-        start = [None] * n
-        end = [None] * n
-        for i in range(n):
-            start[i-1], end[i] = self.find_cut(border[i-1], border[i])
-
-        return list(zip(border, start, end))[::-1]
-
-    def is_valid_border(self, border):
-
-        for i in border:
-            p = self.pieces.get(i)
-            assert p and isinstance(p.info, BorderInfo)
-
-        # should also check that each piece's tab_next connects to the
-        # tab_prev on the next piece
-        
-        return True
-
-    def find_cut(self, prev_label, curr_label):
-
-        prev, curr = self.pieces[prev_label], self.pieces[curr_label]
-
-        di = puzzler.align.DistanceImage(prev.piece)
-
-        t = puzzler.render.Transform()
-        t.rotate(-prev.coords.angle).translate(-prev.coords.dxdy)
-        t.translate(curr.coords.dxdy).rotate(curr.coords.angle)
-
-        curr_points = t.apply_v2(curr.piece.points)
-        # with np.printoptions(precision=1):
-        #    print(f"{curr.piece.points}")
-        #    print(f"{curr_points=}")
-            
-        d = di.query(curr_points)
-
-        a, b = curr.info.succ[1], curr.info.pred[1]
-        a, b = curr.piece.tabs[a].tangent_indexes[1], curr.piece.tabs[b].tangent_indexes[0]
-        n = len(curr_points)
-
-        thresh = 25
-
-        print(f"{prev_label=} {curr_label=}")
-        print(f"  {a=} {b=} {n=}")
-        curr_start = next(itertools.dropwhile(lambda i: d[i] > thresh, ring_range(a, b, n)), b)
-        prev_end = np.argmin(np.linalg.norm(prev.piece.points - curr_points[curr_start], axis=1))
-        print(f"  {prev_end=} {curr_start=}")
-
-        return (prev_end, curr_start)
 
 class FrontierExplorer:
 
@@ -502,17 +416,6 @@ class PuzzleRenderer:
                 with puzzler.render.save_matrix(r.transform):
                     r.transform.rotate(i * math.pi / 2)
                     r.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
-
-            if p.info:
-                tabs = p.piece.tabs
-                edges = p.piece.edges
-                r.draw_text(tabs[p.info.succ[1]].ellipse.center, "n")
-                r.draw_text(tabs[p.info.pred[1]].ellipse.center, "p")
-                if p.info.succ[0] != p.info.pred[0]:
-                    r.draw_text(np.mean(edges[p.info.succ[0]].line.pts, axis=0), "en")
-                    r.draw_text(np.mean(edges[p.info.pred[0]].line.pts, axis=0), "ep")
-                else:
-                    r.draw_text(np.mean(edges[p.info.succ[0]].line.pts, axis=0), "e")
                     
     def draw_frontier(self, frontier):
 
@@ -736,6 +639,8 @@ class AlignTk:
 
         aligner = puzzler.align.MultiAligner([(piece_dict[i].piece, j, piece_dict[i].coords) for i, j in dsts])
 
+        best_fit = None
+
         for i, j in enumerate(allways):
             
             print(i, j)
@@ -752,8 +657,17 @@ class AlignTk:
             mse = aligner.measure_fit(src_piece.piece, src_tabs, src_coords)
 
             print(f"  fit: angle={src_coords.angle:3f} xy={src_coords.dxdy} {mse=:.1f}")
+
+            if best_fit is None or mse < best_fit[0]:
+                best_fit = (mse, src_piece.piece.label, src_coords)
             
         print(f"{len(scores[0])=} {len(scores[1])=} {len(allways)=}")
+
+        print(f"{best_fit=}")
+
+        if best_fit:
+            piece_dict[best_fit[1]].coords = best_fit[2]
+            self.render()
                 
     def do_solve(self):
 
@@ -789,9 +703,12 @@ class AlignTk:
             self.adjacency[label] = ac.compute_adjacency(label)
         print(self.adjacency)
         
-        fc = FrontierComputer(pieces_dict)
+        self.frontier = []
+        for k, v in self.adjacency.items():
+            for r in v.get('none', []):
+                self.frontier.append((k, *r))
 
-        self.frontier = fc.compute_from_border(border[::-1])
+        print(self.frontier)
 
         fe = FrontierExplorer(pieces_dict)
         corners = fe.find_interesting_corners(self.frontier)
@@ -845,7 +762,7 @@ class AlignTk:
         b1 = ttk.Button(self.controls, text='Solve!', command=self.do_solve)
         b1.grid(column=0, row=0, sticky=W)
 
-        b2 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment)
+        b2 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment_B2)
         b2.grid(column=1, row=0, sticky=W)
 
         self.var_label = StringVar(value="x,y")
@@ -863,6 +780,10 @@ def align_ui(args):
     for p in puzzle.pieces:
         by_label[p.label] = p
 
+    if 'I1' in by_label:
+        p = by_label['I1']
+        p.edges = p.edges[::-1]
+
     labels = set(args.labels)
 
     if args.edges:
@@ -872,9 +793,6 @@ def align_ui(args):
         labels |= set(by_label.keys())
 
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
-    for piece in pieces:
-        if piece.piece.edges:
-            piece.info = make_border_info(piece.piece)
 
     rows = set()
     cols = set()

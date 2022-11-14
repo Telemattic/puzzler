@@ -380,12 +380,11 @@ class ClosestPieces:
             ret_no[ii] = len(dst_labels)
             dst_labels.append('axis3')
 
-        retval = dict()
-        for dst_no, dst_label in enumerate(dst_labels):
-
+        def ranges_for_dst_no(dst_no):
+            
             ii = np.nonzero(ret_no == dst_no)[0]
             if 0 == len(ii):
-                continue
+                return []
 
             ranges = []
             for key, group in itertools.groupby(enumerate(ii), lambda x: x[0] - x[1]):
@@ -399,7 +398,19 @@ class ClosestPieces:
                     ranges[0] = (tail[0], head[1])
                     ranges.pop()
 
-            retval[dst_label] = ranges
+            return ranges
+
+        retval = dict()
+        
+        for dst_no, dst_label in enumerate(dst_labels):
+
+            ranges = ranges_for_dst_no(dst_no)
+            if ranges:
+                retval[dst_label] = ranges
+
+        ranges = ranges_for_dst_no(-1)
+        if ranges:
+            retval['none'] = ranges
 
         return retval
     
