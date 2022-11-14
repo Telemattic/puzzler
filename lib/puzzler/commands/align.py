@@ -233,15 +233,16 @@ class Piece:
 
 class FrontierExplorer:
 
-    def __init__(self, pieces):
+    def __init__(self, pieces, geometry):
         self.pieces = pieces
+        self.geometry = geometry
 
     def find_tabs(self, frontier):
 
         retval = []
         
         for l, a, b in frontier:
-            p = self.pieces[l].piece
+            p = self.pieces[l]
             rr = RingRange(a, b, len(p.points))
             for i, tab in enumerate(p.tabs):
                 if all(j in rr for j in tab.tangent_indexes):
@@ -259,14 +260,14 @@ class FrontierExplorer:
     def get_tab_direction(self, tab, rotate=True):
 
         p = self.pieces[tab[0]]
-        t = p.piece.tabs[tab[1]]
-        v = p.piece.points[np.array(t.tangent_indexes)] - t.ellipse.center
+        t = p.tabs[tab[1]]
+        v = p.points[np.array(t.tangent_indexes)] - t.ellipse.center
         v = v / np.linalg.norm(v, axis=1)
         v = np.sum(v, axis=0)
         v = v / np.linalg.norm(v)
         if not t.indent:
             v = -v
-        return puzzler.math.rotate(v, p.coords.angle) if rotate else v
+        return puzzler.math.rotate(v, self.geometry.coords[p.label].angle) if rotate else v
 
 class PuzzleRenderer:
 
@@ -381,15 +382,17 @@ class PuzzleRenderer:
                     
     def draw_frontier(self, frontier):
 
-        piece_dict = dict((i.piece.label, i) for i in self.pieces)
+        piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
         
-        fe = FrontierExplorer(piece_dict)
+        fe = FrontierExplorer(piece_dict, None)
 
         tabs = collections.defaultdict(list)
         for label, tab_no in fe.find_tabs(frontier):
             tabs[label].append(tab_no)
 
         r = self.renderer
+        
+        piece_dict = dict((i.piece.label, i) for i in self.pieces)
         
         for l, tab_nos in tabs.items():
             p = piece_dict[l]
@@ -561,6 +564,12 @@ class AlignTk:
 
     def do_tab_alignment_B2(self):
 
+        if self.geometry is None:
+            return
+
+        if not "A2" in self.geometry.coords or not "B1" in self.geometry.coords:
+            return
+
         dsts = [("A2", 2), ("B1", 1)]
         scores = []
 
@@ -575,8 +584,13 @@ class AlignTk:
             tab_aligner = puzzler.align.TabAligner(dst_piece.piece)
             
             for src_piece in self.pieces:
+                
+                if src_piece.piece.label in self.geometry.coords:
+                    continue
+                
                 if src_piece is dst_piece:
                     continue
+                
                 src_label = src_piece.piece.label
                 for src_tab_no, src_tab in enumerate(src_piece.piece.tabs):
                     if dst_tab.indent == src_tab.indent:
@@ -626,9 +640,40 @@ class AlignTk:
         print(f"{best_fit=}")
 
         if best_fit:
-            piece_dict[best_fit[1]].coords = best_fit[2]
+            _, label, coords = best_fit
+            piece_dict[label].coords = coords
+            self.geometry.coords[label] = coords
+            self.update_adjacency()
             self.render()
-                
+
+    def update_adjacency(self):
+        
+        pieces_dict = {i.piece.label: i.piece for i in self.pieces}
+        
+        ac = puzzler.solver.AdjacencyComputer(pieces_dict, [], self.geometry)
+        
+        adjacency = dict()
+        for label in self.geometry.coords:
+            adjacency[label] = ac.compute_adjacency(label)
+
+        
+        frontier = []
+        for k, v in adjacency.items():
+            for r in v.get('none', []):
+                frontier.append((k, *r))
+
+        print(adjacency)
+        
+        print(frontier)
+        
+        fe = FrontierExplorer(pieces_dict, self.geometry)
+        corners = fe.find_interesting_corners(frontier)
+        for s, t0, t1 in sorted(corners, key=lambda x: abs(x[0])):
+            print(f"{t0}, {t1}: {s:.3f}")
+
+        self.adjacency = adjacency
+        self.frontier = frontier
+
     def do_solve(self):
 
         pieces_dict = dict((i.piece.label, i) for i in self.pieces)
@@ -641,39 +686,18 @@ class AlignTk:
         bs.estimate_puzzle_size(border)
 
         constraints = bs.init_constraints(border)
-        geometry = bs.init_placement(border)
+        self.geometry = bs.init_placement(border)
 
         print(f"{constraints=}")
-        print(f"{geometry=}")
+        print(f"{self.geometry=}")
 
         for i in self.pieces:
-            coords = geometry.coords.get(i.piece.label)
+            coords = self.geometry.coords.get(i.piece.label)
             if coords:
                 print(i.piece.label)
                 i.coords = coords
 
-        pieces_dict = dict((i.piece.label, i) for i in self.pieces)
-
-        # border = [i for i, _ in pairs]
-
-        # kdtrees = {i.piece.label: scipy.spatial.KDTree(i.piece.points) for i in self.pieces}
-        ac = puzzler.solver.AdjacencyComputer(bs.pieces, constraints, geometry)
-        self.adjacency = dict()
-        for label in geometry.coords:
-            self.adjacency[label] = ac.compute_adjacency(label)
-        print(self.adjacency)
-        
-        self.frontier = []
-        for k, v in self.adjacency.items():
-            for r in v.get('none', []):
-                self.frontier.append((k, *r))
-
-        print(self.frontier)
-
-        fe = FrontierExplorer(pieces_dict)
-        corners = fe.find_interesting_corners(self.frontier)
-        for s, t0, t1 in sorted(corners, key=lambda x: abs(x[0])):
-            print(f"{t0}, {t1}: {s:.3f}")
+        self.update_adjacency()
 
         self.render()
         
