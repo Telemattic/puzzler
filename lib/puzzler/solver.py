@@ -500,3 +500,85 @@ class AdjacencyComputer:
             retval.append((span, axis))
 
         return (retval, self.closest(label))
+
+    def compute_successors_and_neighbors(self, adjacency):
+
+        pair_to_range = dict()
+
+        successors = dict()
+    
+        for src_label, src_adjacency_list in adjacency.items():
+        
+            src = self.pieces[src_label]
+            n = len(src.points)
+        
+            def range_length(r):
+                a, b = r
+                return len(puzzler.commands.align.RingRange(a, b+1, n))
+
+            neighbors = dict()
+            for dst_label, src_ranges in src_adjacency_list.items():
+                # print(f"{src_label=} {dst_label=} {src_ranges=}")
+                r = max(src_ranges, key=range_length)
+                neighbors[r] = dst_label
+                pair_to_range[(src_label, dst_label)] = r
+
+                ranges = list(neighbors.keys())
+                ranges.sort()
+                for prev, curr in pairwise_circular(ranges):
+                    successors[(src_label, prev)] = (src_label, curr)
+
+        neighbors = dict()
+
+        nodes_on_frontier = set()
+
+        for (src_label, dst_label), src_range in pair_to_range.items():
+            dst_range = pair_to_range.get((dst_label, src_label))
+            if dst_range:
+                neighbors[(src_label, src_range)] = (dst_label, dst_range)
+            elif dst_label == 'none':
+                nodes_on_frontier.add((src_label, src_range))
+
+        return (successors, neighbors, nodes_on_frontier)
+
+    def find_frontiers(self, successors, neighbors, nodes_on_frontier):
+
+        # nodes_on_frontier = successors.keys() - neighbors.keys()
+
+        covered = set()
+        retval = []
+
+        for head in nodes_on_frontier:
+
+            if head in covered:
+                continue
+
+            frontier = [head]
+            visited = set(frontier)
+        
+            curr = successors[head]
+            while curr != head:
+
+                assert curr not in visited
+                visited.add(curr)
+
+                # if the current node has a neighbor (is not on the
+                # frontier) then jump to the neighbor and then to its
+                # successor (by definition the neighbor's neighbor would
+                # take us back to curr)
+                if neighbor := neighbors.get(curr):
+
+                    assert neighbor not in visited
+                    visited.add(neighbor)
+                    
+                    curr = neighbor
+                else:
+                    frontier.append(curr)
+                
+                curr = successors[curr]
+
+            covered |= visited
+
+            retval.append(frontier)
+
+        return retval

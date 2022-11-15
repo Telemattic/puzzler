@@ -253,11 +253,16 @@ class FrontierExplorer:
     def find_interesting_corners(self, frontier):
 
         tabs = self.find_tabs(frontier)
-        dirs = [self.get_tab_direction(tab) for tab in tabs]
-        scores = [np.dot(dirs[i-1], curr_dir) for i, curr_dir in enumerate(dirs)]
+        dirs = []
+        for tab in tabs:
+            p, v = self.get_tab_center_and_direction(tab)
+            t = self.geometry.coords[tab[0]].get_transform()
+            dirs.append((t.apply_v2(p), t.apply_n2(v)))
+            
+        scores = [np.dot(dirs[i-1][1], curr_dir[1]) for i, curr_dir in enumerate(dirs)]
         return [(scores[i], tabs[i-1], tabs[i]) for i in range(len(tabs))]
 
-    def get_tab_direction(self, tab, rotate=True):
+    def get_tab_center_and_direction(self, tab):
 
         p = self.pieces[tab[0]]
         t = p.tabs[tab[1]]
@@ -267,7 +272,7 @@ class FrontierExplorer:
         v = v / np.linalg.norm(v)
         if not t.indent:
             v = -v
-        return puzzler.math.rotate(v, self.geometry.coords[p.label].angle) if rotate else v
+        return (t.ellipse.center, v)
 
 class PuzzleRenderer:
 
@@ -399,8 +404,7 @@ class PuzzleRenderer:
             with puzzler.render.save_matrix(r.transform):
                 r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
                 for tab_no in tab_nos:
-                    v = fe.get_tab_direction((l, tab_no), False)
-                    p0 = p.piece.tabs[tab_no].ellipse.center
+                    p0, v = fe.get_tab_center_and_direction((l, tab_no))
                     p1 = p0 + v * 100
                     r.draw_lines(np.array((p0, p1)), fill='red', width=1, arrow='last')
 
@@ -504,7 +508,8 @@ class AlignTk:
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
         r.frontier = self.frontier
-        r.adjacency = self.adjacency
+        if self.var_render_adjacency.get():
+            r.adjacency = self.adjacency
         r.render(True)
 
         self.render_full += 1
@@ -518,7 +523,8 @@ class AlignTk:
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
         r.frontier = self.frontier
-        r.adjacency = self.adjacency
+        if self.var_render_adjacency.get():
+            r.adjacency = self.adjacency
         r.render(False)
 
         self.render_full = 0
@@ -656,15 +662,23 @@ class AlignTk:
         for label in self.geometry.coords:
             adjacency[label] = ac.compute_adjacency(label)
 
-        
-        frontier = []
-        for k, v in adjacency.items():
-            for r in v.get('none', []):
-                frontier.append((k, *r))
+        successors, neighbors, nodes_on_frontier = ac.compute_successors_and_neighbors(adjacency)
+        # print(f"{successors=}")
+        # print(f"{neighbors=}")
+        print(f"{nodes_on_frontier=}")
 
-        print(adjacency)
+        frontier = ac.find_frontiers(successors, neighbors, nodes_on_frontier)[0]
         
-        print(frontier)
+        # frontier = []
+        # for k, v in adjacency.items():
+        #     for r in v.get('none', []):
+        #         frontier.append((k, *r))
+
+        # print(adjacency)
+
+        frontier = [(l, *ab) for l, ab in frontier]
+        
+        print(f"{frontier=}")
         
         fe = FrontierExplorer(pieces_dict, self.geometry)
         corners = fe.find_interesting_corners(frontier)
@@ -715,9 +729,6 @@ class AlignTk:
         tags = [self.canvas.gettags(i) for i in tags]
         self.var_label.set(f"{xy1[0]:.0f},{xy1[1]:.0f} " + ','.join(str(i) for i in tags))
 
-    def keypress(self, event):
-        print(event)
-
     def _init_ui(self, parent):
 
         w, h = parent.winfo_screenwidth(), parent.winfo_screenheight()
@@ -738,8 +749,6 @@ class AlignTk:
         self.canvas.bind("<MouseWheel>", self.mouse_wheel)
         self.canvas.bind("<Motion>", self.motion)
 
-        parent.bind("<Key>", self.keypress)
-
         self.controls = ttk.Frame(self.frame)
         self.controls.grid(row=1, sticky=(W,E))
 
@@ -749,9 +758,14 @@ class AlignTk:
         b2 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment_B2)
         b2.grid(column=1, row=0, sticky=W)
 
+        self.var_render_adjacency = IntVar(value=1)
+        b3 = ttk.Checkbutton(self.controls, text="Adjacency", command=self.render,
+                             variable=self.var_render_adjacency)
+        b3.grid(column=2, row=0, sticky=W)
+
         self.var_label = StringVar(value="x,y")
-        l1 = ttk.Label(self.controls, textvariable=self.var_label, width=40)
-        l1.grid(column=2, row=0, sticky=(E))
+        l1 = ttk.Label(self.controls, textvariable=self.var_label, width=80)
+        l1.grid(column=3, row=0, sticky=(E))
 
         self.render_full = False
         self.render()

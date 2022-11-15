@@ -56,12 +56,18 @@ def compute_rigid_transform(P, Q):
 
 class DistanceImage:
 
+    cache = dict()
+
     def __init__(self, piece):
 
         pp = piece.points
         
         self.ll = np.min(pp, axis=0) - 256
         self.ur = np.max(pp, axis=0) + 256
+
+        self.dist_image = DistanceImage.cache.get(piece.label)
+        if self.dist_image is not None:
+            return
 
         w, h = self.ur + 1 - self.ll
         cols = pp[:,0] - self.ll[0]
@@ -72,6 +78,7 @@ class DistanceImage:
 
         self.dist_image = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
         # self.dist_image = np.uint8(self.dist_image.clip(max=255))
+        DistanceImage.cache[piece.label] = self.dist_image
 
     def query(self, points):
 
