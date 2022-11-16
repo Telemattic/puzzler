@@ -5,6 +5,7 @@ import cv2 as cv
 import itertools
 import math
 import numpy as np
+import operator
 import re
 import scipy
 import puzzler.feature
@@ -584,34 +585,34 @@ class AlignTk:
         
         scores = []
 
-        piece_dict = dict((i.piece.label, i) for i in self.pieces)
+        piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
 
         for dst_label, dst_tab_no in corner:
 
             dst_piece = piece_dict[dst_label]
-            dst_tab   = dst_piece.piece.tabs[dst_tab_no]
+            dst_tab   = dst_piece.tabs[dst_tab_no]
 
             the_scores = dict()
-            tab_aligner = puzzler.align.TabAligner(dst_piece.piece)
+            tab_aligner = puzzler.align.TabAligner(dst_piece)
             
-            for src_piece in self.pieces:
+            for src_piece in piece_dict.values():
                 
-                if src_piece.piece.label in self.geometry.coords:
+                if src_piece.label in self.geometry.coords:
                     continue
                 
                 if src_piece is dst_piece:
                     continue
                 
                 scores_for_src = []
-                for src_tab_no, src_tab in enumerate(src_piece.piece.tabs):
+                for src_tab_no, src_tab in enumerate(src_piece.tabs):
                     if dst_tab.indent == src_tab.indent:
                         continue
-                    mse, _, sfp, _ = tab_aligner.compute_alignment(dst_tab_no, src_piece.piece, src_tab_no)
+                    mse, _, sfp, _ = tab_aligner.compute_alignment(dst_tab_no, src_piece, src_tab_no)
                     a, b = sfp
-                    n = b-a if b > a else len(src_piece.piece.points)-a+b
+                    n = b-a if b > a else len(src_piece.points)-a+b
                     scores_for_src.append((mse, n, src_tab_no))
                     
-                the_scores[src_piece.piece.label] = scores_for_src
+                the_scores[src_piece.label] = scores_for_src
 
             scores.append(the_scores)
 
@@ -627,8 +628,8 @@ class AlignTk:
                 allways.append((mse, src_label, tab0, tab1))
 
         allways.sort()
-
-        aligner = puzzler.align.MultiAligner([(piece_dict[i].piece, j, piece_dict[i].coords) for i, j in corner])
+        
+        aligner = puzzler.align.MultiAligner(corner, piece_dict, self.geometry)
 
         fits = []
 
@@ -636,7 +637,7 @@ class AlignTk:
             
             src_tabs  = [src_tab0, src_tab1]
             
-            src_piece = piece_dict[src_label].piece
+            src_piece = piece_dict[src_label]
             
             src_coords = aligner.compute_alignment(src_piece, src_tabs)
 
@@ -644,7 +645,7 @@ class AlignTk:
 
             fits.append((mse, src_label, src_coords))
 
-        fits.sort()
+        fits.sort(key=operator.itemgetter(0))
 
         return fits
 
@@ -660,7 +661,7 @@ class AlignTk:
         for corner in self.corners:
             fits += self.score_corner(corner)[:10]
 
-        fits.sort()
+        fits.sort(key=operator.itemgetter(0))
 
         for i, f in enumerate(fits[:10]):
             mse, src_label, src_coords = f

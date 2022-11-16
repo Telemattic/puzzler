@@ -306,7 +306,7 @@ class ClosestPieces:
         self.overlaps = OverlappingPieces(pieces, geometry.coords)
         self.max_dist = 50
 
-        print(f"ClosestPieces: width={self.geometry.width:.1f} height={self.geometry.height:.1f}")
+        # print(f"ClosestPieces: width={self.geometry.width:.1f} height={self.geometry.height:.1f}")
 
     def __call__(self, src_label):
 

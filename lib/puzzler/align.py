@@ -244,15 +244,19 @@ class EdgeAligner:
 
 class MultiAligner:
 
-    def __init__(self, targets):
+    def __init__(self, targets, pieces, geometry):
         self.targets = targets
 
         dst_points = []
-        for dst_piece, dst_tab_no, dst_coords in self.targets:
+        for dst_label, dst_tab_no in self.targets:
+            dst_piece = pieces[dst_label]
+            dst_coords = geometry.coords[dst_label]
             pt = dst_piece.tabs[dst_tab_no].ellipse.center
             dst_points.append(dst_coords.get_transform().apply_v2(pt))
 
         self.dst_points = np.array(dst_points)
+
+        self.multi_target_error = MultiTargetError(pieces, geometry)
 
     def compute_alignment(self, src_piece, source_tabs):
 
@@ -264,24 +268,58 @@ class MultiAligner:
 
     def measure_fit(self, src_piece, source_tabs, src_coords):
 
-        sse = 0
-        n = 0
+        assert 2 == len(source_tabs)
+        n_tabs = len(src_piece.tabs)
 
-        for i, src_tab_no in enumerate(source_tabs):
+        tab0, tab1 = source_tabs
+        if (tab0 + 1) % n_tabs == tab1:
+            l = src_piece.tabs[tab0].tangent_indexes[0]
+            r = src_piece.tabs[tab1].tangent_indexes[1]
+        elif (tab1 + 1) % n_tabs == tab0:
+            l = src_piece.tabs[tab1].tangent_indexes[0]
+            r = src_piece.tabs[tab0].tangent_indexes[1]
+        else:
+            # print(f"measure_fit: {src_piece.label} {n_tabs=} {tab0=} {tab1=}: tabs must be adjacent!")
+            return 1e6
 
-            dst_piece, _, dst_coords = self.targets[i] 
-            distance_image = DistanceImage(dst_piece)
+        src_points = src_coords.get_transform().apply_v2(ring_slice(src_piece.points, l, r))
+        return self.multi_target_error(src_points)
+    
+class MultiTargetError:
 
+    def __init__(self, pieces, geometry):
+        self.pieces = pieces
+        self.geometry = geometry
+        self.overlaps = puzzler.solver.OverlappingPieces(pieces, geometry.coords)
+        self.max_dist = 256
+
+    def __call__(self, src_points):
+
+        src_bbox = (np.min(src_points, axis=0), np.max(src_points, axis=0))
+        src_center = (src_bbox[0] + src_bbox[1]) * .5
+        src_radius = np.linalg.norm(src_bbox[1] - src_bbox[0])
+
+        num_points = len(src_points)
+        
+        dst_labels = self.overlaps(src_center, src_radius + self.max_dist).tolist()
+
+        ret_dist = np.full(num_points, self.max_dist)
+
+        for dst_label in dst_labels:
+
+            dst_piece = self.pieces[dst_label]
+            dst_coords = self.geometry.coords[dst_label]
+
+            di = DistanceImage(dst_piece)
+            
             transform = puzzler.render.Transform()
             transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
-            transform.translate(src_coords.dxdy).rotate(src_coords.angle)
 
-            l, r = src_piece.tabs[src_tab_no].tangent_indexes
-            src_points = transform.apply_v2(ring_slice(src_piece.points, l, r))
+            dst_dist = di.query(transform.apply_v2(src_points))
 
-            d = distance_image.query(src_points)
-            sse += np.sum(d ** 2)
-            n += len(d)
+            ii = np.nonzero(dst_dist < ret_dist)[0]
+            if len(ii):
+                ret_dist[ii] = dst_dist[ii]
 
-        return sse /n
-    
+        sse = np.sum(ret_dist ** 2)
+        return sse / num_points
