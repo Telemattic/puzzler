@@ -415,6 +415,8 @@ class PuzzleRenderer:
                     p1 = p0 + v * 100
                     r.draw_lines(np.array((p0, p1)), fill='red', width=1, arrow='last')
 
+        return
+
         for l, a, b in frontier:
             p = piece_dict[l]
             with puzzler.render.save_matrix(r.transform):
@@ -576,27 +578,15 @@ class AlignTk:
                 print(f"{dst.piece.label}: {len(rows)} rows")
                 writer.writerows(rows)
 
-    def do_tab_alignment_B2(self):
+    def score_corner(self, corner):
 
-        if self.geometry is None:
-            return
-
-        # if not "A2" in self.geometry.coords or not "B1" in self.geometry.coords:
-        #     return
-
-        # dsts = [("A2", 2), ("B1", 1)]
-        if not self.corners:
-            return
-        
-        dsts = self.corners[0]
-
-        print(f"do_tab_alignment: {dsts[0]} {dsts[1]}")
+        print(f"score_corner: {corner[0]} {corner[1]}")
         
         scores = []
 
         piece_dict = dict((i.piece.label, i) for i in self.pieces)
 
-        for dst_label, dst_tab_no in dsts:
+        for dst_label, dst_tab_no in corner:
 
             dst_piece = piece_dict[dst_label]
             dst_tab   = dst_piece.piece.tabs[dst_tab_no]
@@ -638,7 +628,7 @@ class AlignTk:
 
         allways.sort()
 
-        aligner = puzzler.align.MultiAligner([(piece_dict[i].piece, j, piece_dict[i].coords) for i, j in dsts])
+        aligner = puzzler.align.MultiAligner([(piece_dict[i].piece, j, piece_dict[i].coords) for i, j in corner])
 
         fits = []
 
@@ -652,22 +642,34 @@ class AlignTk:
 
             mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
 
-            fits.append((mse, src_label, src_tabs, src_coords))
+            fits.append((mse, src_label, src_coords))
+
+        fits.sort()
+
+        return fits
+
+    def do_tab_alignment_B2(self):
+
+        if self.geometry is None:
+            return
+
+        if not self.corners:
+            return
+
+        fits = []
+        for corner in self.corners:
+            fits += self.score_corner(corner)[:10]
 
         fits.sort()
 
         for i, f in enumerate(fits[:10]):
-            mse, src_label, src_tabs, src_coords = f
+            mse, src_label, src_coords = f
             with np.printoptions(precision=1):
-                print(f"{i}: {src_label} {src_tabs} angle={src_coords.angle:.3f} xy={src_coords.dxdy} {mse=:.1f}")
+                print(f"{i}: {src_label} angle={src_coords.angle:.3f} xy={src_coords.dxdy} {mse=:.1f}")
 
         if fits:
-            best_fit = fits[0]
-            
-        print(f"{len(scores[0])=} {len(scores[1])=} {len(allways)=}")
-
-        if fits:
-            _, label, _, coords = fits[0]
+            piece_dict = dict((i.piece.label, i) for i in self.pieces)
+            _, label, coords = fits[0]
             piece_dict[label].coords = coords
             self.geometry.coords[label] = coords
             self.update_adjacency()
@@ -706,11 +708,11 @@ class AlignTk:
         good_corners = []
         for (s, t, u), tab0, tab1 in sorted(corners, key=lambda x: abs(x[0][0])):
             is_interesting = abs(s) < .5 and 50 < t < 1000 and 50 < u < 1000
-            print(f"{tab0}, {tab1}: {s=:.3f} {t=:.1f} {u=:.1f}", end='')
-            if is_interesting:
-                print(" ***")
-            else:
-                print()
+            # print(f"{tab0}, {tab1}: {s=:.3f} {t=:.1f} {u=:.1f}", end='')
+            # if is_interesting:
+            #     print(" ***")
+            # else:
+            #     print()
             if is_interesting:
                 good_corners.append((tab0, tab1))
 
