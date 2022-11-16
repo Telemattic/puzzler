@@ -612,23 +612,29 @@ class AlignTk:
                 if src_piece is dst_piece:
                     continue
                 
-                src_label = src_piece.piece.label
+                scores_for_src = []
                 for src_tab_no, src_tab in enumerate(src_piece.piece.tabs):
                     if dst_tab.indent == src_tab.indent:
                         continue
                     mse, _, sfp, _ = tab_aligner.compute_alignment(dst_tab_no, src_piece.piece, src_tab_no)
                     a, b = sfp
                     n = b-a if b > a else len(src_piece.piece.points)-a+b
-                    the_scores[(src_label,src_tab_no)] = (mse, n)
+                    scores_for_src.append((mse, n, src_tab_no))
+                    
+                the_scores[src_piece.piece.label] = scores_for_src
 
             scores.append(the_scores)
 
         allways = []
-        for k0, v0 in scores[0].items():
-            for k1, v1 in scores[1].items():
-                if k1[0] == k0[0]:
-                    mse = (v0[0] * v0[1] + v1[0] * v1[1]) / (v0[1] + v1[1])
-                    allways.append((mse, (*k0, *v0), (*k1, *v1)))
+        for src_label, scores0 in scores[0].items():
+            scores1 = scores[1][src_label]
+            for a, b in itertools.product(scores0, scores1):
+                mse0, n0, tab0 = a
+                mse1, n1, tab1 = b
+                if tab0 == tab1:
+                    continue
+                mse = (mse0 * n0 + mse1 * n1) / (n0 + n1)
+                allways.append((mse, src_label, tab0, tab1))
 
         allways.sort()
 
@@ -636,16 +642,9 @@ class AlignTk:
 
         fits = []
 
-        for i, j in enumerate(allways):
+        for mse, src_label, src_tab0, src_tab1 in allways:
             
-            # print(i, j)
-            #if i == 20:
-            #break
-
-            _, ii, jj = j
-
-            src_label = ii[0]
-            src_tabs  = [ii[1], jj[1]]
+            src_tabs  = [src_tab0, src_tab1]
             
             src_piece = piece_dict[src_label].piece
             
@@ -657,10 +656,8 @@ class AlignTk:
 
         fits.sort()
 
-        for i, f in enumerate(fits):
+        for i, f in enumerate(fits[:10]):
             mse, src_label, src_tabs, src_coords = f
-            if i >= 10 and src_label != 'E2':
-                continue
             with np.printoptions(precision=1):
                 print(f"{i}: {src_label} {src_tabs} angle={src_coords.angle:.3f} xy={src_coords.dxdy} {mse=:.1f}")
 
