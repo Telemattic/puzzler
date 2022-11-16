@@ -259,7 +259,14 @@ class FrontierExplorer:
             t = self.geometry.coords[tab[0]].get_transform()
             dirs.append((t.apply_v2(p), t.apply_n2(v)))
             
-        scores = [np.dot(dirs[i-1][1], curr_dir[1]) for i, curr_dir in enumerate(dirs)]
+        scores = []
+        for i, curr_dir in enumerate(dirs):
+            p1, v2 = dirs[i-1]
+            p3, v4 = curr_dir
+            t = np.cross(p3 - p1, v4) / np.cross(v2, v4)
+            u = np.cross(p3 - p1, v2) / np.cross(v2, v4)
+            scores.append((np.dot(v2, v4), t, u))
+            
         return [(scores[i], tabs[i-1], tabs[i]) for i in range(len(tabs))]
 
     def get_tab_center_and_direction(self, tab):
@@ -461,6 +468,7 @@ class AlignTk:
 
         self.frontier = None
         self.adjacency = None
+        self.corners = []
 
         self._init_ui(parent)
 
@@ -573,10 +581,17 @@ class AlignTk:
         if self.geometry is None:
             return
 
-        if not "A2" in self.geometry.coords or not "B1" in self.geometry.coords:
-            return
+        # if not "A2" in self.geometry.coords or not "B1" in self.geometry.coords:
+        #     return
 
-        dsts = [("A2", 2), ("B1", 1)]
+        # dsts = [("A2", 2), ("B1", 1)]
+        if not self.corners:
+            return
+        
+        dsts = self.corners[0]
+
+        print(f"do_tab_alignment: {dsts[0]} {dsts[1]}")
+        
         scores = []
 
         piece_dict = dict((i.piece.label, i) for i in self.pieces)
@@ -619,34 +634,43 @@ class AlignTk:
 
         aligner = puzzler.align.MultiAligner([(piece_dict[i].piece, j, piece_dict[i].coords) for i, j in dsts])
 
-        best_fit = None
+        fits = []
 
         for i, j in enumerate(allways):
             
-            print(i, j)
-            if i == 20:
-                break
+            # print(i, j)
+            #if i == 20:
+            #break
 
             _, ii, jj = j
 
-            src_piece = piece_dict[ii[0]]
+            src_label = ii[0]
             src_tabs  = [ii[1], jj[1]]
             
-            src_coords = aligner.compute_alignment(src_piece.piece, src_tabs)
+            src_piece = piece_dict[src_label].piece
+            
+            src_coords = aligner.compute_alignment(src_piece, src_tabs)
 
-            mse = aligner.measure_fit(src_piece.piece, src_tabs, src_coords)
+            mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
 
-            print(f"  fit: angle={src_coords.angle:3f} xy={src_coords.dxdy} {mse=:.1f}")
+            fits.append((mse, src_label, src_tabs, src_coords))
 
-            if best_fit is None or mse < best_fit[0]:
-                best_fit = (mse, src_piece.piece.label, src_coords)
+        fits.sort()
+
+        for i, f in enumerate(fits):
+            mse, src_label, src_tabs, src_coords = f
+            if i >= 10 and src_label != 'E2':
+                continue
+            with np.printoptions(precision=1):
+                print(f"{i}: {src_label} {src_tabs} angle={src_coords.angle:.3f} xy={src_coords.dxdy} {mse=:.1f}")
+
+        if fits:
+            best_fit = fits[0]
             
         print(f"{len(scores[0])=} {len(scores[1])=} {len(allways)=}")
 
-        print(f"{best_fit=}")
-
-        if best_fit:
-            _, label, coords = best_fit
+        if fits:
+            _, label, _, coords = fits[0]
             piece_dict[label].coords = coords
             self.geometry.coords[label] = coords
             self.update_adjacency()
@@ -665,7 +689,7 @@ class AlignTk:
         successors, neighbors, nodes_on_frontier = ac.compute_successors_and_neighbors(adjacency)
         # print(f"{successors=}")
         # print(f"{neighbors=}")
-        print(f"{nodes_on_frontier=}")
+        # print(f"{nodes_on_frontier=}")
 
         frontier = ac.find_frontiers(successors, neighbors, nodes_on_frontier)[0]
         
@@ -678,15 +702,24 @@ class AlignTk:
 
         frontier = [(l, *ab) for l, ab in frontier]
         
-        print(f"{frontier=}")
+        # print(f"{frontier=}")
         
         fe = FrontierExplorer(pieces_dict, self.geometry)
         corners = fe.find_interesting_corners(frontier)
-        for s, t0, t1 in sorted(corners, key=lambda x: abs(x[0])):
-            print(f"{t0}, {t1}: {s:.3f}")
+        good_corners = []
+        for (s, t, u), tab0, tab1 in sorted(corners, key=lambda x: abs(x[0][0])):
+            is_interesting = abs(s) < .5 and 50 < t < 1000 and 50 < u < 1000
+            print(f"{tab0}, {tab1}: {s=:.3f} {t=:.1f} {u=:.1f}", end='')
+            if is_interesting:
+                print(" ***")
+            else:
+                print()
+            if is_interesting:
+                good_corners.append((tab0, tab1))
 
         self.adjacency = adjacency
         self.frontier = frontier
+        self.corners = good_corners
 
     def do_solve(self):
 
