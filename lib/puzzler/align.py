@@ -58,16 +58,21 @@ class DistanceImage:
 
     cache = dict()
 
+    @staticmethod
+    def Factory(piece):
+        o = DistanceImage.cache.get(piece.label)
+        if o is None:
+            o = DistanceImage(piece)
+            DistanceImage.cache[piece.label] = o
+
+        return o
+
     def __init__(self, piece):
 
         pp = piece.points
         
         self.ll = np.min(pp, axis=0) - 256
         self.ur = np.max(pp, axis=0) + 256
-
-        self.dist_image = DistanceImage.cache.get(piece.label)
-        if self.dist_image is not None:
-            return
 
         w, h = self.ur + 1 - self.ll
         cols = pp[:,0] - self.ll[0]
@@ -77,8 +82,6 @@ class DistanceImage:
         piece_image[rows, cols] = 0
 
         self.dist_image = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
-        # self.dist_image = np.uint8(self.dist_image.clip(max=255))
-        DistanceImage.cache[piece.label] = self.dist_image
 
     def query(self, points):
 
@@ -98,7 +101,7 @@ class TabAligner:
         if slow:
             self.kdtree = scipy.spatial.KDTree(dst.points)
         else:
-            self.distance_image = DistanceImage(dst)
+            self.distance_image = DistanceImage.Factory(dst)
 
     def compute_alignment(self, dst_tab_no, src, src_tab_no):
 
@@ -310,7 +313,7 @@ class MultiTargetError:
             dst_piece = self.pieces[dst_label]
             dst_coords = self.geometry.coords[dst_label]
 
-            di = DistanceImage(dst_piece)
+            di = DistanceImage.Factory(dst_piece)
             
             transform = puzzler.render.Transform()
             transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
