@@ -327,7 +327,7 @@ class ClosestPieces:
             dst_piece = self.pieces[dst_label]
             dst_coords = self.geometry.coords[dst_label]
 
-            di = puzzler.align.DistanceImage(dst_piece)
+            di = puzzler.align.DistanceImage.Factory(dst_piece)
             
             transform = puzzler.render.Transform()
             transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
@@ -543,10 +543,9 @@ class AdjacencyComputer:
 
     def find_frontiers(self, successors, neighbors, nodes_on_frontier):
 
-        # nodes_on_frontier = successors.keys() - neighbors.keys()
-
         covered = set()
         retval = []
+        fullpaths = []
 
         for head in nodes_on_frontier:
 
@@ -555,6 +554,8 @@ class AdjacencyComputer:
 
             frontier = [head]
             visited = set(frontier)
+
+            fullpath = [head]
         
             curr = successors[head]
             while curr != head:
@@ -570,15 +571,18 @@ class AdjacencyComputer:
 
                     assert neighbor not in visited
                     visited.add(neighbor)
+                    fullpath.append(neighbor)
                     
                     curr = neighbor
                 else:
                     frontier.append(curr)
+                    fullpath.append(curr)
                 
                 curr = successors[curr]
 
             covered |= visited
 
             retval.append(frontier)
+            fullpaths.append(fullpath)
 
-        return retval
+        return retval, fullpaths

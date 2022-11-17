@@ -245,9 +245,19 @@ class FrontierExplorer:
         for l, a, b in frontier:
             p = self.pieces[l]
             rr = RingRange(a, b, len(p.points))
-            for i, tab in enumerate(p.tabs):
-                if all(j in rr for j in tab.tangent_indexes):
-                    retval.append((l, i))
+            
+            included_tabs = [i for i, tab in enumerate(p.tabs) if all(j in rr for j in tab.tangent_indexes)]
+
+            def position_in_ring(i):
+                tab = p.tabs[i]
+                begin = tab.tangent_indexes[0]
+                if begin < rr.a:
+                    begin += rr.n
+                return begin
+
+            included_tabs.sort(key=position_in_ring)
+
+            retval += [(l, i) for i in included_tabs]
 
         return retval
 
@@ -687,27 +697,25 @@ class AlignTk:
             adjacency[label] = ac.compute_adjacency(label)
 
         successors, neighbors, nodes_on_frontier = ac.compute_successors_and_neighbors(adjacency)
-        # print(f"{successors=}")
-        # print(f"{neighbors=}")
-        # print(f"{nodes_on_frontier=}")
 
-        frontier = ac.find_frontiers(successors, neighbors, nodes_on_frontier)[0]
+        frontiers, fullpaths = ac.find_frontiers(successors, neighbors, nodes_on_frontier)
         
-        # frontier = []
-        # for k, v in adjacency.items():
-        #     for r in v.get('none', []):
-        #         frontier.append((k, *r))
+        frontier = [(l, *ab) for l, ab in frontiers[0]]
 
-        # print(adjacency)
+        def flatten(i):
+            a, b = i
+            return f"{a}:{b[0]}-{b[1]}"
 
-        frontier = [(l, *ab) for l, ab in frontier]
-        
-        # print(f"{frontier=}")
-        
+        def flatten_dict(d):
+            return {flatten(k): flatten(v) for k, v in d.items()}
+
+        def flatten_list(l):
+            return [flatten(i) for i in l]
+
         fe = FrontierExplorer(pieces_dict, self.geometry)
         corners = fe.find_interesting_corners(frontier)
         good_corners = []
-        for (s, t, u), tab0, tab1 in sorted(corners, key=lambda x: abs(x[0][0])):
+        for (s, t, u), tab0, tab1 in corners:
             is_interesting = abs(s) < .5 and 50 < t < 1000 and 50 < u < 1000
             # print(f"{tab0}, {tab1}: {s=:.3f} {t=:.1f} {u=:.1f}", end='')
             # if is_interesting:
@@ -720,6 +728,18 @@ class AlignTk:
         self.adjacency = adjacency
         self.frontier = frontier
         self.corners = good_corners
+
+        with open(r'C:\temp\puzzler\update_adjacency.txt','a') as f:
+            print(f"successors={flatten_dict(successors)}", file=f)
+            print(f"neighbors={flatten_dict(neighbors)}", file=f)
+            print(f"nodes_on_frontier={flatten_list(nodes_on_frontier)}", file=f)
+            for i, j in enumerate(frontiers):
+                print(f"frontiers[{i}]={flatten_list(j)}", file=f)
+            for i, j in enumerate(fullpaths):
+                print(f"fullpaths[{i}]={flatten_list(j)}", file=f)
+            print(f"tabs={fe.find_tabs(frontier)}", file=f)
+            print(f"corners={corners}", file=f)
+            print(f"good_corners={good_corners}", file=f)
 
     def do_solve(self):
 
