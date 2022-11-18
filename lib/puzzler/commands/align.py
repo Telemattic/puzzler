@@ -242,7 +242,7 @@ class FrontierExplorer:
 
         retval = []
         
-        for l, a, b in frontier:
+        for l, (a, b) in frontier:
             p = self.pieces[l]
             rr = RingRange(a, b, len(p.points))
             
@@ -299,7 +299,7 @@ class PuzzleRenderer:
         self.camera = camera
         self.pieces = pieces
         self.selection = None
-        self.frontier = []
+        self.frontiers = []
         self.adjacency = dict()
         self.renderer = None
         self.render_fast = None
@@ -326,8 +326,9 @@ class PuzzleRenderer:
         if self.selection is not None:
             self.draw_rotate_handles(self.selection)
 
-        if self.frontier:
-            self.draw_frontier(self.frontier)
+        if self.frontiers:
+            for f in self.frontiers:
+                self.draw_frontier(f)
 
     def test_bbox(self, bbox):
 
@@ -479,7 +480,7 @@ class AlignTk:
         self.draggable = None
         self.selection = None
 
-        self.frontier = None
+        self.frontiers = None
         self.adjacency = None
         self.corners = []
 
@@ -528,7 +529,7 @@ class AlignTk:
         
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
-        r.frontier = self.frontier
+        r.frontiers = self.frontiers
         if self.var_render_adjacency.get():
             r.adjacency = self.adjacency
         r.render(True)
@@ -543,7 +544,7 @@ class AlignTk:
 
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
-        r.frontier = self.frontier
+        r.frontiers = self.frontiers
         if self.var_render_adjacency.get():
             r.adjacency = self.adjacency
         r.render(False)
@@ -644,7 +645,7 @@ class AlignTk:
         fits = []
 
         for mse, src_label, src_tab0, src_tab1 in allways:
-            
+
             src_tabs  = [src_tab0, src_tab1]
             
             src_piece = piece_dict[src_label]
@@ -653,6 +654,10 @@ class AlignTk:
 
             mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
 
+            if src_label == 'H10' and mse < 1000.:
+                with np.printoptions(precision=1):
+                    print(f"  {src_label=} {src_tab0=} {src_tab1=} {mse=:5.1f} angle={src_coords.angle:+.3f} xy={src_coords.dxdy}")
+            
             fits.append((mse, src_label, src_coords, corner))
 
         fits.sort(key=operator.itemgetter(0))
@@ -700,8 +705,6 @@ class AlignTk:
 
         frontiers, fullpaths = ac.find_frontiers(successors, neighbors, nodes_on_frontier)
         
-        frontier = [(l, *ab) for l, ab in frontiers[0]]
-
         def flatten(i):
             a, b = i
             return f"{a}:{b[0]}-{b[1]}"
@@ -713,7 +716,9 @@ class AlignTk:
             return [flatten(i) for i in l]
 
         fe = FrontierExplorer(pieces_dict, self.geometry)
-        corners = fe.find_interesting_corners(frontier)
+        corners = []
+        for f in frontiers:
+            corners += fe.find_interesting_corners(f)
         good_corners = []
         for (s, t, u), tab0, tab1 in corners:
             is_interesting = abs(s) < .5 and 50 < t < 1000 and 50 < u < 1000
@@ -726,7 +731,7 @@ class AlignTk:
                 good_corners.append((tab0, tab1))
 
         self.adjacency = adjacency
-        self.frontier = frontier
+        self.frontiers = frontiers
         self.corners = good_corners
 
         with open(r'C:\temp\puzzler\update_adjacency.txt','a') as f:
@@ -737,7 +742,6 @@ class AlignTk:
                 print(f"frontiers[{i}]={flatten_list(j)}", file=f)
             for i, j in enumerate(fullpaths):
                 print(f"fullpaths[{i}]={flatten_list(j)}", file=f)
-            print(f"tabs={fe.find_tabs(frontier)}", file=f)
             print(f"corners={corners}", file=f)
             print(f"good_corners={good_corners}", file=f)
 
