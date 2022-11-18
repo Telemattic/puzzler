@@ -591,7 +591,7 @@ class AlignTk:
 
     def score_corner(self, corner):
 
-        print(f"score_corner: {corner[0]} {corner[1]}")
+        print(f"score_corner: {corner}")
         
         scores = []
 
@@ -653,7 +653,7 @@ class AlignTk:
 
             mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
 
-            fits.append((mse, src_label, src_coords))
+            fits.append((mse, src_label, src_coords, corner))
 
         fits.sort(key=operator.itemgetter(0))
 
@@ -669,18 +669,18 @@ class AlignTk:
 
         fits = []
         for corner in self.corners:
-            fits += self.score_corner(corner)[:10]
+            fits += self.score_corner(corner)
 
         fits.sort(key=operator.itemgetter(0))
 
         for i, f in enumerate(fits[:10]):
-            mse, src_label, src_coords = f
+            mse, src_label, src_coords, corner = f
             with np.printoptions(precision=1):
-                print(f"{i}: {src_label} angle={src_coords.angle:.3f} xy={src_coords.dxdy} {mse=:.1f}")
+                print(f"{i}: {src_label:3s} angle={src_coords.angle:+.3f} xy={src_coords.dxdy} {mse=:5.1f} {corner=}")
 
         if fits:
             piece_dict = dict((i.piece.label, i) for i in self.pieces)
-            _, label, coords = fits[0]
+            _, label, coords, _ = fits[0]
             piece_dict[label].coords = coords
             self.geometry.coords[label] = coords
             self.update_adjacency()

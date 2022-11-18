@@ -334,7 +334,7 @@ class ClosestPieces:
             transform.translate(src_coords.dxdy).rotate(src_coords.angle)
 
             src_points = transform.apply_v2(src_piece.points)
-            dst_dist = di.query(src_points)
+            dst_dist = np.abs(di.query(src_points))
 
             ii = np.nonzero(dst_dist < ret_dist)[0]
             if 0 == len(ii):
@@ -503,7 +503,8 @@ class AdjacencyComputer:
 
     def compute_successors_and_neighbors(self, adjacency):
 
-        pair_to_range = dict()
+        src_and_range_to_dst = dict()
+        src_and_dst_to_range = dict()
 
         successors = dict()
     
@@ -516,27 +517,31 @@ class AdjacencyComputer:
                 a, b = r
                 return len(puzzler.commands.align.RingRange(a, b+1, n))
 
-            neighbors = dict()
+            ranges = []
             for dst_label, src_ranges in src_adjacency_list.items():
                 # print(f"{src_label=} {dst_label=} {src_ranges=}")
-                r = max(src_ranges, key=range_length)
-                neighbors[r] = dst_label
-                pair_to_range[(src_label, dst_label)] = r
+                if dst_label == 'none':
+                    ranges += src_ranges
+                else:
+                    r = max(src_ranges, key=range_length)
+                    ranges.append(r)
+                    src_and_range_to_dst[(src_label, r)] = dst_label
+                    src_and_dst_to_range[(src_label, dst_label)] = r
 
-                ranges = list(neighbors.keys())
-                ranges.sort()
-                for prev, curr in pairwise_circular(ranges):
-                    successors[(src_label, prev)] = (src_label, curr)
+            ranges.sort()
+            for prev, curr in pairwise_circular(ranges):
+                successors[(src_label, prev)] = (src_label, curr)
 
         neighbors = dict()
 
         nodes_on_frontier = set()
 
-        for (src_label, dst_label), src_range in pair_to_range.items():
-            dst_range = pair_to_range.get((dst_label, src_label))
-            if dst_range:
-                neighbors[(src_label, src_range)] = (dst_label, dst_range)
-            elif dst_label == 'none':
+        for (src_label, src_range) in successors:
+
+            if dst_label := src_and_range_to_dst.get((src_label, src_range)):
+                if dst_range := src_and_dst_to_range.get((dst_label, src_label)):
+                    neighbors[(src_label, src_range)] = (dst_label, dst_range)
+            else:
                 nodes_on_frontier.add((src_label, src_range))
 
         return (successors, neighbors, nodes_on_frontier)

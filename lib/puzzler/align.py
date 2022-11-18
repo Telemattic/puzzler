@@ -81,7 +81,17 @@ class DistanceImage:
         piece_image = np.ones((h, w), dtype=np.uint8)
         piece_image[rows, cols] = 0
 
-        self.dist_image = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
+        dist_image = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
+
+        # pixels interior to the piece are 0, exterior are 1
+        is_exterior_mask = cv.floodFill(piece_image, None, -self.ll, 0)[1]
+
+        # positive distance is distance from the piece (external),
+        # negative distance is distance from the boundary of the piece
+        # for internal points
+        signed_dist_image = np.where(is_exterior_mask, dist_image, -dist_image)
+
+        self.dist_image = signed_dist_image
 
     def query(self, points):
 
@@ -285,8 +295,8 @@ class MultiAligner:
             # print(f"measure_fit: {src_piece.label} {n_tabs=} {tab0=} {tab1=}: tabs must be adjacent!")
             return 1e6
 
-        src_points = src_coords.get_transform().apply_v2(ring_slice(src_piece.points, l, r))
-        return self.multi_target_error(src_points)
+        src_points = src_coords.get_transform().apply_v2(src_piece.points)
+        return self.multi_target_error(src_points, l, r)
     
 class MultiTargetError:
 
@@ -296,17 +306,19 @@ class MultiTargetError:
         self.overlaps = puzzler.solver.OverlappingPieces(pieces, geometry.coords)
         self.max_dist = 256
 
-    def __call__(self, src_points):
+    def __call__(self, src_points, l, r):
 
         src_bbox = (np.min(src_points, axis=0), np.max(src_points, axis=0))
         src_center = (src_bbox[0] + src_bbox[1]) * .5
         src_radius = np.linalg.norm(src_bbox[1] - src_bbox[0])
 
-        num_points = len(src_points)
-        
         dst_labels = self.overlaps(src_center, src_radius + self.max_dist).tolist()
 
-        ret_dist = np.full(num_points, self.max_dist)
+        src_points_inner = ring_slice(src_points, l, r)
+        src_points_outer = ring_slice(src_points, r, l)
+        
+        ret_dist_inner = np.full(len(src_points_inner), self.max_dist)
+        ret_dist_outer = np.full(len(src_points_outer), self.max_dist)
 
         for dst_label in dst_labels:
 
@@ -318,11 +330,23 @@ class MultiTargetError:
             transform = puzzler.render.Transform()
             transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
 
-            dst_dist = di.query(transform.apply_v2(src_points))
+            dst_dist = np.abs(di.query(transform.apply_v2(src_points_inner)))
 
-            ii = np.nonzero(dst_dist < ret_dist)[0]
+            ii = np.nonzero(dst_dist < ret_dist_inner)[0]
             if len(ii):
-                ret_dist[ii] = dst_dist[ii]
+                ret_dist_inner[ii] = dst_dist[ii]
 
-        sse = np.sum(ret_dist ** 2)
+            dst_dist = di.query(transform.apply_v2(src_points_outer))
+            ii = np.nonzero(dst_dist < ret_dist_outer)[0]
+            if len(ii):
+                ret_dist_outer[ii] = dst_dist[ii]
+
+        sse = np.sum(ret_dist_inner ** 2)
+        num_points = len(src_points_inner)
+
+        ii = np.nonzero(ret_dist_outer < 0)
+        if len(ii):
+            sse += np.sum(ret_dist_outer[ii] ** 2)
+            num_points += len(ii)
+
         return sse / num_points
