@@ -98,8 +98,17 @@ class DistanceImage:
         # could consider scipy.interpolate.RegularGridInterpolator,
         # either with nearest or linear interpolation
         h, w = self.dist_image.shape
+        # n = len(points)
+        
+        # rows = np.empty(n, dtype=np.int32)
+        # np.clip(points[:,1] - self.ll[1], a_min=0, a_max=h-1, out=rows, casting='unsafe')
+        
+        # cols = np.empty(n, dtype=np.int32)
+        # np.clip(points[:,0] - self.ll[0], a_min=0, a_max=w-1, out=cols, casting='unsafe')
+
         rows = np.int32(np.clip(points[:,1] - self.ll[1], a_min=0, a_max=h-1))
         cols = np.int32(np.clip(points[:,0] - self.ll[0], a_min=0, a_max=w-1))
+
         return self.dist_image[rows, cols]
 
 class TabAligner:
@@ -275,7 +284,23 @@ class MultiAligner:
 
         src_points = np.array([src_piece.tabs[s].ellipse.center for s in source_tabs])
 
-        r, x, y = compute_rigid_transform(src_points, self.dst_points)
+        dst_vec = self.dst_points[1] - self.dst_points[0]
+        dst_angle = np.arctan2(dst_vec[1], dst_vec[0])
+
+        src_vec = src_points[1] - src_points[0]
+        src_angle = np.arctan2(src_vec[1], src_vec[0])
+
+        src_points_rotated = AffineTransform(dst_angle-src_angle, (0,0)).get_transform().apply_v2(src_points)
+
+        r, x, y = compute_rigid_transform(src_points_rotated, self.dst_points)
+
+        # with np.printoptions(precision=1):
+        #     print(f"{dst_angle=:.3f} {src_angle=:.3f}")
+        #     print(f"{src_points=}")
+        #     print(f"{src_points_rotated=}")
+        #     print(f"{r=:.3f} {x=:.1f} {y=:.1f}")
+
+        r += dst_angle - src_angle
 
         return AffineTransform(r, (x,y))
 
