@@ -147,30 +147,6 @@ class MoveCamera(Draggable):
         delta = (xy - self.origin) * np.array((-1, 1))
         self.camera.center = self.init_camera_center + delta
 
-class AffineTransform:
-
-    def __init__(self, angle=0., xy=(0.,0.)):
-        self.angle = angle
-        self.dxdy  = np.array(xy, dtype=np.float64)
-
-    def invert_matrix(m):
-        angle = math.atan2(m[1,0], m[0,0])
-        x, y = m[0,2], m[1,2]
-        return AffineTransform(angle, (x,y))
-
-    def get_transform(self):
-        return (puzzler.render.Transform()
-                .translate(self.dxdy)
-                .rotate(self.angle))
-
-    def rot_matrix(self):
-        c, s = np.cos(self.angle), np.sin(self.angle)
-        return np.array(((c, -s),
-                         (s,  c)))
-
-    def copy(self):
-        return AffineTransform(self.angle, tuple(self.dxdy))
-
 class Perimeter:
 
     def __init__(self, points):
@@ -229,7 +205,7 @@ class Piece:
         self.piece = piece
         self.perimeter = Perimeter(self.piece.points)
         self.approx = ApproxPoly(self.perimeter, 10)
-        self.coords = AffineTransform()
+        self.coords = puzzler.align.AffineTransform()
 
 class PuzzleRenderer:
 
@@ -415,14 +391,9 @@ class AlignTk:
     def __init__(self, parent, pieces):
         self.pieces = pieces
         self.solver = puzzler.solver.PuzzleSolver({i.piece.label: i.piece for i in self.pieces}, None)
-        self.geometry = None
 
         self.draggable = None
         self.selection = None
-
-        self.frontiers = None
-        self.adjacency = None
-        self.corners = []
 
         self._init_ui(parent)
 
@@ -469,9 +440,9 @@ class AlignTk:
         
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
-        r.frontiers = self.frontiers
+        r.frontiers = self.solver.frontiers
         if self.var_render_adjacency.get():
-            r.adjacency = self.adjacency
+            r.adjacency = self.solver.adjacency
         r.render(True)
 
         self.render_full += 1
@@ -484,9 +455,9 @@ class AlignTk:
 
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
-        r.frontiers = self.frontiers
+        r.frontiers = self.solver.frontiers
         if self.var_render_adjacency.get():
-            r.adjacency = self.adjacency
+            r.adjacency = self.solver.adjacency
         r.render(False)
 
         self.render_full = 0
@@ -533,46 +504,30 @@ class AlignTk:
     def do_tab_alignment_B2(self):
 
         self.solver.solve_field()
-        
-        self.geometry = self.solver.geometry
-        if self.geometry:
-            for p in self.pieces:
-                if c := self.geometry.coords.get(p.piece.label):
-                    p.coords = c
-                    
-        self.adjacency = self.solver.adjacency
-        self.frontiers = self.solver.frontiers
-        self.corners = self.solver.corners
+        self.update_coords()
                     
         self.render()
+
+    def update_coords(self):
+        
+        g = self.solver.geometry
+        if not g:
+            return
+        
+        for p in self.pieces:
+            if c := g.coords.get(p.piece.label):
+                p.coords = c
 
     def load_geometry(self, path):
 
         self.solver.load_geometry(path)
         self.solver.update_adjacency()
-
-        self.geometry = self.solver.geometry
-        for p in self.pieces:
-            if c := self.geometry.coords.get(p.piece.label):
-                p.coords = c
-
-        self.adjacency = self.solver.adjacency
-        self.frontiers = self.solver.frontiers
-        self.corners = self.solver.corners
+        self.update_coords()
 
     def do_solve(self):
 
         self.solver.solve_border()
-        
-        self.geometry = self.solver.geometry
-        if self.geometry:
-            for p in self.pieces:
-                if c := self.geometry.coords.get(p.piece.label):
-                    p.coords = c
-
-        self.adjacency = self.solver.adjacency
-        self.frontiers = self.solver.frontiers
-        self.corners = self.solver.corners
+        self.update_coords()
                     
         self.render()
         
