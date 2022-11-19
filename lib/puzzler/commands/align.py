@@ -411,7 +411,7 @@ class PuzzleRenderer:
 
         piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
         
-        fe = FrontierExplorer(piece_dict, None)
+        fe = puzzler.solver.FrontierExplorer(piece_dict, None)
 
         tabs = collections.defaultdict(list)
         for label, tab_no in fe.find_tabs(frontier):
@@ -478,6 +478,7 @@ class AlignTk:
 
     def __init__(self, parent, pieces):
         self.pieces = pieces
+        self.solver = puzzler.solver.PuzzleSolver({i.piece.label: i.piece for i in self.pieces}, None)
         self.geometry = None
 
         self.draggable = None
@@ -717,8 +718,26 @@ class AlignTk:
 
     def do_tab_alignment_B2(self):
 
+        self.solver.solve_field()
+        
+        self.geometry = self.solver.geometry
+        if self.geometry:
+            for p in self.pieces:
+                if c := self.geometry.coords.get(p.piece.label):
+                    p.coords = c
+                    
+        self.adjacency = self.solver.adjacency
+        self.frontiers = self.solver.frontiers
+        self.corners = self.solver.corners
+                    
+        self.render()
+
+        return
+
         if self.geometry is None:
             return
+
+        ps = puzzler.solver.PuzzleSolver({(i.piece.label, i.piece) for i in self.pieces}, self.geometry)
 
         if not self.corners:
             return
@@ -766,22 +785,17 @@ class AlignTk:
 
     def load_geometry(self, path):
 
-        with open(path) as f:
-            obj = json.load(f)
+        self.solver.load_geometry(path)
+        self.solver.update_adjacency()
 
-        width = obj['width']
-        height = obj['height']
-        coords = dict()
-        for k, v in obj['coords'].items():
-            angle = v['angle']
-            xy = np.array(v['xy'])
-            coords[k] = AffineTransform(angle, xy)
+        self.geometry = self.solver.geometry
+        for p in self.pieces:
+            if c := self.geometry.coords.get(p.piece.label):
+                p.coords = c
 
-        self.geometry = puzzler.solver.Geometry(width, height, coords)
-        
-        piece_dict = {i.piece.label: i for i in self.pieces}
-        for k, v in self.geometry.coords.items():
-            piece_dict[k].coords = v
+        self.adjacency = self.solver.adjacency
+        self.frontiers = self.solver.frontiers
+        self.corners = self.solver.corners
 
     def update_adjacency(self):
 
@@ -840,6 +854,22 @@ class AlignTk:
             print(f"good_corners={good_corners}", file=f)
 
     def do_solve(self):
+
+        self.solver.solve_border()
+        
+        self.geometry = self.solver.geometry
+        if self.geometry:
+            for p in self.pieces:
+                if c := self.geometry.coords.get(p.piece.label):
+                    p.coords = c
+
+        self.adjacency = self.solver.adjacency
+        self.frontiers = self.solver.frontiers
+        self.corners = self.solver.corners
+                    
+        self.render()
+
+        return
 
         pieces_dict = dict((i.piece.label, i) for i in self.pieces)
         
@@ -971,7 +1001,6 @@ def align_ui(args):
 
     if args.geometry:
         ui.load_geometry(args.geometry)
-        ui.update_adjacency()
     
     root.mainloop()
 

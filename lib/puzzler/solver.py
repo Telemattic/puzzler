@@ -1,9 +1,12 @@
 import puzzler
 import collections
+from datetime import datetime
 import itertools
+import json
 import math
 import numpy as np
 import operator
+import os
 from dataclasses import dataclass
 
 def pairwise_circular(iterable):
@@ -591,3 +594,246 @@ class AdjacencyComputer:
             fullpaths.append(fullpath)
 
         return retval, fullpaths
+
+class FrontierExplorer:
+
+    def __init__(self, pieces, geometry):
+        self.pieces = pieces
+        self.geometry = geometry
+
+    def find_tabs(self, frontier):
+
+        retval = []
+        
+        for l, (a, b) in frontier:
+            p = self.pieces[l]
+            rr = puzzler.commands.align.RingRange(a, b, len(p.points))
+            
+            included_tabs = [i for i, tab in enumerate(p.tabs) if all(j in rr for j in tab.tangent_indexes)]
+
+            def position_in_ring(i):
+                tab = p.tabs[i]
+                begin = tab.tangent_indexes[0]
+                if begin < rr.a:
+                    begin += rr.n
+                return begin
+
+            included_tabs.sort(key=position_in_ring)
+
+            retval += [(l, i) for i in included_tabs]
+
+        return retval
+
+    def find_interesting_corners(self, frontier):
+
+        tabs = self.find_tabs(frontier)
+        dirs = []
+        for tab in tabs:
+            p, v = self.get_tab_center_and_direction(tab)
+            t = self.geometry.coords[tab[0]].get_transform()
+            dirs.append((t.apply_v2(p), t.apply_n2(v)))
+            
+        scores = []
+        for i, curr_dir in enumerate(dirs):
+            p1, v2 = dirs[i-1]
+            p3, v4 = curr_dir
+            t = np.cross(p3 - p1, v4) / np.cross(v2, v4)
+            u = np.cross(p3 - p1, v2) / np.cross(v2, v4)
+            scores.append((np.dot(v2, v4), t, u))
+            
+        return [(scores[i], tabs[i-1], tabs[i]) for i in range(len(tabs))]
+
+    def get_tab_center_and_direction(self, tab):
+
+        p = self.pieces[tab[0]]
+        t = p.tabs[tab[1]]
+        v = p.points[np.array(t.tangent_indexes)] - t.ellipse.center
+        v = v / np.linalg.norm(v, axis=1)
+        v = np.sum(v, axis=0)
+        v = v / np.linalg.norm(v)
+        if not t.indent:
+            v = -v
+        return (t.ellipse.center, v)
+
+class PuzzleSolver:
+
+    def __init__(self, pieces, geometry=None):
+        self.pieces = pieces
+        self.geometry = geometry
+        self.adjacency = None
+        self.frontiers = None
+        self.corners = []
+
+    def solve(self):
+        if self.geometry:
+            self.solve_field()
+        else:
+            self.solve_border()
+
+    def solve_border(self):
+        
+        bs = BorderSolver(self.pieces)
+
+        scores = bs.score_matches()
+        border = bs.link_pieces(scores)
+        print(f"{border=}")
+        bs.estimate_puzzle_size(border)
+
+        constraints = bs.init_constraints(border)
+        self.geometry = bs.init_placement(border)
+
+        print(f"{constraints=}")
+        print(f"{self.geometry=}")
+
+        self.save_geometry()
+        self.update_adjacency()
+
+    def solve_field(self):
+        
+        if self.geometry is None:
+            return
+
+        if not self.corners:
+            return
+
+        fits = []
+        for corner in self.corners:
+            v = self.score_corner(corner)
+            if len(v) > 1:
+                r = v[0][0] / v[1][0]
+                fits.append((r, *v[0]))
+            elif v:
+                fits.append((1., *v[0]))
+
+            s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
+            print(f"{corner}: " + ", ".join(s))
+
+        if not fits:
+            return
+        
+        fits.sort(key=operator.itemgetter(0))
+
+        for i, f in enumerate(fits[:10]):
+            r, mse, src_label, src_coords, src_tabs, corner = f
+            angle = src_coords.angle * (180. / math.pi)
+            print(f"{i}: {src_label:3s} angle={angle:+6.1f} {r=:.3f} {mse=:5.1f} {src_tabs=} {corner=}")
+
+        _, _, label, coords, _, _ = fits[0]
+            
+        self.geometry.coords[label] = coords
+        self.save_geometry()
+        self.update_adjacency()
+
+    def score_corner(self, corner):
+
+        assert 2 == len(corner)
+
+        corner = (corner[1], corner[0])
+        dst_tabs = tuple([self.pieces[p].tabs[i].indent for p, i in corner])
+
+        allways = []
+        for src_piece in self.pieces.values():
+                
+            if src_piece.label in self.geometry.coords:
+                continue
+
+            n = len(src_piece.tabs)
+            for i in range(n):
+                prev = src_piece.tabs[i-1]
+                curr = src_piece.tabs[i]
+
+                if prev.indent != dst_tabs[0] and curr.indent != dst_tabs[1]:
+                    src_tabs = ((i+n-1)%n, i)
+                    allways.append((src_piece.label, src_tabs))
+
+        aligner = puzzler.align.MultiAligner(corner, self.pieces, self.geometry)
+
+        fits = []
+
+        for src_label, src_tabs in allways:
+
+            src_piece = self.pieces[src_label]
+            src_coords = aligner.compute_alignment(src_piece, src_tabs)
+            mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
+            fits.append((mse, src_label, src_coords, src_tabs, corner))
+
+        fits.sort(key=operator.itemgetter(0))
+
+        return fits
+
+    def save_geometry(self):
+        
+        path = os.path.join(r'C:\temp\puzzler\coords',
+                            datetime.now().strftime('%Y%m%d-%H%M%S') + '.json')
+        
+        g = self.geometry
+        obj = {'width': g.width, 'height': g.height, 'coords':dict()}
+        for k, v in g.coords.items():
+            obj['coords'][k] = {'angle': v.angle, 'xy': list(v.dxdy)}
+                
+        with open(path, 'w') as f:
+            json.dump(obj, f, indent=2)
+
+    def load_geometry(self, path):
+
+        with open(path) as f:
+            obj = json.load(f)
+
+        width = obj['width']
+        height = obj['height']
+        coords = dict()
+        for k, v in obj['coords'].items():
+            angle = v['angle']
+            xy = np.array(v['xy'])
+            coords[k] = AffineTransform(angle, xy)
+
+        self.geometry = Geometry(width, height, coords)
+        
+    def update_adjacency(self):
+
+        ac = AdjacencyComputer(self.pieces, [], self.geometry)
+        
+        adjacency = dict()
+        for label in self.geometry.coords:
+            adjacency[label] = ac.compute_adjacency(label)
+
+        successors, neighbors, nodes_on_frontier = ac.compute_successors_and_neighbors(adjacency)
+
+        frontiers, fullpaths = ac.find_frontiers(successors, neighbors, nodes_on_frontier)
+        
+        def flatten(i):
+            a, b = i
+            return f"{a}:{b[0]}-{b[1]}"
+
+        def flatten_dict(d):
+            return {flatten(k): flatten(v) for k, v in d.items()}
+
+        def flatten_list(l):
+            return [flatten(i) for i in l]
+
+        fe = FrontierExplorer(self.pieces, self.geometry)
+        corners = []
+        for f in frontiers:
+            corners += fe.find_interesting_corners(f)
+        good_corners = []
+        for (s, t, u), tab0, tab1 in corners:
+            is_interesting = abs(s) < .5 and 50 < t < 1000 and 50 < u < 1000
+            if is_interesting:
+                good_corners.append((tab0, tab1))
+
+        self.adjacency = adjacency
+        self.frontiers = frontiers
+        self.corners = good_corners
+
+        return
+
+        with open(r'C:\temp\puzzler\update_adjacency.txt','a') as f:
+            print(f"successors={flatten_dict(successors)}", file=f)
+            print(f"neighbors={flatten_dict(neighbors)}", file=f)
+            print(f"nodes_on_frontier={flatten_list(nodes_on_frontier)}", file=f)
+            for i, j in enumerate(frontiers):
+                print(f"frontiers[{i}]={flatten_list(j)}", file=f)
+            for i, j in enumerate(fullpaths):
+                print(f"fullpaths[{i}]={flatten_list(j)}", file=f)
+            print(f"corners={corners}", file=f)
+            print(f"good_corners={good_corners}", file=f)
