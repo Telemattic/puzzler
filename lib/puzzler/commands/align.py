@@ -2,10 +2,13 @@ import bisect
 import collections
 import csv
 import cv2 as cv
+from datetime import datetime
+import json
 import itertools
 import math
 import numpy as np
 import operator
+import os
 import re
 import scipy
 import puzzler.feature
@@ -654,11 +657,59 @@ class AlignTk:
 
             mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
 
-            if src_label == 'H10' and mse < 1000.:
+            if False and src_label == 'H10' and mse < 1000.:
                 with np.printoptions(precision=1):
                     print(f"  {src_label=} {src_tab0=} {src_tab1=} {mse=:5.1f} angle={src_coords.angle:+.3f} xy={src_coords.dxdy}")
             
             fits.append((mse, src_label, src_coords, corner))
+
+        fits.sort(key=operator.itemgetter(0))
+
+        return fits
+
+    def score_corner2(self, corner):
+
+        piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
+
+        # print(f"score_corner: {corner}")
+
+        assert 2 == len(corner)
+
+        corner = (corner[1], corner[0])
+        dst_tabs = tuple([piece_dict[p].tabs[i].indent for p, i in corner])
+
+        allways = []
+        for src_piece in piece_dict.values():
+                
+            if src_piece.label in self.geometry.coords:
+                continue
+
+            n = len(src_piece.tabs)
+            for i in range(n):
+                prev = src_piece.tabs[i-1]
+                curr = src_piece.tabs[i]
+
+                if prev.indent != dst_tabs[0] and curr.indent != dst_tabs[1]:
+                    src_tabs = ((i+n-1)%n, i)
+                    allways.append((src_piece.label, src_tabs))
+
+        aligner = puzzler.align.MultiAligner(corner, piece_dict, self.geometry)
+
+        fits = []
+
+        for src_label, src_tabs in allways:
+
+            src_piece = piece_dict[src_label]
+            
+            src_coords = aligner.compute_alignment(src_piece, src_tabs)
+
+            mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
+
+            if False and src_label == 'H10' and mse < 1000.:
+                with np.printoptions(precision=1):
+                    print(f"  {src_label=} {src_tabs=} {mse=:5.1f} angle={src_coords.angle:+.3f} xy={src_coords.dxdy}")
+            
+            fits.append((mse, src_label, src_coords, src_tabs, corner))
 
         fits.sort(key=operator.itemgetter(0))
 
@@ -674,25 +725,66 @@ class AlignTk:
 
         fits = []
         for corner in self.corners:
-            fits += self.score_corner(corner)
+            v = self.score_corner2(corner)
+            if len(v) > 1:
+                r = v[0][0] / v[1][0]
+                fits.append((r, *v[0]))
+            elif v:
+                fits.append((1., *v[0]))
+
+            s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
+            print(f"{corner}: " + ", ".join(s))
 
         fits.sort(key=operator.itemgetter(0))
 
         for i, f in enumerate(fits[:10]):
-            mse, src_label, src_coords, corner = f
-            with np.printoptions(precision=1):
-                print(f"{i}: {src_label:3s} angle={src_coords.angle:+.3f} xy={src_coords.dxdy} {mse=:5.1f} {corner=}")
+            r, mse, src_label, src_coords, src_tabs, corner = f
+            angle = src_coords.angle * (180. / math.pi)
+            print(f"{i}: {src_label:3s} angle={angle:+6.1f} {r=:.3f} {mse=:5.1f} {src_tabs=} {corner=}")
 
         if fits:
             piece_dict = dict((i.piece.label, i) for i in self.pieces)
-            _, label, coords, _ = fits[0]
+            _, _, label, coords, _, _ = fits[0]
             piece_dict[label].coords = coords
             self.geometry.coords[label] = coords
+            self.save_geometry()
             self.update_adjacency()
             self.render()
 
-    def update_adjacency(self):
+    def save_geometry(self):
         
+        path = os.path.join(r'C:\temp\puzzler\coords',
+                            datetime.now().strftime('%Y%m%d-%H%M%S') + '.json')
+        
+        g = self.geometry
+        obj = {'width': g.width, 'height': g.height, 'coords':dict()}
+        for k, v in g.coords.items():
+            obj['coords'][k] = {'angle': v.angle, 'xy': list(v.dxdy)}
+                
+        with open(path, 'w') as f:
+            json.dump(obj, f, indent=2)
+
+    def load_geometry(self, path):
+
+        with open(path) as f:
+            obj = json.load(f)
+
+        width = obj['width']
+        height = obj['height']
+        coords = dict()
+        for k, v in obj['coords'].items():
+            angle = v['angle']
+            xy = np.array(v['xy'])
+            coords[k] = AffineTransform(angle, xy)
+
+        self.geometry = puzzler.solver.Geometry(width, height, coords)
+        
+        piece_dict = {i.piece.label: i for i in self.pieces}
+        for k, v in self.geometry.coords.items():
+            piece_dict[k].coords = v
+
+    def update_adjacency(self):
+
         pieces_dict = {i.piece.label: i.piece for i in self.pieces}
         
         ac = puzzler.solver.AdjacencyComputer(pieces_dict, [], self.geometry)
@@ -734,6 +826,8 @@ class AlignTk:
         self.frontiers = frontiers
         self.corners = good_corners
 
+        return
+
         with open(r'C:\temp\puzzler\update_adjacency.txt','a') as f:
             print(f"successors={flatten_dict(successors)}", file=f)
             print(f"neighbors={flatten_dict(neighbors)}", file=f)
@@ -768,6 +862,7 @@ class AlignTk:
                 print(i.piece.label)
                 i.coords = coords
 
+        self.save_geometry()
         self.update_adjacency()
 
         self.render()
@@ -873,6 +968,11 @@ def align_ui(args):
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
     root.wm_resizable(0, 0)
+
+    if args.geometry:
+        ui.load_geometry(args.geometry)
+        ui.update_adjacency()
+    
     root.mainloop()
 
 def add_parser(commands):
@@ -880,4 +980,5 @@ def add_parser(commands):
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
     parser_align.add_argument("labels", nargs='*')
     parser_align.add_argument("-e", "--edges", help="add all edges", action='store_true')
+    parser_align.add_argument("-g", "--geometry", help="geometry file")
     parser_align.set_defaults(func=align_ui)
