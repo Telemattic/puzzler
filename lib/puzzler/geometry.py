@@ -51,7 +51,8 @@ class DistanceToEllipseComputer:
         self.semi_major = ellipse.semi_major
         self.semi_minor = ellipse.semi_minor
 
-        c, s = math.cos(ellipse.phi), math.sin(ellipse.phi)
+        # rotate the point into the coordinates of an axis-aligned ellipse
+        c, s = math.cos(-ellipse.phi), math.sin(-ellipse.phi)
         
         self.rot = np.array((( c, s), (-s, c)))
         
