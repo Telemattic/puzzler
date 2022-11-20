@@ -98,12 +98,20 @@ class TabComputer:
                     print("  angle for ellipse too small, rejecting")
                 continue
 
+            if tab['mse'] > 500:
+                if self.verbose:
+                    print("  MSE of fit too high, rejecting")
+                continue
+            
             e = tab['ellipse']
 
             if e.semi_major / e.semi_minor > 1.8:
                 if self.verbose:
                     print("  ellipse too eccentric, rejecting")
                 continue
+
+            if self.verbose:
+                print("  ** keeping indent tab")
             
             self.tabs.append(tab)
 
@@ -121,21 +129,36 @@ class TabComputer:
                     print("  angle for ellipse too small, rejecting")
                 continue
             
+            if tab['mse'] > 500:
+                if self.verbose:
+                    print("  MSE of fit too high, rejecting")
+                continue
+            
             e = tab['ellipse']
 
             if e.semi_major / e.semi_minor > 1.8:
                 if self.verbose:
                     print("  ellipse too eccentric, rejecting")
                 continue
-            
+
             if self.indexes_overlap(tab):
                 if self.verbose:
-                    print("outdent tab overlaps previously found tab")
+                    print("  outdent tab overlaps previously found tab")
                 continue
+            
+            if self.verbose:
+                print("  ** keeping outdent tab")
             
             self.tabs.append(tab)
 
-        for _ in range(3):
+        # return
+
+        if self.verbose:
+            print(f"Iterate fit process for {len(self.tabs)} ellipses")
+
+        for j in range(3):
+            if self.verbose:
+                print(f"-- pass {j+1}/3 --")
             for i, tab in enumerate(self.tabs):
                 a, b = tab['trimmed_indexes']
                 if self.verbose:
@@ -172,7 +195,7 @@ class TabComputer:
     def fit_ellipse_to_outdent(self, l, r):
 
         if self.verbose:
-            print(f"fit_ellipse_to_outdent: {l=} {r=}")
+            print(f"\nfit_ellipse_to_outdent: {l=} {r=}")
 
         indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
 
@@ -195,7 +218,7 @@ class TabComputer:
     def fit_ellipse_to_convexity_defect(self, l, r, c):
 
         if self.verbose:
-            print(f"fit_ellipse_to_convexity_defect: {l=} {r=} {c=}")
+            print(f"\nfit_ellipse_to_convexity_defect: {l=} {r=} {c=}")
 
         indexes, signed_area = self.approx_poly.indexes, self.approx_poly.signed_area
         n = len(indexes)
@@ -229,10 +252,11 @@ class TabComputer:
         if ellipse is None:
             return None
 
+        dist = puzzler.geometry.DistanceToEllipseComputer(ellipse)(points)
+        sse  = np.sum(dist ** 2)
+        mse  = sse / len(points)
+            
         if self.verbose:
-            dist = puzzler.geometry.DistanceToEllipseComputer(ellipse)(points)
-            sse  = np.sum(dist ** 2)
-            mse  = sse / len(points)
             print(f"  fit: SSE={sse:.1f} MSE={mse:.1f}")
 
         poly = [ellipse.center[0], ellipse.center[1], ellipse.semi_major, ellipse.semi_minor, None, ellipse.phi]
@@ -249,7 +273,7 @@ class TabComputer:
             print(f"  center={cx:.1f},{cy:.1f} major={ellipse.semi_major:.1f} minor={ellipse.semi_minor:.1f} phi={math.degrees(ellipse.phi):.1f}")
             print(f"  angle={math.degrees(angle):.1f}")
 
-        tab = {'ellipse': ellipse, 'indexes': (a,b), 'indent':indent, 'angle': angle}
+        tab = {'ellipse': ellipse, 'indexes': (a,b), 'indent':indent, 'angle': angle, 'mse': mse}
 
         # indices of last two points that are "close enough" to the ellipse
         ## aa, bb = self.find_fit_range(ellipse)
@@ -258,6 +282,9 @@ class TabComputer:
         self.find_tangent_points(tab)
 
         self.trim_indexes(tab)
+
+        if self.verbose:
+            print(f"  indexes: fit={tab['indexes']} tangent={tab['tangents']} trimmed={tab['trimmed_indexes']}")
 
         return tab
 
@@ -282,15 +309,25 @@ class TabComputer:
         points = self.perimeter.points 
         n = len(points)
 
+        va = []
         for aa in range(a,a+50):
             d = dist(points[aa % n])
+            va.append(d)
             if d < 5:
                 break
 
+        vb = []
         for bb in range(b,b-50,-1):
             d = dist(points[bb])
+            vb.append(d)
             if d < 5:
                 break
+
+        if False and self.verbose:
+            print("trim_indexes:")
+            with np.printoptions(precision=1):
+                print(f"  {a=} {aa=} {np.array(va)}")
+                print(f"  {b=} {bb=} {np.array(vb)}")
 
         tab['trimmed_indexes'] = (aa, bb)
 
@@ -516,6 +553,21 @@ class EllipseFitterTk:
             cross = np.cross(v0, v1)
             print(f"{cross=}")
 
+    def get_camera_matrix(self):
+
+        t = puzzler.render.Transform()
+        
+        h = int(self.canvas.configure('height')[4])
+        camera_matrix = np.array(
+            ((1,  0,   0),
+             (0, -1, h-1),
+             (0,  0,   1)), dtype=np.float64)
+        t.multiply(camera_matrix)
+        t.scale(self.camera_scale)
+        t.translate(-self.camera_trans)
+
+        return t.matrix
+
     def render(self):
 
         canvas = self.canvas
@@ -523,14 +575,7 @@ class EllipseFitterTk:
 
         r = puzzler.render.Renderer(self.canvas)
 
-        h = int(canvas.configure('height')[4])
-        camera_matrix = np.array(
-            ((1,  0,   0),
-             (0, -1, h-1),
-             (0,  0,   1)), dtype=np.float64)
-        r.transform.multiply(camera_matrix)
-        r.transform.scale(self.camera_scale)
-        r.transform.translate(-self.camera_trans)
+        r.transform.multiply(self.get_camera_matrix())
 
         if self.var_render_perimeter.get():
             r.draw_points(self.perimeter.points, radius=1, fill='black')
@@ -589,6 +634,22 @@ class EllipseFitterTk:
                     line = edge['line']
                     r.draw_lines(line.pts, fill='blue', width='2')
 
+    def motion(self, event):
+        cm = self.get_camera_matrix()
+        xy0 = np.array((event.x, event.y, 1))
+        xy1 = xy0 @ np.linalg.inv(cm).T
+
+        xy = xy1[:2]
+        x2y2 = np.square(self.perimeter.points - xy)
+        d = np.sum(x2y2, axis=1)
+        ii = np.argmin(d)
+
+        s = f"{xy[0]:.0f},{xy[1]:.0f}"
+        if d[ii] < 25:
+            s += f": point={ii}"
+
+        self.var_label.set(s)
+        
     def _init_controls(self, parent):
     
         self.controls = ttk.Frame(parent)
@@ -611,6 +672,10 @@ class EllipseFitterTk:
         cb3 = ttk.Checkbutton(cf1, text='Defects', command=self.render,
                               variable=self.var_render_convexity_defects)
         cb3.grid(column=2, row=0)
+
+        self.var_label = StringVar(value="x,y")
+        l1 = ttk.Label(self.controls, textvariable=self.var_label, width=40)
+        l1.grid(column=1, row=0)
         
         cf2 = ttk.LabelFrame(self.controls, text='Approx')
         cf2.grid(column=0, row=1, sticky=(N,W))
@@ -688,6 +753,7 @@ class EllipseFitterTk:
         self.canvas = Canvas(self.frame, width=w, height=h,
                              background='white', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.canvas.bind("<Motion>", self.motion)
 
         self._init_controls(self.frame)
 
