@@ -21,8 +21,12 @@ class Puzzle:
             rect: tuple[int, int, int, int]
 
         def __post_init__(self):
-            self.bbox = (np.min(self.points, axis=0), np.max(self.points, axis=0))
-            self.radius = np.max(np.linalg.norm(self.points, axis=1))
+            if self.points is not None and len(self.points):
+                self.bbox = (np.min(self.points, axis=0), np.max(self.points, axis=0))
+                self.radius = np.max(np.linalg.norm(self.points, axis=1))
+            else:
+                self.bbox = (np.zeros(2), np.zeros(2))
+                self.radius = 0.
             
         label:  str
         source: Source
