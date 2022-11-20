@@ -596,7 +596,8 @@ def align_ui(args):
 
     if 'I1' in by_label:
         p = by_label['I1']
-        p.edges = p.edges[::-1]
+        if len(p.edges) == 2:
+            p.edges = p.edges[::-1]
 
     labels = set(args.labels)
 
