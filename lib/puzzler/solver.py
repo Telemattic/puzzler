@@ -303,11 +303,12 @@ class OverlappingPieces:
                 
 class ClosestPieces:
 
-    def __init__(self, pieces, geometry):
+    def __init__(self, pieces, geometry, distance_query_cache):
         self.pieces = pieces
         self.geometry = geometry
         self.overlaps = OverlappingPieces(pieces, geometry.coords)
         self.max_dist = 50
+        self.distance_query_cache = distance_query_cache
 
         # print(f"ClosestPieces: width={self.geometry.width:.1f} height={self.geometry.height:.1f}")
 
@@ -330,14 +331,18 @@ class ClosestPieces:
             dst_piece = self.pieces[dst_label]
             dst_coords = self.geometry.coords[dst_label]
 
-            di = puzzler.align.DistanceImage.Factory(dst_piece)
-            
-            transform = puzzler.render.Transform()
-            transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
-            transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+            if False:
+                transform = puzzler.render.Transform()
+                transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
+                transform.translate(src_coords.dxdy).rotate(src_coords.angle)
 
-            src_points = transform.apply_v2(src_piece.points)
-            dst_dist = np.abs(di.query(src_points))
+                di = puzzler.align.DistanceImage.Factory(dst_piece)
+            
+                src_points = transform.apply_v2(src_piece.points)
+                dst_dist = np.abs(di.query(src_points))
+            else:
+                dst_dist = np.abs(
+                    self.distance_query_cache.query(dst_piece, dst_coords, src_piece, src_coords))
 
             ii = np.nonzero(dst_dist < ret_dist)[0]
             if 0 == len(ii):
@@ -383,6 +388,25 @@ class ClosestPieces:
             ret_no[ii] = len(dst_labels)
             dst_labels.append('axis3')
 
+        retval = collections.defaultdict(list)
+
+        i = 0
+        for key, group in itertools.groupby(ret_no):
+            j = len(list(group))
+            key_s = dst_labels[key] if key >= 0 else 'none'
+            retval[key_s].append((i, i+j-1))
+            i += j
+            
+        for v in retval.values():
+            if len(v) >= 2:
+                head = v[0]
+                tail = v[-1]
+                if 0 == head[0] and i-1 == tail[1]:
+                    v[0] = (tail[0], head[1])
+                    v.pop()
+
+        return retval
+    
         def ranges_for_dst_no(dst_no):
             
             ii = np.nonzero(ret_no == dst_no)[0]
@@ -414,6 +438,11 @@ class ClosestPieces:
         ranges = ranges_for_dst_no(-1)
         if ranges:
             retval['none'] = ranges
+
+        # with np.printoptions(threshold=10000):
+        #     print(f"dst_no={ret_no}")
+        # print(f"{dst_labels=}")
+        # print(f"closest={retval}")
 
         return retval
     
@@ -469,7 +498,7 @@ class ClosestPoints:
     
 class AdjacencyComputer:
 
-    def __init__(self, pieces, constraints, geometry):
+    def __init__(self, pieces, constraints, geometry, distance_query_cache):
         self.pieces = pieces
         self.constraints = constraints
         self.geometry = geometry
@@ -484,7 +513,7 @@ class AdjacencyComputer:
                 self.tab_constraints[c.a[0]].append(c)
                 self.tab_constraints[c.b[0]].append(TabConstraint(c.b, c.a))
 
-        self.closest = ClosestPieces(self.pieces, self.geometry)
+        self.closest = ClosestPieces(self.pieces, self.geometry, distance_query_cache)
 
     def compute_adjacency(self, label):
 
@@ -711,8 +740,6 @@ class PuzzleSolver:
             s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
             print(f"{corner}: " + ", ".join(s))
 
-        # print(self.distance_query_cache.stats)
-
         if not fits:
             return
         
@@ -728,6 +755,8 @@ class PuzzleSolver:
         self.geometry.coords[label] = coords
         self.save_geometry()
         self.update_adjacency()
+
+        print(self.distance_query_cache.stats | {'cache_size': len(self.distance_query_cache.cache)})
 
     def score_corner(self, corner):
 
@@ -797,7 +826,7 @@ class PuzzleSolver:
         
     def update_adjacency(self):
 
-        ac = AdjacencyComputer(self.pieces, [], self.geometry)
+        ac = AdjacencyComputer(self.pieces, [], self.geometry, self.distance_query_cache)
         
         adjacency = dict()
         for label in self.geometry.coords:

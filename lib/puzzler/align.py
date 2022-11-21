@@ -403,7 +403,7 @@ class DistanceQueryCache:
     def __init__(self):
         self.serial_no = 1
         self.cache = dict()
-        self.stats = {'n_read':0, 'n_write':0, 'read_miss':0, 'read_hit':0}
+        self.stats = {'n_read':0, 'n_write':0, 'read_miss':0, 'read_hit':0, 'n_purge':0}
 
     def query(self, dst_piece, dst_coords, src_piece, src_coords):
 
@@ -445,10 +445,11 @@ class DistanceQueryCache:
         self.cache[key] = [value, self.serial_no]
 
     def purge(self):
-        old_keys = [k for k, v in self.cache.items() if v[1] != self.serial_no]
+        old_keys = [k for k, v in self.cache.items() if v[1] < self.serial_no]
         for k in old_keys:
             del self.cache[k]
         self.serial_no += 1
+        self.stats['n_purge'] += len(old_keys)
     
 class MultiTargetError2:
 
