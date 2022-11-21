@@ -280,6 +280,8 @@ class MultiAligner:
 
         self.multi_target_error = MultiTargetError(pieces, geometry)
 
+        self.multi_target_error2 = MultiTargetError2(pieces, geometry, DistanceQueryCache())
+
     def compute_alignment(self, src_piece, source_tabs):
 
         src_points = np.array([src_piece.tabs[s].ellipse.center for s in source_tabs])
@@ -320,8 +322,15 @@ class MultiAligner:
             # print(f"measure_fit: {src_piece.label} {n_tabs=} {tab0=} {tab1=}: tabs must be adjacent!")
             return 1e6
 
+        verbose = src_piece.label == 'H7' and source_tabs == (2,3)
+
         src_points = src_coords.get_transform().apply_v2(src_piece.points)
-        return self.multi_target_error(src_points, l, r)
+        error1 = self.multi_target_error(src_points, l, r, verbose)
+        if verbose:
+            error2 = self.multi_target_error2(src_piece, src_coords, l, r, verbose)
+            print(f"-- {src_piece.label} {source_tabs} {l=} {r=} {error1=:.1f} {error2=:.1f}")
+            
+        return error1
     
 class MultiTargetError:
 
@@ -331,7 +340,7 @@ class MultiTargetError:
         self.overlaps = puzzler.solver.OverlappingPieces(pieces, geometry.coords)
         self.max_dist = 256
 
-    def __call__(self, src_points, l, r):
+    def __call__(self, src_points, l, r, verbose=False):
 
         src_bbox = (np.min(src_points, axis=0), np.max(src_points, axis=0))
         src_center = (src_bbox[0] + src_bbox[1]) * .5
@@ -341,6 +350,8 @@ class MultiTargetError:
 
         src_points_inner = ring_slice(src_points, l, r)
         src_points_outer = ring_slice(src_points, r, l)
+
+        assert len(src_points) == len(src_points_inner) + len(src_points_outer)
         
         ret_dist_inner = np.full(len(src_points_inner), self.max_dist)
         ret_dist_outer = np.full(len(src_points_outer), self.max_dist)
@@ -355,23 +366,143 @@ class MultiTargetError:
             transform = puzzler.render.Transform()
             transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
 
-            dst_dist = np.abs(di.query(transform.apply_v2(src_points_inner)))
-
-            ii = np.nonzero(dst_dist < ret_dist_inner)[0]
+            dst_dist_inner = np.abs(di.query(transform.apply_v2(src_points_inner)))
+            ii = np.nonzero(dst_dist_inner < ret_dist_inner)[0]
             if len(ii):
-                ret_dist_inner[ii] = dst_dist[ii]
+                ret_dist_inner[ii] = dst_dist_inner[ii]
 
-            dst_dist = di.query(transform.apply_v2(src_points_outer))
-            ii = np.nonzero(dst_dist < ret_dist_outer)[0]
+            dst_dist_outer = di.query(transform.apply_v2(src_points_outer))
+            ii = np.nonzero(dst_dist_outer < ret_dist_outer)[0]
             if len(ii):
-                ret_dist_outer[ii] = dst_dist[ii]
+                ret_dist_outer[ii] = dst_dist_outer[ii]
+                
+        sse = np.sum(np.square(ret_dist_inner))
+        num_points = len(ret_dist_inner)
 
-        sse = np.sum(ret_dist_inner ** 2)
-        num_points = len(src_points_inner)
-
-        ii = np.nonzero(ret_dist_outer < 0)
+        ii = np.nonzero(ret_dist_outer < 0)[0]
         if len(ii):
-            sse += np.sum(ret_dist_outer[ii] ** 2)
+            sse += np.sum(np.square(ret_dist_outer[ii]))
             num_points += len(ii)
 
+        if verbose:
+            ret_dist = np.concatenate((ret_dist_outer[-l:], ret_dist_inner, ret_dist_outer[:-l]))
+            with np.printoptions(precision=0):
+                print(ret_dist)
+            print(f"<MTE1> {sse=:.1f} {num_points=}")
+            
+
         return sse / num_points
+
+class DistanceQueryCache:
+
+    def __init__(self):
+        self.serial_no = 1
+        self.cache = dict()
+
+    def make_key(self, dst_piece, dst_coords, src_piece, src_coords, l, r):
+        def coords_key(c):
+            return (c.angle, c.dxdy[0], c.dxdy[1])
+        return (dst_piece.label, coords_key(dst_coords),
+                src_piece.label, coords_key(src_coords), l, r)
+
+    def read(self, key):
+        entry = self.cache.get(key)
+        if not entry:
+            return None
+        
+        entry[1] = self.serial_no
+        return entry[0]
+
+    def write(self, key, value):
+        self.cache[key] = [value, self.serial_no]
+
+    def purge(self):
+        old_keys = [k for k, v in self.cache.items() if v[1] != self.serial_no]
+        del self.cache[old_keys]
+        self.serial_no += 1
+
+    # def __del__(self):
+    #     print(f"serial_no: {self.serial_no}")
+    #     print(f"cache: {self.cache}")
+    
+class MultiTargetError2:
+
+    def __init__(self, pieces, geometry, cache):
+        self.pieces = pieces
+        self.geometry = geometry
+        self.overlaps = puzzler.solver.OverlappingPieces(pieces, geometry.coords)
+        self.max_dist = 256
+        self.cache = cache
+
+    def __call__(self, src_piece, src_coords, l, r, verbose=False):
+
+        src_center = src_coords.dxdy
+        src_radius = src_piece.radius
+        
+        dst_labels = self.overlaps(src_center, src_radius + self.max_dist).tolist()
+        ret_dist = np.full(len(src_piece.points), self.max_dist)
+
+        for dst_label in dst_labels:
+
+            dst_piece = self.pieces[dst_label]
+            dst_coords = self.geometry.coords[dst_label]
+
+            dst_dist = self.distance_query(dst_piece, dst_coords, src_piece, src_coords, l, r)
+            if verbose:
+                with np.printoptions(precision=1):
+                    print(f"<MTE2> {dst_label}: {dst_dist}")
+
+            ii = np.nonzero(dst_dist < ret_dist)[0]
+            if len(ii):
+                ret_dist[ii] = dst_dist[ii]
+
+        sse = 0
+        num_points = 0
+
+        inner = [(l,r)]
+        outer = [(0,l), (r,len(ret_dist))]
+
+        if l >= r:
+            inner, outer = outer, inner
+
+        for a, b in inner:
+            sse += np.sum(np.square(ret_dist[a:b]))
+            num_points += b-a
+
+        for a, b in outer:
+            ii = np.nonzero(ret_dist[a:b] < 0)[0]
+            if len(ii):
+                sse += np.sum(np.square(ret_dist[ii + a]))
+                num_points += len(ii)
+
+        if verbose:
+            with np.printoptions(precision=0):
+                print(ret_dist)
+            print(f"<MTE2> {sse=:.1f} {num_points=}")
+
+        return sse / num_points
+
+    def distance_query(self, dst_piece, dst_coords, src_piece, src_coords, l, r):
+
+        key = self.cache.make_key(dst_piece, dst_coords, src_piece, src_coords, l, r)
+        if (retval := self.cache.read(key)) is not None:
+            return retval
+
+        transform = puzzler.render.Transform()
+        transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
+        transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+
+        di = DistanceImage.Factory(dst_piece)
+        retval = di.query(transform.apply_v2(src_piece.points))
+
+        if l < r:
+            retval[l:r] = np.abs(retval[l:r])
+        else:
+            retval[:l] = np.abs(retval[:l])
+            retval[r:] = np.abs(retval[r:])
+            
+        self.cache.write(key, retval)
+
+        return retval
+        
+    
