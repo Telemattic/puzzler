@@ -405,11 +405,29 @@ class DistanceQueryCache:
         self.cache = dict()
         self.stats = {'n_read':0, 'n_write':0, 'read_miss':0, 'read_hit':0}
 
-    def make_key(self, dst_piece, dst_coords, src_piece, src_coords, l, r):
+    def query(self, dst_piece, dst_coords, src_piece, src_coords):
+
+        key = self.make_key(dst_piece, dst_coords, src_piece, src_coords)
+        if (retval := self.read(key)) is not None:
+            return retval
+
+        transform = puzzler.render.Transform()
+        transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
+        transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+
+        di = DistanceImage.Factory(dst_piece)
+        retval = di.query(transform.apply_v2(src_piece.points))
+        retval.setflags(write=False)
+
+        self.write(key, retval)
+
+        return retval
+        
+    def make_key(self, dst_piece, dst_coords, src_piece, src_coords):
         def coords_key(c):
             return (c.angle, c.dxdy[0], c.dxdy[1])
         return (dst_piece.label, coords_key(dst_coords),
-                src_piece.label, coords_key(src_coords), l, r)
+                src_piece.label, coords_key(src_coords))
 
     def read(self, key):
         self.stats['n_read'] += 1
@@ -439,7 +457,7 @@ class MultiTargetError2:
         self.geometry = geometry
         self.overlaps = puzzler.solver.OverlappingPieces(pieces, geometry.coords)
         self.max_dist = 256
-        self.cache = cache
+        self.distance_query_cache = cache
 
     def __call__(self, src_piece, src_coords, l, r, verbose=False):
 
@@ -449,26 +467,29 @@ class MultiTargetError2:
         dst_labels = self.overlaps(src_center, src_radius + self.max_dist).tolist()
         ret_dist = np.full(len(src_piece.points), self.max_dist)
 
-        for dst_label in dst_labels:
-
-            dst_piece = self.pieces[dst_label]
-            dst_coords = self.geometry.coords[dst_label]
-
-            dst_dist = self.distance_query(dst_piece, dst_coords, src_piece, src_coords, l, r)
-
-            ii = np.nonzero(dst_dist < ret_dist)[0]
-            if len(ii):
-                ret_dist[ii] = dst_dist[ii]
-
-        sse = 0
-        num_points = 0
-
         if l < r:
             inner = [(l,r)]
             outer = [(0,l), (r,len(ret_dist))]
         else:
             inner = [(l,len(ret_dist)), (0,r)]
             outer = [(r,l)]
+
+        for dst_label in dst_labels:
+
+            dst_piece = self.pieces[dst_label]
+            dst_coords = self.geometry.coords[dst_label]
+
+            dst_dist = self.distance_query_cache.query(
+                dst_piece, dst_coords, src_piece, src_coords)
+
+            for a, b in inner:
+                ret_dist[a:b] = np.minimum(np.abs(dst_dist[a:b]), ret_dist[a:b])
+
+            for a, b in outer:
+                ret_dist[a:b] = np.minimum(dst_dist[a:b], ret_dist[a:b])
+
+        sse = 0
+        num_points = 0
 
         if verbose:
             print(f"  <MTE2> {l=} {r=} {inner=} {outer=}")
@@ -489,28 +510,3 @@ class MultiTargetError2:
             print(f"  <MTE2> {inner_sse=:.1f} {sse=:.1f} {num_points=}")
 
         return sse / num_points
-
-    def distance_query(self, dst_piece, dst_coords, src_piece, src_coords, l, r):
-
-        key = self.cache.make_key(dst_piece, dst_coords, src_piece, src_coords, l, r)
-        if (retval := self.cache.read(key)) is not None:
-            return retval
-
-        transform = puzzler.render.Transform()
-        transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
-        transform.translate(src_coords.dxdy).rotate(src_coords.angle)
-
-        di = DistanceImage.Factory(dst_piece)
-        retval = di.query(transform.apply_v2(src_piece.points))
-
-        if l < r:
-            retval[l:r] = np.abs(retval[l:r])
-        else:
-            retval[:r] = np.abs(retval[:r])
-            retval[l:] = np.abs(retval[l:])
-            
-        self.cache.write(key, retval)
-
-        return retval
-        
-    
