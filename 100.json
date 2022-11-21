@@ -1,31 +1,31 @@
 {
   "scans": {
     "pieces_A": {
-      "path": "C:\\temp\\puzzler\\scans\\pieces_A.jpg"
+      "path": "C:\\temp\\puzzler\\undersea\\scans\\pieces_A.jpg"
     },
     "pieces_B": {
-      "path": "C:\\temp\\puzzler\\scans\\pieces_B.jpg"
+      "path": "C:\\temp\\puzzler\\undersea\\scans\\pieces_B.jpg"
     },
     "pieces_C": {
-      "path": "C:\\temp\\puzzler\\scans\\pieces_C.jpg"
+      "path": "C:\\temp\\puzzler\\undersea\\scans\\pieces_C.jpg"
     },
     "pieces_D": {
-      "path": "c:\\temp\\puzzler\\scans\\pieces_D.jpg"
+      "path": "c:\\temp\\puzzler\\undersea\\scans\\pieces_D.jpg"
     },
     "pieces_E": {
-      "path": "c:\\temp\\puzzler\\scans\\pieces_E.jpg"
+      "path": "c:\\temp\\puzzler\\undersea\\scans\\pieces_E.jpg"
     },
     "pieces_F": {
-      "path": "c:\\temp\\puzzler\\scans\\pieces_F.jpg"
+      "path": "c:\\temp\\puzzler\\undersea\\scans\\pieces_F.jpg"
     },
     "pieces_G": {
-      "path": "c:\\temp\\puzzler\\scans\\pieces_G.jpg"
+      "path": "c:\\temp\\puzzler\\undersea\\scans\\pieces_G.jpg"
     },
     "pieces_H": {
-      "path": "c:\\temp\\puzzler\\scans\\pieces_H.jpg"
+      "path": "c:\\temp\\puzzler\\undersea\\scans\\pieces_H.jpg"
     },
     "pieces_I": {
-      "path": "c:\\temp\\puzzler\\scans\\pieces_I.jpg"
+      "path": "c:\\temp\\puzzler\\undersea\\scans\\pieces_I.jpg"
     }
   },
   "pieces": [
