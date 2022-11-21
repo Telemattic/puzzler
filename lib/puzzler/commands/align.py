@@ -508,6 +508,12 @@ class AlignTk:
                     
         self.render()
 
+        if self.var_solve_continuous.get():
+            if self.solver.corners:
+                self.parent.after_idle(self.do_tab_alignment_B2)
+            else:
+                self.var_solve_continuous.set(0)
+
     def update_coords(self):
         
         g = self.solver.geometry
@@ -579,9 +585,13 @@ class AlignTk:
                              variable=self.var_render_adjacency)
         b3.grid(column=2, row=0, sticky=W)
 
+        self.var_solve_continuous = IntVar(value=0)
+        b4 = ttk.Checkbutton(self.controls, text="Continuous", variable=self.var_solve_continuous)
+        b4.grid(column=3, row=0, sticky=W)
+
         self.var_label = StringVar(value="x,y")
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=80)
-        l1.grid(column=3, row=0, sticky=(E))
+        l1.grid(column=4, row=0, sticky=(E))
 
         self.render_full = False
         self.render()
