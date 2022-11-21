@@ -335,7 +335,7 @@ class MultiTargetError:
 
         src_bbox = (np.min(src_points, axis=0), np.max(src_points, axis=0))
         src_center = (src_bbox[0] + src_bbox[1]) * .5
-        src_radius = np.linalg.norm(src_bbox[1] - src_bbox[0])
+        src_radius = np.linalg.norm(src_bbox[1] - src_bbox[0]) * .5
 
         dst_labels = self.overlaps(src_center, src_radius + self.max_dist).tolist()
 
