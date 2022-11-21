@@ -266,7 +266,7 @@ class EdgeAligner:
 
 class MultiAligner:
 
-    def __init__(self, targets, pieces, geometry):
+    def __init__(self, targets, pieces, geometry, cache):
         self.targets = targets
 
         dst_points = []
@@ -280,7 +280,7 @@ class MultiAligner:
 
         self.multi_target_error = MultiTargetError(pieces, geometry)
 
-        self.multi_target_error2 = MultiTargetError2(pieces, geometry, DistanceQueryCache())
+        self.multi_target_error2 = MultiTargetError2(pieces, geometry, cache)
 
     def compute_alignment(self, src_piece, source_tabs):
 
@@ -322,14 +322,20 @@ class MultiAligner:
             # print(f"measure_fit: {src_piece.label} {n_tabs=} {tab0=} {tab1=}: tabs must be adjacent!")
             return 1e6
 
-        verbose = src_piece.label == 'H7' and source_tabs == (2,3)
+        return self.multi_target_error2(src_piece, src_coords, l, r)
 
+        verbose = src_piece.label == 'H10' and src_coords.dxdy[0] > 7500 and src_coords.dxdy[1] < 1500
+        if verbose:
+            print(f"<MEASUREFIT> {src_piece.label} {source_tabs} angle={src_coords.angle:.3f} x,y={src_coords.dxdy[0]:.1f},{src_coords.dxdy[1]:.1f} {l=} {r=}")
+        
         src_points = src_coords.get_transform().apply_v2(src_piece.points)
         error1 = self.multi_target_error(src_points, l, r, verbose)
+        
+        error2 = self.multi_target_error2(src_piece, src_coords, l, r, verbose)
+
         if verbose:
-            error2 = self.multi_target_error2(src_piece, src_coords, l, r, verbose)
-            print(f"-- {src_piece.label} {source_tabs} {l=} {r=} {error1=:.1f} {error2=:.1f}")
-            
+            print(f"  --> {src_piece.label} {source_tabs} {error1=:.1f} {error2=:.1f}")
+
         return error1
     
 class MultiTargetError:
@@ -379,6 +385,8 @@ class MultiTargetError:
         sse = np.sum(np.square(ret_dist_inner))
         num_points = len(ret_dist_inner)
 
+        inner_sse = sse
+
         ii = np.nonzero(ret_dist_outer < 0)[0]
         if len(ii):
             sse += np.sum(np.square(ret_dist_outer[ii]))
@@ -386,10 +394,7 @@ class MultiTargetError:
 
         if verbose:
             ret_dist = np.concatenate((ret_dist_outer[-l:], ret_dist_inner, ret_dist_outer[:-l]))
-            with np.printoptions(precision=0):
-                print(ret_dist)
-            print(f"<MTE1> {sse=:.1f} {num_points=}")
-            
+            print(f"  <MTE1> {inner_sse=:.1f} {sse=:.1f} {num_points=}")
 
         return sse / num_points
 
@@ -398,6 +403,7 @@ class DistanceQueryCache:
     def __init__(self):
         self.serial_no = 1
         self.cache = dict()
+        self.stats = {'n_read':0, 'n_write':0, 'read_miss':0, 'read_hit':0}
 
     def make_key(self, dst_piece, dst_coords, src_piece, src_coords, l, r):
         def coords_key(c):
@@ -406,24 +412,25 @@ class DistanceQueryCache:
                 src_piece.label, coords_key(src_coords), l, r)
 
     def read(self, key):
+        self.stats['n_read'] += 1
         entry = self.cache.get(key)
         if not entry:
+            self.stats['read_miss'] += 1
             return None
         
         entry[1] = self.serial_no
+        self.stats['read_hit'] += 1
         return entry[0]
 
     def write(self, key, value):
+        self.stats['n_write'] += 1
         self.cache[key] = [value, self.serial_no]
 
     def purge(self):
         old_keys = [k for k, v in self.cache.items() if v[1] != self.serial_no]
-        del self.cache[old_keys]
+        for k in old_keys:
+            del self.cache[k]
         self.serial_no += 1
-
-    # def __del__(self):
-    #     print(f"serial_no: {self.serial_no}")
-    #     print(f"cache: {self.cache}")
     
 class MultiTargetError2:
 
@@ -448,9 +455,6 @@ class MultiTargetError2:
             dst_coords = self.geometry.coords[dst_label]
 
             dst_dist = self.distance_query(dst_piece, dst_coords, src_piece, src_coords, l, r)
-            if verbose:
-                with np.printoptions(precision=1):
-                    print(f"<MTE2> {dst_label}: {dst_dist}")
 
             ii = np.nonzero(dst_dist < ret_dist)[0]
             if len(ii):
@@ -459,15 +463,21 @@ class MultiTargetError2:
         sse = 0
         num_points = 0
 
-        inner = [(l,r)]
-        outer = [(0,l), (r,len(ret_dist))]
+        if l < r:
+            inner = [(l,r)]
+            outer = [(0,l), (r,len(ret_dist))]
+        else:
+            inner = [(l,len(ret_dist)), (0,r)]
+            outer = [(r,l)]
 
-        if l >= r:
-            inner, outer = outer, inner
+        if verbose:
+            print(f"  <MTE2> {l=} {r=} {inner=} {outer=}")
 
         for a, b in inner:
             sse += np.sum(np.square(ret_dist[a:b]))
             num_points += b-a
+
+        inner_sse = sse
 
         for a, b in outer:
             ii = np.nonzero(ret_dist[a:b] < 0)[0]
@@ -476,9 +486,7 @@ class MultiTargetError2:
                 num_points += len(ii)
 
         if verbose:
-            with np.printoptions(precision=0):
-                print(ret_dist)
-            print(f"<MTE2> {sse=:.1f} {num_points=}")
+            print(f"  <MTE2> {inner_sse=:.1f} {sse=:.1f} {num_points=}")
 
         return sse / num_points
 
@@ -498,8 +506,8 @@ class MultiTargetError2:
         if l < r:
             retval[l:r] = np.abs(retval[l:r])
         else:
-            retval[:l] = np.abs(retval[:l])
-            retval[r:] = np.abs(retval[r:])
+            retval[:r] = np.abs(retval[:r])
+            retval[l:] = np.abs(retval[l:])
             
         self.cache.write(key, retval)
 

@@ -663,6 +663,7 @@ class PuzzleSolver:
         self.adjacency = None
         self.frontiers = None
         self.corners = []
+        self.distance_query_cache = puzzler.align.DistanceQueryCache()
 
     def solve(self):
         if self.geometry:
@@ -696,6 +697,8 @@ class PuzzleSolver:
         if not self.corners:
             return
 
+        self.distance_query_cache.purge()
+
         fits = []
         for corner in self.corners:
             v = self.score_corner(corner)
@@ -707,6 +710,8 @@ class PuzzleSolver:
 
             s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
             print(f"{corner}: " + ", ".join(s))
+
+        # print(self.distance_query_cache.stats)
 
         if not fits:
             return
@@ -746,7 +751,8 @@ class PuzzleSolver:
                     src_tabs = ((i+n-1)%n, i)
                     allways.append((src_piece.label, src_tabs))
 
-        aligner = puzzler.align.MultiAligner(corner, self.pieces, self.geometry)
+        aligner = puzzler.align.MultiAligner(
+            corner, self.pieces, self.geometry, self.distance_query_cache)
 
         fits = []
 
