@@ -318,82 +318,68 @@ class ClosestPieces:
         src_coords = self.geometry.coords[src_label]
         num_points = len(src_piece.points)
         
-        dst_labels = self.overlaps(src_coords.dxdy, src_piece.radius + self.max_dist).tolist()
-
         ret_dist = np.full(num_points, self.max_dist)
-        ret_no = np.full(num_points, -1)
+        ret_no = np.zeros(num_points, dtype=np.int32)
+        ret_labels = ['none']
 
-        for dst_no, dst_label in enumerate(dst_labels):
-
-            if dst_label == src_label:
-                continue
-
+        def piece_overlap(dst_label):
             dst_piece = self.pieces[dst_label]
             dst_coords = self.geometry.coords[dst_label]
 
-            if False:
-                transform = puzzler.render.Transform()
-                transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
-                transform.translate(src_coords.dxdy).rotate(src_coords.angle)
-
-                di = puzzler.align.DistanceImage.Factory(dst_piece)
-            
-                src_points = transform.apply_v2(src_piece.points)
-                dst_dist = np.abs(di.query(src_points))
-            else:
-                dst_dist = np.abs(
-                    self.distance_query_cache.query(dst_piece, dst_coords, src_piece, src_coords))
+            dst_dist = np.abs(
+                self.distance_query_cache.query(dst_piece, dst_coords, src_piece, src_coords))
 
             ii = np.nonzero(dst_dist < ret_dist)[0]
             if 0 == len(ii):
-                continue
+                return
             
             ret_dist[ii] = dst_dist[ii]
-            ret_no[ii] = dst_no
+            ret_no[ii] = len(ret_labels)
+            ret_labels.append(dst_label)
 
-        transform = puzzler.render.Transform()
-        transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+        candidates = self.overlaps(src_coords.dxdy, src_piece.radius + self.max_dist).tolist()
 
-        src_points = transform.apply_v2(src_piece.points)
+        for dst_label in candidates:
 
-        # axis 0
-        dst_dist = np.abs(src_points[:,1])
-        ii = np.nonzero(dst_dist < ret_dist)[0]
-        if len(ii):
+            if dst_label != src_label:
+                piece_overlap(dst_label)
+
+        src_points = None
+
+        def axis_overlap(xy, loc, label):
+
+            center = src_coords.dxdy[xy]
+            radius = src_piece.radius + self.max_dist
+            overlaps = center - radius <= loc <= center + radius
+            if not overlaps:
+                return
+
+            nonlocal src_points
+            if src_points is None:
+                transform = puzzler.render.Transform()
+                transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+                src_points = transform.apply_v2(src_piece.points)
+            
+            dst_dist = np.abs(src_points[:,xy] - loc)
+            ii = np.nonzero(dst_dist < ret_dist)[0]
+            if 0 == len(ii):
+                return
+            
             ret_dist[ii] = dst_dist[ii]
-            ret_no[ii] = len(dst_labels)
-            dst_labels.append('axis0')
+            ret_no[ii] = len(ret_labels)
+            ret_labels.append(label)
 
-        # axis 1
-        dst_dist = np.abs(src_points[:,0] - self.geometry.width)
-        ii = np.nonzero(dst_dist < ret_dist)[0]
-        if len(ii):
-            ret_dist[ii] = dst_dist[ii]
-            ret_no[ii] = len(dst_labels)
-            dst_labels.append('axis1')
-
-        # axis 2
-        dst_dist = np.abs(src_points[:,1] - self.geometry.height)
-        ii = np.nonzero(dst_dist < ret_dist)[0]
-        if len(ii):
-            ret_dist[ii] = dst_dist[ii]
-            ret_no[ii] = len(dst_labels)
-            dst_labels.append('axis2')
-
-        # axis 3
-        dst_dist = np.abs(src_points[:,0])
-        ii = np.nonzero(dst_dist < ret_dist)[0]
-        if len(ii):
-            ret_dist[ii] = dst_dist[ii]
-            ret_no[ii] = len(dst_labels)
-            dst_labels.append('axis3')
+        axis_overlap(1, 0., 'axis0')
+        axis_overlap(0, self.geometry.width, 'axis1')
+        axis_overlap(1, self.geometry.height, 'axis2')
+        axis_overlap(0, 0., 'axis3')
 
         retval = collections.defaultdict(list)
 
         i = 0
         for key, group in itertools.groupby(ret_no):
             j = len(list(group))
-            key_s = dst_labels[key] if key >= 0 else 'none'
+            key_s = ret_labels[key]
             retval[key_s].append((i, i+j-1))
             i += j
             
@@ -404,45 +390,6 @@ class ClosestPieces:
                 if 0 == head[0] and i-1 == tail[1]:
                     v[0] = (tail[0], head[1])
                     v.pop()
-
-        return retval
-    
-        def ranges_for_dst_no(dst_no):
-            
-            ii = np.nonzero(ret_no == dst_no)[0]
-            if 0 == len(ii):
-                return []
-
-            ranges = []
-            for key, group in itertools.groupby(enumerate(ii), lambda x: x[0] - x[1]):
-                group = list(map(operator.itemgetter(1), group))
-                ranges.append((group[0], group[-1]))
-
-            if len(ranges) >= 2:
-                head = ranges[0]
-                tail = ranges[-1]
-                if 0 == head[0] and len(src_points)-1 == tail[1]:
-                    ranges[0] = (tail[0], head[1])
-                    ranges.pop()
-
-            return ranges
-
-        retval = dict()
-        
-        for dst_no, dst_label in enumerate(dst_labels):
-
-            ranges = ranges_for_dst_no(dst_no)
-            if ranges:
-                retval[dst_label] = ranges
-
-        ranges = ranges_for_dst_no(-1)
-        if ranges:
-            retval['none'] = ranges
-
-        # with np.printoptions(threshold=10000):
-        #     print(f"dst_no={ret_no}")
-        # print(f"{dst_labels=}")
-        # print(f"closest={retval}")
 
         return retval
     
