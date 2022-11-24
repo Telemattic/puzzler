@@ -278,9 +278,7 @@ class MultiAligner:
 
         self.dst_points = np.array(dst_points)
 
-        self.multi_target_error = MultiTargetError(pieces, geometry)
-
-        self.multi_target_error2 = MultiTargetError2(pieces, geometry, cache)
+        self.multi_target_error = MultiTargetError(pieces, geometry, cache)
 
     def compute_alignment(self, src_piece, source_tabs):
 
@@ -322,88 +320,14 @@ class MultiAligner:
             # print(f"measure_fit: {src_piece.label} {n_tabs=} {tab0=} {tab1=}: tabs must be adjacent!")
             return 1e6
 
-        return self.multi_target_error2(src_piece, src_coords, l, r)
-
-        verbose = src_piece.label == 'H10' and src_coords.dxdy[0] > 7500 and src_coords.dxdy[1] < 1500
-        if verbose:
-            print(f"<MEASUREFIT> {src_piece.label} {source_tabs} angle={src_coords.angle:.3f} x,y={src_coords.dxdy[0]:.1f},{src_coords.dxdy[1]:.1f} {l=} {r=}")
-        
-        src_points = src_coords.get_transform().apply_v2(src_piece.points)
-        error1 = self.multi_target_error(src_points, l, r, verbose)
-        
-        error2 = self.multi_target_error2(src_piece, src_coords, l, r, verbose)
-
-        if verbose:
-            print(f"  --> {src_piece.label} {source_tabs} {error1=:.1f} {error2=:.1f}")
-
-        return error1
+        return self.multi_target_error(src_piece, src_coords, l, r)
     
-class MultiTargetError:
-
-    def __init__(self, pieces, geometry):
-        self.pieces = pieces
-        self.geometry = geometry
-        self.overlaps = puzzler.solver.OverlappingPieces(pieces, geometry.coords)
-        self.max_dist = 256
-
-    def __call__(self, src_points, l, r, verbose=False):
-
-        src_bbox = (np.min(src_points, axis=0), np.max(src_points, axis=0))
-        src_center = (src_bbox[0] + src_bbox[1]) * .5
-        src_radius = np.linalg.norm(src_bbox[1] - src_bbox[0]) * .5
-
-        dst_labels = self.overlaps(src_center, src_radius + self.max_dist).tolist()
-
-        src_points_inner = ring_slice(src_points, l, r)
-        src_points_outer = ring_slice(src_points, r, l)
-
-        assert len(src_points) == len(src_points_inner) + len(src_points_outer)
-        
-        ret_dist_inner = np.full(len(src_points_inner), self.max_dist)
-        ret_dist_outer = np.full(len(src_points_outer), self.max_dist)
-
-        for dst_label in dst_labels:
-
-            dst_piece = self.pieces[dst_label]
-            dst_coords = self.geometry.coords[dst_label]
-
-            di = DistanceImage.Factory(dst_piece)
-            
-            transform = puzzler.render.Transform()
-            transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
-
-            dst_dist_inner = np.abs(di.query(transform.apply_v2(src_points_inner)))
-            ii = np.nonzero(dst_dist_inner < ret_dist_inner)[0]
-            if len(ii):
-                ret_dist_inner[ii] = dst_dist_inner[ii]
-
-            dst_dist_outer = di.query(transform.apply_v2(src_points_outer))
-            ii = np.nonzero(dst_dist_outer < ret_dist_outer)[0]
-            if len(ii):
-                ret_dist_outer[ii] = dst_dist_outer[ii]
-                
-        sse = np.sum(np.square(ret_dist_inner))
-        num_points = len(ret_dist_inner)
-
-        inner_sse = sse
-
-        ii = np.nonzero(ret_dist_outer < 0)[0]
-        if len(ii):
-            sse += np.sum(np.square(ret_dist_outer[ii]))
-            num_points += len(ii)
-
-        if verbose:
-            ret_dist = np.concatenate((ret_dist_outer[-l:], ret_dist_inner, ret_dist_outer[:-l]))
-            print(f"  <MTE1> {inner_sse=:.1f} {sse=:.1f} {num_points=}")
-
-        return sse / num_points
-
 class DistanceQueryCache:
 
     def __init__(self):
         self.serial_no = 1
         self.cache = dict()
-        self.stats = {'n_read':0, 'n_write':0, 'read_miss':0, 'read_hit':0, 'n_purge':0}
+        self.stats = {'n_read':0, 'n_write':0, 'read_miss':0, 'read_hit':0, 'n_purge':0, 'n_bytes':0}
 
     def query(self, dst_piece, dst_coords, src_piece, src_coords):
 
@@ -442,16 +366,18 @@ class DistanceQueryCache:
 
     def write(self, key, value):
         self.stats['n_write'] += 1
+        self.stats['n_bytes'] += value.nbytes
         self.cache[key] = [value, self.serial_no]
 
     def purge(self):
         old_keys = [k for k, v in self.cache.items() if v[1] < self.serial_no]
         for k in old_keys:
-            del self.cache[k]
+            v = self.cache.pop(k)
+            self.stats['n_bytes'] -= v[0].nbytes
         self.serial_no += 1
         self.stats['n_purge'] += len(old_keys)
     
-class MultiTargetError2:
+class MultiTargetError:
 
     def __init__(self, pieces, geometry, cache):
         self.pieces = pieces
