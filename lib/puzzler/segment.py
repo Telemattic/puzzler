@@ -211,7 +211,7 @@ class SegmenterTk:
         return self.label_var.get()
 
     def next_label(self):
-        m = re.fullmatch("(\w)(\d+)", self.curr_label())
+        m = re.fullmatch("(\D+)(\d+)", self.curr_label())
         if m is None:
             return
         
