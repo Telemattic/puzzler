@@ -98,12 +98,21 @@ class SegmenterTk:
 
         print(f"image={self.image_raw}")
         print(f"scale={self.image_scale} -> {self.image_size}")
-        
-        img      = cv.resize(img, self.image_size, cv.INTER_CUBIC)
+
+        # OpenCV: To shrink an image, it will generally look best with
+        # INTER_AREA interpolation, whereas to enlarge an image, it
+        # will generally look best with INTER_CUBIC (slow) or
+        # INTER_LINEAR (faster but still looks OK).
+        if self.image_scale > 1:
+            ksize = self.image_scale * 2 + 1
+            img = cv.GaussianBlur(img, (ksize,ksize), sigmaX=0, sigmaY=0)
+            img = cv.resize(img, self.image_size, cv.INTER_AREA)
 
         # trim off the margin introduced by a bit of overscan around
         # the black background
         img      = img[0:h-16,0:w-16,:]
+
+        self.image_size = (img.shape[1], img.shape[0])
               
         gray     = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         thresh   = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
@@ -160,10 +169,10 @@ class SegmenterTk:
         self.label.grid(column=0, row=0, sticky=(N, W))
 
         self.label_var = StringVar(value="A1")
-        self.entry = ttk.Entry(self.controls, width=5, textvariable=self.label_var)
+        self.entry = ttk.Entry(self.controls, width=5, textvariable=self.label_var, font="Courier")
         self.entry.grid(column=1, row=0, sticky=(N, W))
         
-        self.canvas = Canvas(self.frame, width=self.max_w, height=self.max_h,
+        self.canvas = Canvas(self.frame, width=self.image_size[0], height=self.image_size[1],
                              background='blue', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
 
