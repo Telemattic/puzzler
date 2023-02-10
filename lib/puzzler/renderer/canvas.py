@@ -1,12 +1,14 @@
 import puzzler.render
 import numpy as np
+import tkinter
 
 class CanvasRenderer(puzzler.render.Renderer):
 
     def __init__(self, canvas=None):
         self.canvas    = canvas
         self._transform = puzzler.render.Transform()
-        self.save_stack = []
+        self._save_stack = []
+        self._fonts = dict()
 
     def transform(self, m):
         self._transform.multiply(m)
@@ -22,10 +24,10 @@ class CanvasRenderer(puzzler.render.Renderer):
 
     def save(self):
         m = self._transform.matrix.copy()
-        self.save_stack.append(m)
+        self._save_stack.append(m)
 
     def restore(self):
-        m = self.save_stack.pop()
+        m = self._save_stack.pop()
         self._transform.matrix = m
 
     def to_canvas(self, pts):
@@ -55,7 +57,22 @@ class CanvasRenderer(puzzler.render.Renderer):
     def draw_polygon(self, points, **kw):
         self.canvas.create_polygon(self.to_canvas(points), **kw)
 
-    def draw_text(self, xy, text, **kw):
+    def make_font(self, face, size):
+        key = (face, size)
+        if f := self._fonts.get(key):
+            return f.name
+
+        name = f"pfont{len(self._fonts)}"
+        self._fonts[key] = tkinter.font.Font(family=face, name=name, size=-size)
+
+        return name
+
+    def draw_text(self, xy, text, font=None, fill=None):
+        kw = {}
+        if font:
+            kw['font'] = font
+        if fill:
+            kw['fill'] = fill
         self.canvas.create_text(self.to_canvas(xy), text=text, **kw)
 
 

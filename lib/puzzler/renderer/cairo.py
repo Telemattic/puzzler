@@ -138,15 +138,25 @@ class CairoRenderer(puzzler.render.Renderer):
 
         ctx.restore()
 
+    def make_font(self, face, size):
+
+        font = None
+        with puzzler.render.save(self):
+            ctx = self.context
+            ctx.select_font_face(face)
+            (w, h) = ctx.device_to_user_distance(size, size)
+            ctx.set_font_matrix(cairo.Matrix(xx=w, yy=h))
+            font = ctx.get_scaled_font()
+        return font
+
     def draw_text(self, xy, text, font=None, fill=(0, 0, 0)):
 
         ctx = self.context
         ctx.save()
-        
-        ctx.select_font_face("Courier New")
-        (w, h) = ctx.device_to_user_distance(18, 18)
-        ctx.set_font_matrix(cairo.Matrix(xx=w, yy=h))
-        
+
+        if font:
+            ctx.set_scaled_font(font)
+
         ctx.move_to(*xy)
 
         if fill:

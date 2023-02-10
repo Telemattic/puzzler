@@ -8,7 +8,6 @@ import puzzler
 import puzzler.renderer.canvas
 
 from tkinter import *
-from tkinter import font
 from tkinter import ttk
 
 from tqdm import tqdm

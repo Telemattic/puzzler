@@ -5,7 +5,6 @@ import re
 import scipy
 
 from tkinter import *
-from tkinter import font
 from tkinter import ttk
 
 class Normals:

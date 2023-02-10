@@ -101,5 +101,8 @@ class Renderer:
     def draw_polygon(self, points, **kw):
         raise NotImplementedError
 
-    def draw_text(self, xy, text, **kw):
+    def make_font(self, face, size):
+        raise NotImplementedError
+
+    def draw_text(self, xy, text, font=None, fill=None):
         raise NotImplementedError

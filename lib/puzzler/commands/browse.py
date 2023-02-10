@@ -7,7 +7,6 @@ import puzzler.renderer.cairo
 import re
 
 from tkinter import *
-from tkinter import font
 from tkinter import ttk
 
 # Camera = puzzler.commands.align.Camera
@@ -86,8 +85,7 @@ class Browser:
         r = puzzler.renderer.canvas.CanvasRenderer(canvas)
         r.transform(camera.matrix)
 
-        if not self.font:
-            self.font = font.Font(family='Courier', name='pieceLabelFont', size=12)
+        self.font = r.make_font("Courier", 18)
 
         for i, o in enumerate(self.outlines):
             x = (i %  self.cols)
@@ -127,8 +125,7 @@ class Browser:
 
         r.transform(camera.matrix)
 
-        if not self.font:
-            self.font = font.Font(family='Courier', name='pieceLabelFont', size=12)
+        self.font = r.make_font("Courier New", 18)
 
         for i, o in enumerate(self.outlines):
             x = (i %  self.cols)
@@ -162,7 +159,7 @@ class Browser:
 
         r.draw_polygon(o.poly, outline='black', fill=None)
 
-        r.draw_text(np.zeros(2), text=p.label, fill='black')
+        r.draw_text(np.zeros(2), text=p.label, font=self.font, fill='black')
 
 class BrowseTk:
 
