@@ -1,10 +1,9 @@
-import cairo
 import cv2 as cv
-import PIL.Image
-import PIL.ImageTk
 import math
 import numpy as np
 import puzzler
+import puzzler.renderer.canvas
+import puzzler.renderer.cairo
 import re
 
 from tkinter import *
@@ -13,150 +12,6 @@ from tkinter import ttk
 
 # Camera = puzzler.commands.align.Camera
 # MoveCamera = puzzler.commands.align.MoveCamera
-
-class CairoRenderer:
-
-    def __init__(self, canvas):
-        self.canvas  = canvas
-        w, h = canvas.winfo_width(), canvas.winfo_height()
-        # print(f"CairoRenderer: {w=} {h=}")
-        self.surface = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
-        self.context = cairo.Context(self.surface)
-        self._colors = dict()
-
-        ctx = self.context
-
-        ctx.save()
-        ctx.rectangle(0, 0, w, h)
-        ctx.set_source_rgb(1, 1, 1)
-        ctx.fill()
-        ctx.restore()
-
-    def draw_polygon(self, points, fill=None, outline=(0,0,0), width=1):
-
-        ctx = self.context
-
-        ctx.save()
-
-        if outline and width:
-            (w, h) = ctx.device_to_user_distance(width, width)
-            ctx.set_line_width(math.fabs(w))
-        
-        ctx.move_to(*points[-1])
-        for p in points:
-            ctx.line_to(*p)
-        ctx.close_path()
-        
-        if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
-            if outline:
-                ctx.fill_preserve()
-            else:
-                ctx.fill()
-                
-        if outline:
-            ctx.set_source_rgb(*self.get_color(outline))
-            ctx.stroke()
-        
-        ctx.restore()
-
-    def get_color(self, color):
-        
-        if isinstance(color,str):
-            if x := self._colors.get(color):
-                return x
-            x = tuple((c / 65535 for c in self.canvas.winfo_rgb(color)))
-            self._colors[color] = x
-            return x
-
-        return color
-
-    def draw_lines(self, points, fill=(0, 0, 0), width=1):
-
-        ctx = self.context
-        ctx.save()
-
-        if fill and width:
-            (w, h) = ctx.device_to_user_distance(width, width)
-            ctx.set_line_width(math.fabs(w))
-            
-        if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
-        
-        def pairwise(x):
-            i = iter(x)
-            return zip(i, i)
-
-        for p1, p2 in pairwise(points):
-            ctx.move_to(*p1)
-            ctx.line_to(*p2)
-
-        ctx.stroke()
-
-        ctx.restore()
-
-    def draw_ellipse(self, center, semi_major, semi_minor, phi, fill=None, outline=(0, 0, 0), width=1):
-        
-        ctx = self.context
-        ctx.save()
-        
-        if outline and width:
-            (w, h) = ctx.device_to_user_distance(width, width)
-            ctx.set_line_width(math.fabs(w))
-        
-        ctx.translate(*center)
-        ctx.rotate(phi)
-        ctx.scale(semi_major, semi_minor)
-        ctx.arc(0., 0., 1., 0, 2 * math.pi)
-
-        if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
-            if outline:
-                ctx.fill_preserve()
-            else:
-                ctx.fill()
-                
-        if outline:
-            ctx.set_source_rgb(*self.get_color(outline))
-            ctx.stroke()
-
-        ctx.restore()
-
-    def draw_text(self, xy, text, font=None, fill=(0, 0, 0)):
-
-        ctx = self.context
-        ctx.save()
-        
-        ctx.select_font_face("Courier New")
-        (w, h) = ctx.device_to_user_distance(18, 18)
-        ctx.set_font_matrix(cairo.Matrix(xx=w, yy=h))
-        
-        ctx.move_to(*xy)
-
-        if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
-        
-        ctx.show_text(text)
-
-        ctx.restore()
-
-    def commit(self):
-        surface = self.surface
-
-        if True:
-            w, h = surface.get_width(), surface.get_height()
-            stride = surface.get_stride()
-            print(f"surface: {w=} {h=} {stride=}")
-            ystep = 1
-            image = PIL.Image.frombuffer('RGBA', (w,h), surface.get_data().tobytes(), 'raw', 'BGRA', stride, ystep)
-            # image.save("yuck.png")
-            displayed_image = PIL.ImageTk.PhotoImage(image=image)
-        else:
-            surface.write_to_png('fnord.png')
-            displayed_image = PhotoImage(file='fnord.png')
-            
-        self.canvas.create_image((0, 0), image=displayed_image, anchor=NW)
-        return displayed_image
 
 class Browser:
 
@@ -228,9 +83,8 @@ class Browser:
         if self.use_cairo:
             return self.render_cairo(canvas, camera)
 
-        r = puzzler.render.Renderer(canvas)
-        r.transform.multiply(camera.matrix)
-        # r.transform.scale(self.scale)
+        r = puzzler.renderer.canvas.CanvasRenderer(canvas)
+        r.transform(camera.matrix)
 
         if not self.font:
             self.font = font.Font(family='Courier', name='pieceLabelFont', size=12)
@@ -240,8 +94,8 @@ class Browser:
             y = (self.rows - 1 - (i // self.cols))
             tx = (x + .5) * self.bbox_w
             ty = (y + .5) * self.bbox_h
-            with puzzler.render.save_matrix(r.transform):
-                r.transform.translate((tx, ty))
+            with puzzler.render.save(r):
+                r.translate((tx, ty))
                 self.render_outline(r, o)
 
     def render_outline(self, r, o):
@@ -251,15 +105,15 @@ class Browser:
         # want the corners of the outline bbox centered within the tile
         bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
 
-        with puzzler.render.save_matrix(r.transform):
-            r.transform.translate(-bbox_center)
+        with puzzler.render.save(r):
+            r.translate(-bbox_center)
 
             if p.tabs is not None:
                 for tab in p.tabs:
                     e = tab.ellipse
                     r.draw_ellipse(e.center, e.semi_major, e.semi_minor, e.phi, fill='cyan', outline='')
 
-            if p.edges is not None and False:
+            if p.edges is not None:
                 for edge in p.edges:
                     r.draw_lines(edge.line.pts, width=4, fill='pink')
 
@@ -269,23 +123,9 @@ class Browser:
 
     def render_cairo(self, canvas, camera):
 
-        r = CairoRenderer(canvas)
+        r = puzzler.renderer.cairo.CairoRenderer(canvas)
 
-        m = camera.matrix
-        xx = m[0][0]
-        yx = m[1][0]
-        xy = m[0][1]
-        yy = m[1][1]
-        x0 = m[0][2]
-        y0 = m[1][2]
-        m = cairo.Matrix(xx, yx, xy, yy, x0, y0)
-
-        r.context.transform(m)
-
-        w, h = canvas.winfo_width(), canvas.winfo_height()
-        for d in [(0,h), (w//2, h//2), (w,0)]:
-            u = r.context.device_to_user(*d)
-            print(f"  device={d} user={u}")
+        r.transform(camera.matrix)
 
         if not self.font:
             self.font = font.Font(family='Courier', name='pieceLabelFont', size=12)
@@ -296,10 +136,9 @@ class Browser:
             tx = (x + .5) * self.bbox_w
             ty = (y + .5) * self.bbox_h
 
-            r.context.save()
-            r.context.translate(tx, ty)
-            self.render_outline_cairo(r, o)
-            r.context.restore()
+            with puzzler.render.save(r):
+                r.translate((tx, ty))
+                self.render_outline_cairo(r, o)
 
         return r.commit()
 
@@ -310,7 +149,7 @@ class Browser:
         # want the corners of the outline bbox centered within the tile
         bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
 
-        r.context.translate(*-bbox_center)
+        r.translate(-bbox_center)
 
         if p.tabs is not None:
             for tab in p.tabs:

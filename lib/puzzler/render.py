@@ -55,42 +55,51 @@ class Transform:
         return normals[:,:2]
     
 @contextmanager
-def save_matrix(m):
+def save(r):
 
-    saved_matrix = m.matrix.copy()
+    r.save()
     try:
-        yield m
+        yield r
     finally:
-        m.matrix = saved_matrix
+        r.restore()
 
 class Renderer:
 
-    def __init__(self, canvas=None):
-        self.canvas    = canvas
-        self.transform = Transform()
+    def __init__(self):
+        pass
 
-    def to_canvas(self, pts):
-        return self.transform.apply_v2(pts).tolist()
+    def save(self):
+        pass
+
+    def restore(self):
+        pass
+
+    def transform(self, m):
+        raise NotImplementedError
+
+    def translate(self, xy):
+        raise NotImplementedError
+
+    def rotate(self, rad):
+        raise NotImplementedError
+
+    def user_to_device(self, points):
+        raise NotImplementedError
 
     def draw_points(self, points, radius, **kw):
-        r = np.array((radius, radius))
-        for xy in self.transform.apply_v2(np.atleast_2d(points)):
-            bbox = np.array((xy-r, xy+r))
-            self.canvas.create_oval(bbox.tolist(), **kw)
+        raise NotImplementedError
             
     def draw_lines(self, points, **kw):
-        self.canvas.create_line(self.to_canvas(points), **kw)
+        raise NotImplementedError
 
     def draw_circle(self, points, radius, **kw):
-        r = np.linalg.norm(np.array((radius, 0, 0)) @ self.transform.matrix.T)
-        rr = np.array((r, r))
-        for xy in self.transform.apply_v2(np.atleast_2d(points)):
-            bbox = np.array((xy-rr, xy+rr))
-            self.canvas.create_oval(bbox.tolist(), **kw)
+        raise NotImplementedError
+
+    def draw_ellipse(self, center, semi_major, semi_minor, phi, **kw):
+        raise NotImplementedError
 
     def draw_polygon(self, points, **kw):
-        self.canvas.create_polygon(self.to_canvas(points), **kw)
+        raise NotImplementedError
 
     def draw_text(self, xy, text, **kw):
-        self.canvas.create_text(self.to_canvas(xy), text=text, **kw)
-
+        raise NotImplementedError

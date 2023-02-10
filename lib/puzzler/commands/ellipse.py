@@ -5,10 +5,13 @@ import math
 import numpy as np
 import operator
 import puzzler
+import puzzler.renderer.canvas
 
 from tkinter import *
 from tkinter import font
 from tkinter import ttk
+
+from tqdm import tqdm
 
 class PerimeterLoader:
 
@@ -151,7 +154,7 @@ class TabComputer:
             
             self.tabs.append(tab)
 
-        # return
+        return
 
         if self.verbose:
             print(f"Iterate fit process for {len(self.tabs)} ellipses")
@@ -573,9 +576,9 @@ class EllipseFitterTk:
         canvas = self.canvas
         canvas.delete('all')
 
-        r = puzzler.render.Renderer(self.canvas)
+        r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
 
-        r.transform.multiply(self.get_camera_matrix())
+        r.transform(self.get_camera_matrix())
 
         if self.var_render_perimeter.get():
             r.draw_points(self.perimeter.points, radius=1, fill='black')
@@ -774,11 +777,11 @@ def feature_view(args):
 def feature_update(args):
 
     puzzle = puzzler.file.load(args.puzzle)
-    for piece in puzzle.pieces:
+    for piece in tqdm(puzzle.pieces):
         if piece.points is None:
             continue
 
-        print(piece.label)
+        # print(piece.label)
 
         perimeter = PerimeterLoader(piece)
 

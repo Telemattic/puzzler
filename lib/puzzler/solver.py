@@ -192,6 +192,8 @@ class BorderSolver:
 
     def link_pieces(self, scores):
 
+        print(f"link_pieces: corners={len(self.corners)}, edges={len(self.edges)}")
+
         pairs = dict()
         used = set()
         for dst in self.corners + self.edges:
@@ -201,6 +203,10 @@ class BorderSolver:
 
             # print(f"{dst} <- {best} (mse={ss[best][0]})")
 
+            if best in used:
+                print(f"best match match for {dst} is {best} and it's already been used!")
+                continue
+
             # greedily assume the best fit will be available, if it
             # isn't then we'll have to try harder (possibly *much*
             # harder)
@@ -208,7 +214,7 @@ class BorderSolver:
             used.add(best)
             pairs[dst] = best
 
-        # make sure the border pieces for a single ring
+        # make sure the border pieces form a single ring
         visited = set()
         curr = next(iter(pairs.keys()))
         while curr not in visited:
@@ -217,7 +223,7 @@ class BorderSolver:
 
         assert visited == used == set(pairs.keys())
 
-        retval = ["H1"]
+        retval = [min(self.corners)] # ["H1"] if "H1" in self.corners else [self.corners[0]]
         curr = pairs[retval[0]]
         while curr != retval[0]:
             retval.append(curr)

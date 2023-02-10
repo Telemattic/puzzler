@@ -9,6 +9,7 @@ import re
 import scipy
 import puzzler.feature
 import puzzler
+import puzzler.renderer.canvas
 import puzzler.solver
 
 from tkinter import *
@@ -224,8 +225,8 @@ class PuzzleRenderer:
     def render(self, render_fast):
         
         self.canvas.delete('all')
-        self.renderer = puzzler.render.Renderer(self.canvas)
-        self.renderer.transform.multiply(self.camera.matrix)
+        self.renderer = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+        self.renderer.transform(self.camera.matrix)
 
         self.render_fast = render_fast
 
@@ -252,7 +253,7 @@ class PuzzleRenderer:
         x1, y1 = ur
         points = np.array([(x0,y0), (x1,y0), (x1,y1), (x0,y1)])
 
-        screen = self.renderer.transform.apply_v2(points)
+        screen = self.renderer.user_to_device(points)
         x = screen[:,0]
         y = screen[:,1]
 
@@ -268,9 +269,10 @@ class PuzzleRenderer:
 
         r = self.renderer
             
-        with puzzler.render.save_matrix(r.transform):
+        with puzzler.render.save(r):
                 
-            r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+            r.translate(p.coords.dxdy)
+            r.rotate(p.coords.angle)
 
             if not self.test_bbox(p.piece.bbox):
                 return
@@ -300,9 +302,10 @@ class PuzzleRenderer:
         p = self.pieces[piece_id]
 
         r = self.renderer
-        with puzzler.render.save_matrix(r.transform):
+        with puzzler.render.save(r):
 
-            r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+            r.translate(p.coords.dxdy)
+            r.rotate(p.coords.angle)
 
             r1  = 250
             r2  = 300
@@ -315,8 +318,8 @@ class PuzzleRenderer:
             tags = ('rotate', f'piece_{piece_id}')
 
             for i in range(4):
-                with puzzler.render.save_matrix(r.transform):
-                    r.transform.rotate(i * math.pi / 2)
+                with puzzler.render.save(r):
+                    r.rotate(i * math.pi / 2)
                     r.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
                     
     def draw_frontier(self, frontier):
@@ -335,8 +338,9 @@ class PuzzleRenderer:
         
         for l, tab_nos in tabs.items():
             p = piece_dict[l]
-            with puzzler.render.save_matrix(r.transform):
-                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+            with puzzler.render.save(r):
+                r.translate(p.coords.dxdy)
+                r.rotate(p.coords.angle)
                 for tab_no in tab_nos:
                     p0, v = fe.get_tab_center_and_direction((l, tab_no))
                     p1 = p0 + v * 100
@@ -346,14 +350,16 @@ class PuzzleRenderer:
 
         for l, a, b in frontier:
             p = piece_dict[l]
-            with puzzler.render.save_matrix(r.transform):
-                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+            with puzzler.render.save(r):
+                r.translate(p.coords.dxdy)
+                r.rotate(p.coords.angle)
                 r.draw_points(p.piece.points[a], fill='pink', radius=8)
                 
         for l, a, b in frontier:
             p = piece_dict[l]
-            with puzzler.render.save_matrix(r.transform):
-                r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+            with puzzler.render.save(r):
+                r.translate(p.coords.dxdy)
+                r.rotate(p.coords.angle)
                 r.draw_points(p.piece.points[b], fill='purple', radius=5)
 
     def draw_adjacency(self, adjacency):
@@ -376,8 +382,9 @@ class PuzzleRenderer:
         tag = src + ":" + dst
 
         r = self.renderer
-        with puzzler.render.save_matrix(r.transform):
-            r.transform.translate(p.coords.dxdy).rotate(p.coords.angle)
+        with puzzler.render.save(r):
+            r.translate(p.coords.dxdy)
+            r.rotate(p.coords.angle)
             for a, b in v:
                 points = ring_slice(p.piece.points, a, b+1)
                 if len(points) < 2:

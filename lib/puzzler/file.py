@@ -1,8 +1,6 @@
 import json
-import numpy as np
 import os
 import puzzler
-from dataclasses import dataclass
     
 def path_to_id(path):
     return os.path.splitext(os.path.basename(path))[0]
