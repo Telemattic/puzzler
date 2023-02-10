@@ -80,12 +80,13 @@ class Browser:
     def render(self, canvas, camera):
 
         if self.use_cairo:
-            return self.render_cairo(canvas, camera)
+            r = puzzler.renderer.cairo.CairoRenderer(canvas)
+        else:
+            r = puzzler.renderer.canvas.CanvasRenderer(canvas)
 
-        r = puzzler.renderer.canvas.CanvasRenderer(canvas)
         r.transform(camera.matrix)
 
-        self.font = r.make_font("Courier", 18)
+        self.font = r.make_font("Courier New", 18)
 
         for i, o in enumerate(self.outlines):
             x = (i %  self.cols)
@@ -95,6 +96,8 @@ class Browser:
             with puzzler.render.save(r):
                 r.translate((tx, ty))
                 self.render_outline(r, o)
+
+        return r.commit()
 
     def render_outline(self, r, o):
 
@@ -116,48 +119,6 @@ class Browser:
                     r.draw_lines(edge.line.pts, width=4, fill='pink')
 
             r.draw_polygon(o.poly, outline='black', fill='', width=1)
-
-        r.draw_text(np.zeros(2), text=p.label, font=self.font, fill='black')
-
-    def render_cairo(self, canvas, camera):
-
-        r = puzzler.renderer.cairo.CairoRenderer(canvas)
-
-        r.transform(camera.matrix)
-
-        self.font = r.make_font("Courier New", 18)
-
-        for i, o in enumerate(self.outlines):
-            x = (i %  self.cols)
-            y = (self.rows - 1 - (i // self.cols))
-            tx = (x + .5) * self.bbox_w
-            ty = (y + .5) * self.bbox_h
-
-            with puzzler.render.save(r):
-                r.translate((tx, ty))
-                self.render_outline_cairo(r, o)
-
-        return r.commit()
-
-    def render_outline_cairo(self, r, o):
-
-        p = o.piece
-
-        # want the corners of the outline bbox centered within the tile
-        bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
-
-        r.translate(-bbox_center)
-
-        if p.tabs is not None:
-            for tab in p.tabs:
-                e = tab.ellipse
-                r.draw_ellipse(e.center, e.semi_major, e.semi_minor, e.phi, fill='cyan', outline=None)
-                
-        if p.edges is not None:
-            for edge in p.edges:
-                r.draw_lines(edge.line.pts, width=4, fill='pink')
-
-        r.draw_polygon(o.poly, outline='black', fill=None)
 
         r.draw_text(np.zeros(2), text=p.label, font=self.font, fill='black')
 

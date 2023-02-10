@@ -30,6 +30,9 @@ class CanvasRenderer(puzzler.render.Renderer):
         m = self._save_stack.pop()
         self._transform.matrix = m
 
+    def commit(self):
+        return None
+
     def to_canvas(self, pts):
         return self._transform.apply_v2(pts).tolist()
 
@@ -49,9 +52,16 @@ class CanvasRenderer(puzzler.render.Renderer):
             bbox = np.array((xy-rr, xy+rr))
             self.canvas.create_oval(bbox.tolist(), **kw)
 
-    def draw_ellipse(self, center, semi_major, semi_minor, phi, **kw):
+    def draw_ellipse(self, center, semi_major, semi_minor, phi, fill=None, outline='black', width=1):
         ellipse = puzzler.geometry.Ellipse(center, semi_major, semi_minor, phi)
         points = puzzler.geometry.get_ellipse_points(ellipse, npts=40)
+        kw = {}
+        if fill is not None:
+            kw['fill'] = fill
+        if outline is not None:
+            kw['outline'] = outline
+        if width is not None:
+            kw['width'] = width
         self.canvas.create_polygon(self.to_canvas(points), **kw)
 
     def draw_polygon(self, points, **kw):
@@ -63,6 +73,8 @@ class CanvasRenderer(puzzler.render.Renderer):
             return f.name
 
         name = f"pfont{len(self._fonts)}"
+        # negative size creates a font sized in pixels (i.e. device
+        # units), positive size creates a font sized in points
         self._fonts[key] = tkinter.font.Font(family=face, name=name, size=-size)
 
         return name
