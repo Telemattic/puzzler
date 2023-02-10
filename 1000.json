@@ -93,7 +93,84 @@
           602,
           539
         ]
-      }
+      },
+      "points": "eJx9FAlyxCBIZYkz/f/7+pS2kUMuLSJBREAg/n79fAPAGH2hDf8JxLHvqQEvT0sGINqXqDtTgsMUBfoQa3snf5MERoVt2e7AAfTeaDZBB5PJZE7m3DsCepIGGWObbJyvHnK2L5pvCjxBCcCQAboghuDD8wMfQSEGqBSF4JrPIrrau6yMaoEsivnlZ3mXmC75LRU5LZPwsHs/H2u9ckrZblq7/8aVueoosfK23B27PRYyPAvfsdAAlRLyVz+LU2U5KYSGWlRogtyIszTktJ7Uj7Wn9mfbXa+/QOrRvpOcu5M703WpNalHUfO9Yr8e4eDajZDnkuG6DEVhWZeyee1QuIS+0LHWpaOYcH21rDofK1umwjnRNNWgEo3MJJ3pfBEHSeCSqZliZh5Voxo+OCk3zypqCA8bOdZq+eQixRzTV/Izn4OmUAzeLz6Yvr+ovIzuCQ2CROJja49uVLpRc+BJZW7GQhzuyb/EaQJMXtApuPXF0sHTMSpvZUvKfW4e8ODQS/G0F6+S7ucyUTdL2Av+AIIFIVk=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            231,
+            486
+          ],
+          "ellipse": {
+            "center": [
+              -144.75472558297955,
+              -13.789934300557638
+            ],
+            "semi_major": 59.253430292606915,
+            "semi_minor": 56.08589379342966,
+            "phi": 1.8157551497647366
+          },
+          "indent": true,
+          "tangent_indexes": [
+            214,
+            501
+          ]
+        },
+        {
+          "fit_indexes": [
+            815,
+            1081
+          ],
+          "ellipse": {
+            "center": [
+              -15.768697761005322,
+              171.06897762081388
+            ],
+            "semi_major": 61.14585291510012,
+            "semi_minor": 58.77948148711145,
+            "phi": 1.3430216288019372
+          },
+          "indent": true,
+          "tangent_indexes": [
+            797,
+            1097
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1277,
+            1772
+          ],
+          "line": {
+            "pt0": [
+              202.8916015625,
+              303.212646484375
+            ],
+            "pt1": [
+              283.3140563964844,
+              -192.212646484375
+            ]
+          }
+        },
+        {
+          "fit_indexes": [
+            1772,
+            0
+          ],
+          "line": {
+            "pt0": [
+              281.0885314941406,
+              -194.65283203125
+            ],
+            "pt1": [
+              -246.08853149414062,
+              -291.6956481933594
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A2",
@@ -105,7 +182,71 @@
           574,
           630
         ]
-      }
+      },
+      "points": "eJyFVImRICEI1MEnrs0/jkvjahVoHsepVWzw51HKz/9/1KwEEZ2PWTqEy872HqJr7+NI79Br4kvnY8N7nrIaUISIHik1MJVFSJ0g1Ne2uLlGSMe4WL/Y64KwQ0eh9vMQgB7atNu2qxGbebql9U2rCkDUAZkSQZpuIXWbnE0UOAtQxQg6BT2z3WyLwmYLpe1SjC+plKq1cCvgswCnVKEFXKyvS0KpSn4TX34JFt1E+lPI7LLuobNfd9tAsxYmGAsbZhSnWTWtOoQNWOfsMgn/iI/F79w0Kvb0atIf4SYwD70Xf9kaaVnTR/fPuEy3yGytxtQQVZA8AIXU3iN80HahGFbNK3OfvApgJOAqtGCxvpFhYRe5q7xh/R9BFbsvQ5Ej5Yb4KsPjLUFpxwPcNMDH8H2n+y6M6etKI3vJUo81HwP2909yGD1J56owmcW0wbytCiA4i4p4z55++NGSJcxcyxgpZdiWiT+lsYgg142D9DmYUyJCW7NegKnhXXCRdHtk2N6QaJFtNWtLttWM2yh2kNc9PYfUrRelF5mc66E5I9iTFcZiJ470fhkz410BsNGPKf86jA2quyu4/AISbR4D",
+      "tabs": [
+        {
+          "fit_indexes": [
+            503,
+            752
+          ],
+          "ellipse": {
+            "center": [
+              -249.14761453284794,
+              3.880985222532902
+            ],
+            "semi_major": 58.63657120398214,
+            "semi_minor": 50.5781280186507,
+            "phi": 1.2045690649550265
+          },
+          "indent": false,
+          "tangent_indexes": [
+            482,
+            772
+          ]
+        },
+        {
+          "fit_indexes": [
+            1725,
+            1983
+          ],
+          "ellipse": {
+            "center": [
+              261.55784616857215,
+              -43.475774380046126
+            ],
+            "semi_major": 61.00469927166303,
+            "semi_minor": 56.040898997561634,
+            "phi": 1.6524514514043147
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1711,
+            2006
+          ]
+        },
+        {
+          "fit_indexes": [
+            2011,
+            464
+          ],
+          "ellipse": {
+            "center": [
+              -15.498450812495633,
+              -153.31098444209263
+            ],
+            "semi_major": 188.6872905448316,
+            "semi_minor": 131.62322862227356,
+            "phi": 0.133928217502386
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1997,
+            479
+          ]
+        }
+      ],
+      "edges": []
     },
     {
       "label": "A3",
@@ -117,7 +258,88 @@
           504,
           511
         ]
-      }
+      },
+      "points": "eJytVQFyxCAIDBLjz/r/H7UKCIuaTtspAnIgJJHV+/z4ZL4n8c2DhsVUqJQu3EeZwqpe2S37eQouptZXkyNTnSVXjQhjTHV/XbKXJmVRV+dOfRbt1FxstGsdqkRUGVGUk/LjSaKU5pNLDNtLFSPisPPWyTAWAbqN+7jZ2zap+iQsA9kjmTjYHui9gE2mAh9Ariki5Cspfy7FMrOwGGFxwgdFDSo5C3OIorEEraJlxp8NvbQZexod7YSPDqFHYTSom8/T+ZnaqcqwqdYnxmBRmNFEtJhUFXa6WgP8BnTh5bYPMQRTIDiDuJDC94DglRAjvKu4ClJnZ3WaB3SeqdSVNt+/Zd4kBSLNIg3dy0L0LTXXJZd21TsC05tD+xguXJgcCBTMAwiAFeDp8Bmi57v62a7zVkgn2y4Ov0A4Xx5+g6jA9VGl9qOGQhYRWx+fVlo/usVIKFYQw8WLHSSXDNeJ18tQRBuEMgSanczmx2ndZ9zh76huxgu146p6sLak15zwTN9oz4ncy9uVv/8JvBfg43qM/bxirOLK9RbmFLE4b4nnMr+J/K3e/5SYwS+SKSGN",
+      "tabs": [
+        {
+          "fit_indexes": [
+            236,
+            514
+          ],
+          "ellipse": {
+            "center": [
+              -171.02953633469588,
+              2.0808479682812444
+            ],
+            "semi_major": 60.103763048771974,
+            "semi_minor": 59.711280955853276,
+            "phi": 2.4139950748477057
+          },
+          "indent": true,
+          "tangent_indexes": [
+            222,
+            525
+          ]
+        },
+        {
+          "fit_indexes": [
+            867,
+            1128
+          ],
+          "ellipse": {
+            "center": [
+              -17.550870497446592,
+              167.52016435613277
+            ],
+            "semi_major": 59.98645212464417,
+            "semi_minor": 57.60310424670772,
+            "phi": 1.1844179692118768
+          },
+          "indent": true,
+          "tangent_indexes": [
+            855,
+            1147
+          ]
+        },
+        {
+          "fit_indexes": [
+            1492,
+            1745
+          ],
+          "ellipse": {
+            "center": [
+              163.8066301153054,
+              9.659144403196663
+            ],
+            "semi_major": 58.24911342846374,
+            "semi_minor": 51.63286923192906,
+            "phi": 1.2661256820911984
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1482,
+            1769
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1986,
+            20
+          ],
+          "line": {
+            "pt0": [
+              242.9740753173828,
+              -243.55413818359375
+            ],
+            "pt1": [
+              -205.9740753173828,
+              -252.64141845703125
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A4",
@@ -129,7 +351,88 @@
           567,
           567
         ]
-      }
+      },
+      "points": "eJyFFdthxCAoRNElu/8O/WkbeUuwh4CKCEYI/n79fLfe7gVwG9TDf0R5BUrpWdCYF5absHa3hQqd20IHZLZaR2QU0Dmvi+oGzYjMNkEihlsYITVHYaGXzwQn0LaQBww0uK4HH5KBAEzqnAsFnLYeAbQBkXhd+A5Cc+KbDqwemEYtz407ubi0Uuj7EhMhfYNc0BXuKEzhLICzkpraujDZt6cJRK3jnnKYXLzNHrYkYXRe2NpEMB8+T1afXAu36nZLV5vT8z0veFJ0zDGEdIxDRMwWnzYZI+xwtXnQni/1kyRPZnI1p9hc5YIHCxd7eIBVTbySYNuriNYmq1EtVRvenIrUEDaUqWs+hjCHcC1Tr5aaoLAHLmGEXjwoOCkRtXBcsMNlZBEHtUAliJ2IRwt0iqpA+pCPAtRuFqpHG7Ucy5HFVN8GDBRfF1vDXujtezXOm5GwT3jrljX66vhb4+XZKzcEJi8KC0JV911e1snsHR5R8dftQdW01VOhH5oeVnlF8QPyZcZ8focn/sgxfbccDgVjbGnEieB/Tkc+mB22iJ79pdiwxyjkYQ5QUnltinLzas7W9A8RXiFH",
+      "tabs": [
+        {
+          "fit_indexes": [
+            202,
+            470
+          ],
+          "ellipse": {
+            "center": [
+              -246.90755008909363,
+              -43.39111675340071
+            ],
+            "semi_major": 59.88083868910892,
+            "semi_minor": 57.899052572166774,
+            "phi": 1.9169421865534335
+          },
+          "indent": false,
+          "tangent_indexes": [
+            181,
+            482
+          ]
+        },
+        {
+          "fit_indexes": [
+            1337,
+            1595
+          ],
+          "ellipse": {
+            "center": [
+              170.00746526190122,
+              28.54143183980543
+            ],
+            "semi_major": 58.10955207967739,
+            "semi_minor": 54.8471570414754,
+            "phi": 1.6487273126291273
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1322,
+            1607
+          ]
+        },
+        {
+          "fit_indexes": [
+            1958,
+            2220
+          ],
+          "ellipse": {
+            "center": [
+              45.264826868631694,
+              -155.7715059708792
+            ],
+            "semi_major": 64.233684521784,
+            "semi_minor": 55.067255557778026,
+            "phi": 0.6479252651941358
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1938,
+            2236
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            679,
+            1123
+          ],
+          "line": {
+            "pt0": [
+              -252.65003967285156,
+              212.80130004882812
+            ],
+            "pt1": [
+              190.6680145263672,
+              293.0638732910156
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A5",
@@ -141,7 +444,88 @@
           630,
           525
         ]
-      }
+      },
+      "points": "eJyNVQlyxSAIVdF4/8P923Q6jcjyUPsTtijghkjSz++HaiXGSlQNWSvqCi7Q0q4AkWpVzaZpFy+qOGDThOZZR7E991rutQuLiYMA8uSsKGQtNaqjAQkxzmUc6hQhanZ2OHrYcjPZhAQHMU+4mA0HiXDoQt1ag4zZXXjMx8LWka20Q6Rx21S3DkWFdfdhLinMNDUWu1puWQreXWhKHxTx4za5rLLoNz+cuMAATRfPlJzTQBVJROoilBh7chSabnNMkuFANw5iFjgmZuCQn0uScqJuuVone5bS+aVZZnJOotA8FYK8aVo3ZBW5ZVmkFD6jvC3yoGc8wnKsHN6v2Siq4hvfwnL28ft2O92xlpvyi9IL9kv0r6ujl+jyjckToMc5loGPSmx4/s3cSZA0Wr/iYbksGllqHB4YxDprudRCCZCEDO1pwOsI+4aI+TtxvrrC1TtUswW8kCF6dWynsgiTw/PEaMPWY5jhLDnKfHQ6NvNm2HrQzVG7bEdChFXezot/hn5sfoPVrR+77f8Jd/XLlY+urxd5Z3xpetjxg7mtl/Jt7IvgNP/cpfcP2/8jMA==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            226,
+            473
+          ],
+          "ellipse": {
+            "center": [
+              7.128734421945055,
+              -168.31377790334838
+            ],
+            "semi_major": 61.61399943147065,
+            "semi_minor": 53.773511554807335,
+            "phi": 2.9948189739831785
+          },
+          "indent": true,
+          "tangent_indexes": [
+            199,
+            495
+          ]
+        },
+        {
+          "fit_indexes": [
+            816,
+            1088
+          ],
+          "ellipse": {
+            "center": [
+              -169.5783180112016,
+              -2.4577269952970644
+            ],
+            "semi_major": 61.89131945272935,
+            "semi_minor": 57.50201270659341,
+            "phi": 2.9146010833568865
+          },
+          "indent": true,
+          "tangent_indexes": [
+            799,
+            1116
+          ]
+        },
+        {
+          "fit_indexes": [
+            1498,
+            1744
+          ],
+          "ellipse": {
+            "center": [
+              -20.1265420459106,
+              268.6496224291157
+            ],
+            "semi_major": 58.272016893491205,
+            "semi_minor": 52.82062024845318,
+            "phi": 3.1346958713042925
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1479,
+            1757
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1964,
+            2465
+          ],
+          "line": {
+            "pt0": [
+              239.48728942871094,
+              202.97256469726562
+            ],
+            "pt1": [
+              258.9549255371094,
+              -297.9725646972656
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A6",
@@ -153,7 +537,91 @@
           616,
           581
         ]
-      }
+      },
+      "points": "eJx9VYmVxSAI9PiGDrb/irakfZsAI4OaL4d4csaUn7/f/vl0hQ+kQCVlzUjxhsAGrq2CV4PU+YJvw1kFvR8a1RJqA2xwN7bJfU/qvcE119zYBfKkf5EWt9N0bzMy8KtFIC3QSiPcG8ZumBh9uBZ+4A5NmeesuRLojGx5wqbHIVASZ95m7u60KRmrhZhDmURNwEU7cTbJN1RjCnatq7JS8ULi0FLVwaOVHVfetm6LEZCojV6jJGRavLmbRSnnHXJaz5vPk1U8XB6viJgFrJGViFdkGogoOscZ/yLTR4ukm6LiWCjzkfrqxtY9yUh9fXoR5SZdIjq2dindsLXx4LgmOjwyBg8q+XExsmuhAZpfMpZSeizoczvcRe6/i+mTAEqhWZshu02WYnGSa4mWsCRpSng5L5kgLwPSkO7IB5ZzNJK8e9W9mi/7iS/2QURZ3M8liF5OflwhElv+JYf/Cr++8RNZ/076Fo++rnXue5qi42aOGu/NinsW9kB8xJhCEpaioBjZef9oHqYELTNgER8Kye7wPxSxHL0=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            376,
+            631
+          ],
+          "ellipse": {
+            "center": [
+              -230.17607193099036,
+              -33.25702869514159
+            ],
+            "semi_major": 60.48483754035178,
+            "semi_minor": 54.36999152455712,
+            "phi": 2.318567583578684
+          },
+          "indent": false,
+          "tangent_indexes": [
+            363,
+            653
+          ]
+        },
+        {
+          "fit_indexes": [
+            966,
+            1223
+          ],
+          "ellipse": {
+            "center": [
+              -16.437366683537523,
+              250.9972213899861
+            ],
+            "semi_major": 61.635170215437356,
+            "semi_minor": 54.7567493163848,
+            "phi": 0.15202331023296733
+          },
+          "indent": false,
+          "tangent_indexes": [
+            958,
+            1244
+          ]
+        },
+        {
+          "fit_indexes": [
+            1254,
+            1930
+          ],
+          "ellipse": {
+            "center": [
+              150.47246803960667,
+              0.43169252156962334
+            ],
+            "semi_major": 190.2676069139984,
+            "semi_minor": 128.6888226186182,
+            "phi": 1.8040535199110688
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1240,
+            1945
+          ]
+        },
+        {
+          "fit_indexes": [
+            1958,
+            139
+          ],
+          "ellipse": {
+            "center": [
+              29.37911847502926,
+              -244.991474878808
+            ],
+            "semi_major": 63.760161696933025,
+            "semi_minor": 56.56279699142979,
+            "phi": 2.1580736170500194
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1940,
+            135
+          ]
+        }
+      ],
+      "edges": []
     },
     {
       "label": "A7",
@@ -165,7 +633,88 @@
           588,
           581
         ]
-      }
+      },
+      "points": "eJx9VYmV6CAIlBi1i+2/nF/RfxtH7pBFBE8Cg9H28/9fvzd1Zi4iri1AFworFGZUJWIma56qy8wSrB77+CpcMBqngocobg8/y+N3WlXtzMJ9bTtFj0fwtpOGc8UwKMRatclrKlaQAKEa3BmTAwlnZIMyFA+PwFCJaqHeMTAml2ZJLnPvlgyfX8twlClGInDWdESTwtxEKi0v3nwE8UbwUwj1fOIiPW8hJeKw+t790KujA72aiCD0emXOq+KISnnBM4Lj1lpzOGmsgpiitnkxAjpDkQPM6K8D5FOY5ua5GdXR2ByLqUQrMApMH2oswM1USq0nChkWPFyujfSsSdrDFaMJYtHjzSVTlgc+OHKQ+CN8zAzQfGY1hFcoOSxkIQ74FIWMu6qIwA/ZuEcUJApgNQqN45zmeZn2WdQBfyDWnB+9D6lG11t5M8X0H8YKnwqb2arbPCprpl7mtxgzb7DGK5T0F61CKD0/ktzT9oqN23PsxTcwdKVXtT9a+W0tH4hinTw5/NYgCrkWTlyGysaU74Iopi/1WTz2xrR7CJ9i1NSBD/jqQH8B0f8gCQ==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            418,
+            677
+          ],
+          "ellipse": {
+            "center": [
+              -236.36962858333706,
+              -48.452025788419306
+            ],
+            "semi_major": 58.49080756912594,
+            "semi_minor": 55.84512699279243,
+            "phi": 2.6107805961713337
+          },
+          "indent": false,
+          "tangent_indexes": [
+            407,
+            696
+          ]
+        },
+        {
+          "fit_indexes": [
+            1021,
+            1275
+          ],
+          "ellipse": {
+            "center": [
+              -37.03458940229559,
+              161.43981660669044
+            ],
+            "semi_major": 60.16170097972183,
+            "semi_minor": 55.62578578711833,
+            "phi": 2.5996217587465846
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1009,
+            1297
+          ]
+        },
+        {
+          "fit_indexes": [
+            2123,
+            112
+          ],
+          "ellipse": {
+            "center": [
+              40.17362068295272,
+              -247.44132097066415
+            ],
+            "semi_major": 60.25003228227692,
+            "semi_minor": 56.90134297129523,
+            "phi": 2.931398028698707
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2107,
+            128
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1503,
+            1900
+          ],
+          "line": {
+            "pt0": [
+              218.4998779296875,
+              274.04229736328125
+            ],
+            "pt1": [
+              277.93731689453125,
+              -123.04229736328125
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A8",
@@ -177,7 +726,88 @@
           581,
           504
         ]
-      }
+      },
+      "points": "eJytVQlyxSAIlRC/9z9Tj9M7tBXZ0U7+TIuIxA2Ep/n+/PrAWwiDQFxiVaL7Ika8iK0QW12EF0wBpALXxbMwsxAWwavXbsuAEjshnKlXpe9Dj52nGbiNag+5Qf5BObs3egyPSPg4q3laiCNoo+G7oMGk1iIHGqsOFrMYi9A5iaDZZnP7ZWDKa7WSrpjDmM7Ur+76gaSgYAZjYm9nDi/WwGs2uoi+ijRdBqRLvtCSdAt02ajnysKbHIYM1BB+/gBI37DrGc2wzwa3bOivRld+KRMiwBLkmdZxqzYIWc0C8ka2MLajZei01xiD6yzETFPp1HbhWJx9vuhDmLYUMcQA2WNhQBWheN1Qm3Cr4WL8NgCBsVBAccxvQavfYEWtvXMKIPRFnlpY+NAbo9mLVzM4byeqxxqbpB0Oxz4RHPS5GFIn5LQXyGRMzejnBL5q8mW4n+Y8UNz39/VH68f+CrY/0fNG/2OKd3nDdRl++5B6Nek69vJa2qN5/H2e/4471R8xVgVd4p31UAv7VHdv+U5spM9MAM6IT0tohw/KxJ6CJJXCRJWbO0Yt/HFS5Cr9AMNPImY=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            454,
+            710
+          ],
+          "ellipse": {
+            "center": [
+              -167.97263714354457,
+              -11.630411023634636
+            ],
+            "semi_major": 58.880183231318235,
+            "semi_minor": 56.45816571388309,
+            "phi": 1.7450712264756605
+          },
+          "indent": true,
+          "tangent_indexes": [
+            429,
+            725
+          ]
+        },
+        {
+          "fit_indexes": [
+            1060,
+            1319
+          ],
+          "ellipse": {
+            "center": [
+              -10.728670592190673,
+              172.6070816365744
+            ],
+            "semi_major": 61.140520523854406,
+            "semi_minor": 56.87359272700771,
+            "phi": 2.586018870981932
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1045,
+            1345
+          ]
+        },
+        {
+          "fit_indexes": [
+            2226,
+            130
+          ],
+          "ellipse": {
+            "center": [
+              -14.370408808665502,
+              -260.044880560969
+            ],
+            "semi_major": 60.73187327957314,
+            "semi_minor": 58.293409594190464,
+            "phi": 2.6197892250725143
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2216,
+            143
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1554,
+            2007
+          ],
+          "line": {
+            "pt0": [
+              244.20774841308594,
+              255.97799682617188
+            ],
+            "pt1": [
+              250.83189392089844,
+              -196.97799682617188
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A9",
@@ -189,7 +819,88 @@
           532,
           574
         ]
-      }
+      },
+      "points": "eJyNFVl2xCAoRAn3v2ZP0K++BmUnmTcICgQ3FnP8/P2OuWEwDhln5ooU1VGM8mxs4l+UWDgsWp+xzzoYmV9w3njeuMgBTgA4pYlgqFo2Y1zdmj8E17qLDOamads/OchHPT9uFr0xGlyLrDEu8uGiyxlqTdABd8crX7KT7jsNayRG63tk69jis92COk1D4Qy4IM6vMCqr0YE0p8yEr6W23bBgW4hTmlssccdQR3xKVPOfoOWr5I6n0u0mjtOUIw47zxmSOWU0RL95GofUXnAwStvdot05kBNpJy2w2yaArLm2AQAvsgc3p7sEiqIwRWwmST26bfdbWbM6VSU4s2NEIDjy1UF8Bua87tK2ymcr09NhcVh40w1a7Ku2KZa2PhG7xFeZY3lA/O0I7wfZE8ILk3SMDId0Rwu/UvAIlWuAo6eHpIinSc6UnDA58BroUUKmL4EXwVr4iK043L3rd7KLqT4OPo3C9P4Nam18CVDCn2WO/CNQCWoWyxeLOcYPzQjNMieNGcbca9OLNV6EFDX48FsKWz4APp7y3fT1E300+uS3qHy9+csUqooscm3u/8c/vM0igA==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            226,
+            476
+          ],
+          "ellipse": {
+            "center": [
+              -8.133997315939311,
+              -163.24806951800386
+            ],
+            "semi_major": 57.957194516972415,
+            "semi_minor": 53.697627268307244,
+            "phi": 0.19387409501300426
+          },
+          "indent": true,
+          "tangent_indexes": [
+            206,
+            488
+          ]
+        },
+        {
+          "fit_indexes": [
+            804,
+            1080
+          ],
+          "ellipse": {
+            "center": [
+              -241.8487803686851,
+              5.398490294898805
+            ],
+            "semi_major": 60.759867206011016,
+            "semi_minor": 54.96134758725176,
+            "phi": 0.03774587828665954
+          },
+          "indent": false,
+          "tangent_indexes": [
+            791,
+            1087
+          ]
+        },
+        {
+          "fit_indexes": [
+            1463,
+            1721
+          ],
+          "ellipse": {
+            "center": [
+              -3.9412760723487783,
+              169.1616803157608
+            ],
+            "semi_major": 61.014959433291516,
+            "semi_minor": 56.62721801824804,
+            "phi": 2.664987552056109
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1442,
+            1742
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1948,
+            2425
+          ],
+          "line": {
+            "pt0": [
+              262.285888671875,
+              214.04141235351562
+            ],
+            "pt1": [
+              242.16180419921875,
+              -263.0414123535156
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A10",
@@ -201,7 +912,88 @@
           595,
           567
         ]
-      }
+      },
+      "points": "eJyNFQlyxCAohiC/6P+f0xd1uiK3pFNEBKPItez19fMNDzwPpFHEz1Byr+WGNWV8gAnDiMxYVFGHHRmwb7IWVrlB3noEC6DPNwzfDzntddKm4i6DOhndVMt9b9z/BwgKJJbmuvuuzgcjP0NwL0KSc2FVHaLM0wrBOX5RUwnFLXjxbZQUD9kpcMnCMPakK07aRBnjBO0i06VvI790D6unaKFVpNWXo/sGfjZmFu6TK4n/D4xXadT4CcfRCmFSt21VMbLjoK2GLL7qHc12o7UzpdFfrGoOlo+njj/OdSf649HaS8oos9WdzuZRipGuuQAJpwDuicZN1A9o1A/i9BO2FgEn5T2aCehgSQhF4f0e6li4yMPcbiuhleQGktd4oLar0K8U5KH9rsWmhMDNJEciIQEukpZB3jI4U9RmfU8e1qAUj2Ig71FLP7+73rf4NuYWwI7irGkNAs7zE3Zy0CYFhRibvuUGUnqgZCvvQhby1XInsJpy+4OSPMfMYgxPyOfmRJq2laLpPxMrGqnZqRVlD9t/I5pFT4Jfl8Udug==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            398,
+            672
+          ],
+          "ellipse": {
+            "center": [
+              -262.8847671298625,
+              -45.73137528348759
+            ],
+            "semi_major": 61.01563296717502,
+            "semi_minor": 55.32866527539115,
+            "phi": 2.608332901339147
+          },
+          "indent": false,
+          "tangent_indexes": [
+            398,
+            689
+          ]
+        },
+        {
+          "fit_indexes": [
+            1565,
+            1806
+          ],
+          "ellipse": {
+            "center": [
+              151.60219545415467,
+              15.424515959093084
+            ],
+            "semi_major": 54.440506347908695,
+            "semi_minor": 53.224774686059035,
+            "phi": 2.5295489140365994
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1553,
+            1822
+          ]
+        },
+        {
+          "fit_indexes": [
+            2150,
+            120
+          ],
+          "ellipse": {
+            "center": [
+              32.37457362921525,
+              -245.0100197780736
+            ],
+            "semi_major": 58.31626684900067,
+            "semi_minor": 57.436406417471794,
+            "phi": 0.47056759270915016
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2137,
+            143
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            904,
+            1334
+          ],
+          "line": {
+            "pt0": [
+              -203.95045471191406,
+              220.64007568359375
+            ],
+            "pt1": [
+              225.95045471191406,
+              281.34600830078125
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A11",
@@ -213,7 +1005,88 @@
           567,
           588
         ]
-      }
+      },
+      "points": "eJyNVVtyxSAIDSGG/a/wrqK/bZWXgDpzjyjGCBIk8Pfz+8Gnwwft67RQYlEat4owrOF6QNqMVU9QnzUiPje/7LgZcDsgsjpunyGLwjpEnVB2xrMFOIgbch8GY3TARJOBm5MMuuy7DOgMgz+EDb9wl3P7IKaoPWYe2sS+hUk+VKfQIewCxzWaDQMydpD2MTBRYUqySeRYnajXM24500xyi82rR3bXzUfAMvE5xjs2j6hFcEea3Jk4S4hlxqddi5/CrDzlF98BphRkLXQSWCewW6e6sH7BajBE0WJQ0nwSrXJqGkHSCVu5MM3GV0N4B71vpwFlA2100kmFvxSJuqXVJ0oL1OauKko2trCyMaF5760pU4yUMdNEm3lCcgQ6WTLytJESrcpK8vGkxH3ibfP8d5L3/QeSkjYlxSU9ZYpNDNt9wkweKR3F+xdlrlrO4+bGZAuT1eeHL0DLysYtw62lwm6L7aEy70rntmyHErxW9n3N3b07LdSCNguXhiUHqcTLG34CdxLN6wjxkQLFry5Eju6iGVjLpYbYtKA1mx4rraGy/gO+liBv",
+      "tabs": [
+        {
+          "fit_indexes": [
+            376,
+            636
+          ],
+          "ellipse": {
+            "center": [
+              -267.14332307979896,
+              -22.57202391915866
+            ],
+            "semi_major": 57.63298329977942,
+            "semi_minor": 53.83082260063564,
+            "phi": 2.835085921142651
+          },
+          "indent": false,
+          "tangent_indexes": [
+            367,
+            653
+          ]
+        },
+        {
+          "fit_indexes": [
+            1504,
+            1754
+          ],
+          "ellipse": {
+            "center": [
+              161.66163552168578,
+              20.507610422174146
+            ],
+            "semi_major": 57.80532945579324,
+            "semi_minor": 53.69870768979293,
+            "phi": 1.5350583938360562
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1488,
+            1772
+          ]
+        },
+        {
+          "fit_indexes": [
+            2175,
+            355
+          ],
+          "ellipse": {
+            "center": [
+              -100.66648238984016,
+              -194.09590877166784
+            ],
+            "semi_major": 132.44093437757064,
+            "semi_minor": 74.53056902711846,
+            "phi": 2.651089958065537
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2144,
+            359
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            863,
+            1276
+          ],
+          "line": {
+            "pt0": [
+              -166.07156372070312,
+              238.5389862060547
+            ],
+            "pt1": [
+              247.07156372070312,
+              268.6349182128906
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A12",
@@ -225,7 +1098,91 @@
           602,
           553
         ]
-      }
+      },
+      "points": "eJx9VYthxSAIjCK6/1Ydo5O0VX4exlcgqPhBOYy/Xz/f1CaRfuRqsgm5XlRNVaoqUwl5aVRATTZR9RSviVVYxpa9EimrP9vCEt1e8x1/rkGdbkUqk43O0dBLOIigh9rcc7kc30NgUaLGjXnZNC4SgjS84ExYzYuIlVQklDOik01MjUdpLBE2UXpcS5+O9ilAsV5xFvQUQae6pZ5wXk5j+GIGbawtv1rVnPMkbA2gR5CDGEpOJs4JMhFgwHMBN4839PxFMCTLPtk7ATylKlyY06l12CHrz0kVLPl+SBvC7zD6N47aafrQG4nwMr1WfCVBeQ7wY9uW2yXhe/wLIn4F0jYugGXTY/K8MjnODzU8jyb3zu6l+zDVnb3oXfT8uCuxyeQlRm2XLdoyIibE/OFrLpfdvMf9ugf+P5Rysa+nN9PAG6Dp3t/QR+SHBXBYXFJY/GM8L7QYRvSIzWFPNUYPoBg7Z0xhwn3F07znu+F0y6lvrwHO+dJ7LHpUtqPYLHsXw7uxH1V7VhtywyfXhkcDH+XUxAf77LzXk+3jf5VNYfZ3tuRPGGrKuMBl25cCKRDV6xY3TT/xJl7dPfzYnf4AuTUg+w==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            477,
+            769
+          ],
+          "ellipse": {
+            "center": [
+              -159.21849298972242,
+              44.42374953484702
+            ],
+            "semi_major": 68.61994775291906,
+            "semi_minor": 59.9261218187799,
+            "phi": 2.6676943011314416
+          },
+          "indent": true,
+          "tangent_indexes": [
+            450,
+            767
+          ]
+        },
+        {
+          "fit_indexes": [
+            1083,
+            1329
+          ],
+          "ellipse": {
+            "center": [
+              77.46520697126019,
+              252.46479042636054
+            ],
+            "semi_major": 57.401147140244895,
+            "semi_minor": 53.65356195818388,
+            "phi": 2.88246066002923
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1065,
+            1345
+          ]
+        },
+        {
+          "fit_indexes": [
+            1362,
+            2066
+          ],
+          "ellipse": {
+            "center": [
+              154.7930285067403,
+              -43.49635535948151
+            ],
+            "semi_major": 198.62890661328962,
+            "semi_minor": 112.34639682205915,
+            "phi": 1.4058349643221386
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1345,
+            2084
+          ]
+        },
+        {
+          "fit_indexes": [
+            2099,
+            138
+          ],
+          "ellipse": {
+            "center": [
+              -53.53659839041302,
+              -232.22395611036646
+            ],
+            "semi_major": 60.323997494251515,
+            "semi_minor": 53.54821020944607,
+            "phi": 2.425736002998292
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2084,
+            148
+          ]
+        }
+      ],
+      "edges": []
     },
     {
       "label": "A13",
@@ -237,7 +1194,88 @@
           560,
           511
         ]
-      }
+      },
+      "points": "eJyNFgmSwyAoBIn//9H+rFu5BCSzCx6IiJUr/fx8Hhwn4B+zEpiZRqGRmGlbYS+OSSifx7RAvO8bAce9AO4esKzBuJgEqlgPsO471GMWOW/Gl80tAeXEeSC9D/H83WhC8N/XdL8b203hQN6CViozD68kBsC1YJ4ojfHY3ERaTF/mtbYrX9VIb42VnHr2ck3gEywE7gvuhfGV7ClBJ5SUwWOx2FLVAHCH3UGuuzYRUFuGYKr6arf2lPGZPCiupoOOMjNN3MnhSzJTWgRWxKpZ/dweM4NCMCu05OuYF5FMduiYxVCH3dRsc4YX14fZ89xAOpHQM0nPfJCnQ6ka9hGLimHHIMdSaK0oKsqAvt4VNQJJV5VfGOpBuVOxneh5c7P7Wb2tDt9+fzTQcnbv7EyOgOvyeJYkk1ivIW5FRDw19SINsnV9MDkF30RrR05PNi56gRIp0+VDKFAUCTmm+WROQor+OiFxWZrKDp3SlPjULqgeCjHHn97BEfatXwusptXKz8XQBitfoTyWTw7uzgpZu9zgF46K+T+Bjen5Guca6tIk3r1uWdTvsE7e8fr1pID2+NbMjrke0kTTS24NqefwCwPYIuo=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            847,
+            1117
+          ],
+          "ellipse": {
+            "center": [
+              -1.470059686094385,
+              242.52578888272836
+            ],
+            "semi_major": 60.05101420745821,
+            "semi_minor": 58.51869442858841,
+            "phi": 0.7435542064936183
+          },
+          "indent": false,
+          "tangent_indexes": [
+            840,
+            1128
+          ]
+        },
+        {
+          "fit_indexes": [
+            1450,
+            1729
+          ],
+          "ellipse": {
+            "center": [
+              164.23726120096066,
+              11.147800608681521
+            ],
+            "semi_major": 61.35769610733855,
+            "semi_minor": 59.251200186437515,
+            "phi": 1.5049115164501123
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1439,
+            1733
+          ]
+        },
+        {
+          "fit_indexes": [
+            2119,
+            2373
+          ],
+          "ellipse": {
+            "center": [
+              10.227806316725237,
+              -171.783143902353
+            ],
+            "semi_major": 59.71136267484993,
+            "semi_minor": 52.80175458204034,
+            "phi": 2.761064859865259
+          },
+          "indent": true,
+          "tangent_indexes": [
+            2108,
+            2395
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            178,
+            629
+          ],
+          "line": {
+            "pt0": [
+              -246.14488220214844,
+              -218.5054473876953
+            ],
+            "pt1": [
+              -260.510009765625,
+              231.54969787597656
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A14",
@@ -249,7 +1287,88 @@
           504,
           511
         ]
-      }
+      },
+      "points": "eJyFVglyBCEIHESHqvz/R3lYotyo2aCyiIgHLbM/3z9f2Ccx6/gHi1G0TumF6rDe1Cer1rg5xY4Nm5ILV7qM/j1hepXBB2AzBpYAYYncbyDysgVg9jyzKstEszDTQqstnYzRbi8utIGUVY0at8asKeNt2dacxxlQflEElLNyXdTmlRp1rXzPKbaFhvOhNZjWIIsflyWtVWQrLSLpO0xbz3Sc6+jvkb06+oyXMILDFjzCdAlyRB5OJVSL3ajApjpZS9KhujNDm6BLoPZOtE02ixJpe98hjasXE3Q8z/K5XJfnl3QBel7FtC5tiGeUW3sy0v1MgXFGOeM8gT0AD/bkzriio8kQHiA3KeKJBg5p+oAfbmlPab90HoJcbUfNh6XLeDGtYVKN99w0aShmxFVXxUMxhVLMqvCJdiMyHPjAqAbj/0WKjkaa92lLFCtRWZlOn8Xz7nXcdkfJYSw03vMo2dswG302Sl2rlBBE3WV4NhyWM9WwJk9R91OdE2vOuynrprw8knzMSimZc7KkZE38HcsLWi8FIpOCFf8JVfr85DyL/grtQ2NfGG2pbH8H9m/N5VMz/I7HSlvKPZWdSWxDjOewVzOk5knaIDRKfpQl/V7zpf4CSoUhpA==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            333,
+            589
+          ],
+          "ellipse": {
+            "center": [
+              -151.9640268601918,
+              -16.046965254921027
+            ],
+            "semi_major": 62.43039422573439,
+            "semi_minor": 56.565265579535534,
+            "phi": 2.251637270073336
+          },
+          "indent": true,
+          "tangent_indexes": [
+            309,
+            610
+          ]
+        },
+        {
+          "fit_indexes": [
+            991,
+            1250
+          ],
+          "ellipse": {
+            "center": [
+              4.295452734473752,
+              173.45949579725476
+            ],
+            "semi_major": 59.45547127275957,
+            "semi_minor": 56.31906672167203,
+            "phi": 0.6250639235392841
+          },
+          "indent": true,
+          "tangent_indexes": [
+            969,
+            1263
+          ]
+        },
+        {
+          "fit_indexes": [
+            2056,
+            2316
+          ],
+          "ellipse": {
+            "center": [
+              15.586071258825164,
+              -169.88039702819134
+            ],
+            "semi_major": 58.33144461423935,
+            "semi_minor": 55.57324551818393,
+            "phi": 0.5623266081029485
+          },
+          "indent": true,
+          "tangent_indexes": [
+            2039,
+            2328
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1475,
+            1761
+          ],
+          "line": {
+            "pt0": [
+              263.53521728515625,
+              178.06561279296875
+            ],
+            "pt1": [
+              271.83758544921875,
+              -108.06561279296875
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A15",
@@ -261,7 +1380,88 @@
           616,
           525
         ]
-      }
+      },
+      "points": "eJylFVtyAyFIRcL9L5hT9LvTKG80k3YKLCKwriKw7ev7CXPhojlh2gx0No0z4xkDwGHMcvQtEqoHZoNPz1neBfD3BwAzGDCEFuyhs9wjLlJBkP3E2d4GRx/4WXzukXcRIudBqID+oOIiYQ9EGR6MTsIciJ9NjKZw2O8K8sKTvxXiqsJlwxB93h7qnwCTg7GCOT4AHIJIkLQwUg4UEUZkEAfRQtCOEVPK0oSTp7XehRKQ0wsLE5Mwg65srcqLGhz52ktGj5DGIZPtZJ67yiFkr+auFnO+ZwwDOlkOC90qVUsUuEKnbyZeQ7nR+z3/1gxXMbWENXYIxc6NQm55B7vZJdlFkcuUp86otXy7J3MXX4XKEoegO7GPpnzjhNlJI1kj+XLpZ3YDlhGjdM0CIeH3IGtH2N9OTPO4xY1SOdcuCCsJrg6Fh1DzziaNDb0lonG0dukoRu+W0jLXwsRMC9JDTCGmxxAr9DbrB11UPcQoTh2FBVVvBYu7BDOfNR3dfx6E+mfwoKQfxqmMv5zD9TBQtSZL0KPoKDlEy1+A6lbCIlic3r/+QVWtl3+ySeKAh+091KBRVNcFKFyWvsh5b567Al6d+AdzZyRi",
+      "tabs": [
+        {
+          "fit_indexes": [
+            222,
+            475
+          ],
+          "ellipse": {
+            "center": [
+              1.052799652612974,
+              -172.7136199596413
+            ],
+            "semi_major": 58.37557147237851,
+            "semi_minor": 56.71190903170817,
+            "phi": 2.093928535451659
+          },
+          "indent": true,
+          "tangent_indexes": [
+            203,
+            493
+          ]
+        },
+        {
+          "fit_indexes": [
+            851,
+            1097
+          ],
+          "ellipse": {
+            "center": [
+              -167.38774547822516,
+              -9.069366034658835
+            ],
+            "semi_major": 59.44806942851055,
+            "semi_minor": 55.566717274464736,
+            "phi": 1.0667872991730563
+          },
+          "indent": true,
+          "tangent_indexes": [
+            827,
+            1122
+          ]
+        },
+        {
+          "fit_indexes": [
+            1500,
+            1764
+          ],
+          "ellipse": {
+            "center": [
+              -17.9741296676567,
+              259.57089836660015
+            ],
+            "semi_major": 58.405842088755264,
+            "semi_minor": 55.088781507637385,
+            "phi": 0.7333498034264008
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1495,
+            1777
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1993,
+            2527
+          ],
+          "line": {
+            "pt0": [
+              241.24525451660156,
+              243.95684814453125
+            ],
+            "pt1": [
+              253.1285858154297,
+              -289.95684814453125
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A16",
@@ -273,7 +1473,91 @@
           630,
           504
         ]
-      }
+      },
+      "points": "eJydVQlyxSAIdQly/6P9C3UadtCk7RQB0SjoQ01bX595EU2XycYkYzrztwvu/jF673PchdUgFmOYnair9tJJmLXIkG4T1Bsxi65CFrcTnBY8fa12bbz0PY05ae7GzLtnVDrvroASIFW8Zm3PrU6AhikQMrBEjfgujUU0NlVImhRi82JGs1FG4YAdil+OoIEkqAZP2expcSfNYM2z59vJU+4nryJtyYGogLSq4DRi6mR1Ssxxh+lYYQI2sYlXaavVTKofWauNHkZXxB36/9ExV7Ne8yujFqauxyGW+Mg3JzxtcHZ7BPwlSCnOwAZ+3RGUN8Ed6wG2kC04Hce0s43jQBPftJilWrnmslyEQARUgSpikwX2OZF48RBCjcUuniP7h9TiaWJuuUcsTceh3vUDp1IrXieIugPctmpo1c5MgK+fEGwqZicW423iGes9RJ6Dee6v616Sc1jXrS4t+VWB442JLud4dmoVRrxKsL9g5cfz8G/7idylLIPYyI5t3T4f1lWuhN0LvR1+ObCCZHcE0vUQugQ7lv0VTltU+gZ2hx1a",
+      "tabs": [
+        {
+          "fit_indexes": [
+            481,
+            748
+          ],
+          "ellipse": {
+            "center": [
+              -147.69248258893657,
+              -1.016394174317312
+            ],
+            "semi_major": 60.88494534946385,
+            "semi_minor": 57.27674117651382,
+            "phi": 2.8602764912958674
+          },
+          "indent": true,
+          "tangent_indexes": [
+            461,
+            760
+          ]
+        },
+        {
+          "fit_indexes": [
+            1087,
+            1334
+          ],
+          "ellipse": {
+            "center": [
+              22.415808178808735,
+              254.47189252149897
+            ],
+            "semi_major": 58.50684097683349,
+            "semi_minor": 56.03514060579774,
+            "phi": 2.5339086715448107
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1063,
+            1356
+          ]
+        },
+        {
+          "fit_indexes": [
+            1367,
+            2007
+          ],
+          "ellipse": {
+            "center": [
+              143.82564135806064,
+              -0.7604272148691265
+            ],
+            "semi_major": 172.05923553614147,
+            "semi_minor": 139.18865994164702,
+            "phi": 1.5321471212347804
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1350,
+            2024
+          ]
+        },
+        {
+          "fit_indexes": [
+            2039,
+            142
+          ],
+          "ellipse": {
+            "center": [
+              10.357596892103926,
+              -247.06983473533242
+            ],
+            "semi_major": 60.59434113707087,
+            "semi_minor": 56.243866545423224,
+            "phi": 2.8583363845384993
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2017,
+            151
+          ]
+        }
+      ],
+      "edges": []
     },
     {
       "label": "A17",
@@ -285,7 +1569,88 @@
           588,
           595
         ]
-      }
+      },
+      "points": "eJyNVYt1xSAIjRp0urf/Ap2jbeQjFzQ9RcAfIgriz+f7q90TWmu11QnIpWqJUgsR51rNcw0HcShriTsxFKanKFwTr4lMBkMZ4/CmzigUZYaiTcigCsmmsneVhplTK5qIx1XWhDE53IpabnaAeEGAhAxJkQk5D6sYk+phnbxJu3V3NWW/4Gj85oW9j90GRz11oFilZD03jbGiubNbqns4NMz3y/07B2Hk5Q+BVMUAK6c15W1i15fFTuxkaHmReDtxMP/d1M22w8k2A0teeJp367Zz4OXAuFTh2jYbcT563zuo73nxfZYufDYm0GxRBxihO0V5EXUiGznBGKKJfGFUkzubnpEGV5uEkbVJysSVDuTBE6QNyyUrtbRtCPIMrcozDCYYha6o9pDbd7wTpyH3zmUik8Al7KmOyRmdbJn5kpR/YdoPeV80GdimaoDc7Ogvxr8eh/4hc5Qgb6iv8JJvH7spN6ZDtoksD/2gdxWIDgrxMcOiat5d2RygOBVg/vHFfw++gmppGz86jUP861YUNv+xCIJSIhJuAWOyh5i0kKSTg/zRpWhcMelj4RlSeHDdf1v/lMPDC28wAfzMWY42nqrQpSRMflFR+S9//yDo",
+      "tabs": [
+        {
+          "fit_indexes": [
+            195,
+            452
+          ],
+          "ellipse": {
+            "center": [
+              -160.95890693669378,
+              -50.387193263775146
+            ],
+            "semi_major": 59.90236462896562,
+            "semi_minor": 56.413031560140304,
+            "phi": 1.4263861721926843
+          },
+          "indent": true,
+          "tangent_indexes": [
+            175,
+            469
+          ]
+        },
+        {
+          "fit_indexes": [
+            1470,
+            1723
+          ],
+          "ellipse": {
+            "center": [
+              180.98974389168367,
+              23.021953945308663
+            ],
+            "semi_major": 59.84883623432273,
+            "semi_minor": 55.628324380711575,
+            "phi": 1.2674673844902546
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1455,
+            1739
+          ]
+        },
+        {
+          "fit_indexes": [
+            2049,
+            2310
+          ],
+          "ellipse": {
+            "center": [
+              44.45116101133823,
+              -175.8877992066755
+            ],
+            "semi_major": 60.41255457526786,
+            "semi_minor": 58.31881733463544,
+            "phi": 1.4771476267987365
+          },
+          "indent": true,
+          "tangent_indexes": [
+            2034,
+            2330
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            671,
+            1242
+          ],
+          "line": {
+            "pt0": [
+              -328.09375,
+              180.88565063476562
+            ],
+            "pt1": [
+              243.09375,
+              286.8800964355469
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A18",
@@ -297,7 +1662,91 @@
           595,
           616
         ]
-      }
+      },
+      "points": "eJy1VdthxSAIjQ9k/6U6RIdpK/LG3M8iAlGjcET9/fr5HnOOU1iNMa0Ym6nKqI/Zt+hELImaq0bcRDkTiWJ9mnkY/950sqFi9LPULsQi5hjmJAdxSNScMCNBbYXwdXWqCcp5OrPFA1iwXaRYatxuWHhnzP7txPUsXAsR2/M0w6mrmWe4zNBUYRsGmJCi5PiMGCULSAg6uGMa2J0kTxv3hc3oRcyHBEGJRlNg12fzJtZbHlvYaiQUtoKnCi0MJCOIM511eO3macnOvWJ/6TiyZxUDjlkQB10be/1273vIDhIMGDIiMUozMcKVGkNrHOVzlckwL+Ki/lDWwTKJ7txrf5ms1o89aYOzp2HETo1NRxiBCGMWWvMX2NisoMyhDK+tZYgLU7lfHBHX6d5YnORLUxwvDPTcND9Kn48UQ3QfpodPkywlSwcvKpgVSyC2WmlS3VcPl5fb1q8re7Hu58guK7nm8t1/ylkJ2AsDN6D6jyTrbQPkZs2xfFAfxPUq+8MdL3h7qxhecABkS1ZMsRdCk5xsK229RiaSWLdaNhVg3qU2+LvD9Ac0DCAf",
+      "tabs": [
+        {
+          "fit_indexes": [
+            499,
+            755
+          ],
+          "ellipse": {
+            "center": [
+              -239.13386512873873,
+              76.20680102089526
+            ],
+            "semi_major": 59.936027112189684,
+            "semi_minor": 56.017713576531385,
+            "phi": 0.880084556073454
+          },
+          "indent": false,
+          "tangent_indexes": [
+            484,
+            774
+          ]
+        },
+        {
+          "fit_indexes": [
+            785,
+            1466
+          ],
+          "ellipse": {
+            "center": [
+              51.10570376827552,
+              157.81981342923277
+            ],
+            "semi_major": 186.72480126302747,
+            "semi_minor": 120.18125433356121,
+            "phi": 2.9927616207492296
+          },
+          "indent": false,
+          "tangent_indexes": [
+            774,
+            1482
+          ]
+        },
+        {
+          "fit_indexes": [
+            1499,
+            1754
+          ],
+          "ellipse": {
+            "center": [
+              245.25619365436364,
+              -44.559869357071875
+            ],
+            "semi_major": 60.23669800648418,
+            "semi_minor": 54.78874809042557,
+            "phi": 0.8446327882089717
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1482,
+            1769
+          ]
+        },
+        {
+          "fit_indexes": [
+            2060,
+            153
+          ],
+          "ellipse": {
+            "center": [
+              -54.79167892054694,
+              -229.3286000180071
+            ],
+            "semi_major": 68.15589421617129,
+            "semi_minor": 61.64827235811836,
+            "phi": 2.9093042475382807
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2035,
+            173
+          ]
+        }
+      ],
+      "edges": []
     },
     {
       "label": "A19",
@@ -309,7 +1758,88 @@
           525,
           588
         ]
-      }
+      },
+      "points": "eJyFVQuCABEIlRj3P86ebpd+njFsk0pIyuT357dw6cDWsMdTLVrlgTDAc10oYnyaXVYtFnYfuEPOgGySEkbGqzJn6sJY/1qhNkKFS3CpMRofSSNK/aOUFKWl1LQps0/Q1E2GBtH5KbkBciJWySE7kZ1zVkFF9Sj8Q8DTaagGSmMuTophJDaSVbhaequhfTuqdkwqvsYMmf1ObHtxY8Z183ZA0hOxHxCifwNyOzCRQ/G1uI+RbUr8MR4Gt76kgSyBLUEiCXL6IW693m1v/WvGBeggD6tXK9vg/4qP/cDzdvTn7AidNzqMvv+ai7OXcNJJebMn/+7zKCqEcIF9Tn1xl+pCll6dSmXV5IUDkw+Z4DTsmzdp8g0ckLRpnWpbPLb73ZA3r3FW98SqcN3hsZ0elzGgLaIB55zn8GP4aaqCFJ9HipCVqyhc8UBFYRtEq5IXwShLVqmK18K52OqaFDtpFZwSN5cDtA+y0/XMyy356LTDVNt+xMursUUiinEtszQvEmj2HjQfxOruj7iGLFss8/LuzkpME/0FfQlLpcUnnBkeDny55qsVicWUM7xE2/Hs0lguq2d0vWr4gy7JaJGOuMkNSVxrvNH438a13cKq8AdzOh/E",
+      "tabs": [
+        {
+          "fit_indexes": [
+            308,
+            568
+          ],
+          "ellipse": {
+            "center": [
+              -181.40747045064796,
+              -23.79000438968754
+            ],
+            "semi_major": 60.18455817113523,
+            "semi_minor": 55.600270286911964,
+            "phi": 0.9813238334600612
+          },
+          "indent": true,
+          "tangent_indexes": [
+            293,
+            584
+          ]
+        },
+        {
+          "fit_indexes": [
+            1543,
+            1795
+          ],
+          "ellipse": {
+            "center": [
+              258.1302650579512,
+              -30.463282161579578
+            ],
+            "semi_major": 57.72990202842019,
+            "semi_minor": 55.010122528182336,
+            "phi": 1.946621513085581
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1523,
+            1810
+          ]
+        },
+        {
+          "fit_indexes": [
+            2111,
+            2374
+          ],
+          "ellipse": {
+            "center": [
+              4.533511989683061,
+              -171.13151073205916
+            ],
+            "semi_major": 58.68042808854762,
+            "semi_minor": 57.392351052140036,
+            "phi": 2.4986888380917556
+          },
+          "indent": true,
+          "tangent_indexes": [
+            2100,
+            2395
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            801,
+            1301
+          ],
+          "line": {
+            "pt0": [
+              -260.0919189453125,
+              232.52561950683594
+            ],
+            "pt1": [
+              240.0919189453125,
+              259.2867736816406
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A20",
@@ -321,7 +1851,88 @@
           581,
           553
         ]
-      }
+      },
+      "points": "eJyNFYmR4CBIYtAqtv+6rpGblR/UzCwSQDEiT0j7+f+vv+/bFYV0Jd2YwkPIwwghg3JQAvTwEOKKtF1OIVRQw3SJDGhUMKR9InOTqwY/t2J9qaxl5et6meGScYxBjBUDGSheGgtz3eLUi/OJJG3P0cmz51CUHZGKBMt8k2sAtDWAGeEic7FJEtE5BRmMk8RK2RjMqQAY4bPJDpsCM63PMRR3MA99BOZa0XpR1KqJ2um4lU8me3Vpma/Xn67J0Fqv0UwVLkWuaRb0lIdvXAC2r9uX4F/EzjZDKfVPPusG/ZT3utBykSqAVgF26cq2CVQN3Fa+T+USvJzo7G4Hiqq+dJieeTN8XC8xKNszi5NyvZMXxw1dHnPsgIXjOFhd+pjXU6pU5Lx831EX4sKTkMekp1lrkJ4QITHffQRpYC0h2s4lPSqxiWajRSPSGySUy+llzxhHcA1REb1Na9fGt/4cEouGov/GOlyVe4ydiWqKka+TIz6NzAOPSXluZFuycKB4vf5L0gtx65E9O3jX/W2p9Ff33dy/eD69rkpGbbkGInuWvgTP6/DEWmY9qefvfO/+v91MHr8=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            514,
+            772
+          ],
+          "ellipse": {
+            "center": [
+              -159.98572438995566,
+              -44.87263722004653
+            ],
+            "semi_major": 59.6573819841982,
+            "semi_minor": 55.00266492283692,
+            "phi": 2.4482971089045975
+          },
+          "indent": true,
+          "tangent_indexes": [
+            496,
+            782
+          ]
+        },
+        {
+          "fit_indexes": [
+            1602,
+            1859
+          ],
+          "ellipse": {
+            "center": [
+              241.69063658928883,
+              38.09707990641318
+            ],
+            "semi_major": 59.76653163003062,
+            "semi_minor": 56.6902402148838,
+            "phi": 2.5914119321720133
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1584,
+            1876
+          ]
+        },
+        {
+          "fit_indexes": [
+            2157,
+            116
+          ],
+          "ellipse": {
+            "center": [
+              35.13490480284537,
+              -228.80507079373663
+            ],
+            "semi_major": 58.52917924321739,
+            "semi_minor": 56.66635977374015,
+            "phi": 2.0037022268182714
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2142,
+            128
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1009,
+            1372
+          ],
+          "line": {
+            "pt0": [
+              -196.13783264160156,
+              241.39266967773438
+            ],
+            "pt1": [
+              167.13783264160156,
+              288.3051452636719
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A21",
@@ -333,7 +1944,88 @@
           511,
           546
         ]
-      }
+      },
+      "points": "eJyNFUlixCBIoobzfKr//1GrbAKaTNnEJUpApPz8fmprrQ5sdcgBF6PQdYHwEEACRKjCzJNCk+njCbLjJAdN2BRhJbGJSKEzd0YVkzzckwYyDUEaKyTRGKO4tXGw9pkb0/5igBiksrGp1Rpn/0FL9NDJw3lV8lNsxHW1t2Y+15BcGtodNHDgO8cVubWLc0FN24NcINC7A2US4SQRWESi4oBiTDiJFutyBtsEhPQEPktADYh39dkTSnqJ/S32N9bhCk6CbjdY1O6GulvIwaPdZFPKn0uSc/l8ml1BHWyKz1mflWE8/n3oHcdhm1ElHLDQLwKNPoAFLwGqOE/HYKce3Yg4v33wCnb426mYB963ex59+JN/2utzJL1W/aT284JDN8OX6QfArzP6+A5E4pXe3gmczJrLRfK4ZCr2hIiMIcP4nhQ+DK2ZBihxAcBVBsK/dNdKQbDSwjVCSEBKlGS6pXpPz8LpCa9aVvQTV+Tu3uPZy6toJnfv6dsXNkysUYgfbqHEvcurSaO/tb/LHJRt0HdWQd1m7Ync/TdG/gD3AR18",
+      "tabs": [
+        {
+          "fit_indexes": [
+            32,
+            287
+          ],
+          "ellipse": {
+            "center": [
+              12.106727753877493,
+              -161.03387627815522
+            ],
+            "semi_major": 59.56493696102086,
+            "semi_minor": 56.16211756677871,
+            "phi": 2.193901329593164
+          },
+          "indent": true,
+          "tangent_indexes": [
+            16,
+            306
+          ]
+        },
+        {
+          "fit_indexes": [
+            653,
+            915
+          ],
+          "ellipse": {
+            "center": [
+              -160.59912122054598,
+              7.089670494657084
+            ],
+            "semi_major": 61.127069635193195,
+            "semi_minor": 55.66870114548877,
+            "phi": 2.7645639138188085
+          },
+          "indent": true,
+          "tangent_indexes": [
+            635,
+            932
+          ]
+        },
+        {
+          "fit_indexes": [
+            1690,
+            1954
+          ],
+          "ellipse": {
+            "center": [
+              238.06022260600975,
+              4.716051932674481
+            ],
+            "semi_major": 61.47800184165919,
+            "semi_minor": 59.8106406532224,
+            "phi": 1.8502659811054345
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1673,
+            1973
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1136,
+            1469
+          ],
+          "line": {
+            "pt0": [
+              -180.0133514404297,
+              267.1688537597656
+            ],
+            "pt1": [
+              153.0133514404297,
+              249.66944885253906
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A22",
@@ -345,7 +2037,88 @@
           567,
           588
         ]
-      }
+      },
+      "points": "eJylVVl2xSAIDXHgt/tfThfW08cM6svpIIgREfWC5vr4+mzdSlPRiIK5enMTv+jWhqsIla8CJpmVSsMm4KY6mdzSCs1X5E3FFnsfJoY3z91obOpiVy1OncN8EQrbIMBo57djE+dJZ/NOC7CK/SLavU6OmmDPqAfaUq4XsbiIa0GvqH0zgcLigpgrALu/PZC2rsWzhLVGN6eO5lIOuCaZxF0zUTkytJdISHiYihj6bToP2Yi4aaJ3yWvbmYFbAG71KKvuYAVvbI6lbYAFaFCGNjtTcLSjAK7h/kdZfQFuyfQwF0pPPfx1K7Bt5hc7WVztp8Br3xpsM6G6g4PvalrHf3p2/IExFETxsMDpSIsDxDlxzDmoEgeRjkn1rramsI1Ix5RpcEYzj5rSw8NXWKVleH+DKl18uvTpxY63I16U5W1p1S49FSO/LuJdyxThAC3HLGdCl6jMRMw1ysVVSdlDXDLuitc5kYjtyrE/dY6yMtMJ2WNoBm5xeuhmJBiow2+zL7i/V/U29sH2qEidVuz8w3/rJa6SRyVza9zSF8bQBmNKe79DmqEqJFEFGqOCkp75G9a1HdM=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            487,
+            747
+          ],
+          "ellipse": {
+            "center": [
+              -187.67103094607785,
+              -4.776305263244058
+            ],
+            "semi_major": 61.09608130701525,
+            "semi_minor": 60.24077453930195,
+            "phi": 2.397841044291428
+          },
+          "indent": true,
+          "tangent_indexes": [
+            470,
+            761
+          ]
+        },
+        {
+          "fit_indexes": [
+            1757,
+            2035
+          ],
+          "ellipse": {
+            "center": [
+              185.11640097310513,
+              -21.1505159083726
+            ],
+            "semi_major": 66.74255951930084,
+            "semi_minor": 57.67203832376043,
+            "phi": 2.87771732396933
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1741,
+            2032
+          ]
+        },
+        {
+          "fit_indexes": [
+            2334,
+            136
+          ],
+          "ellipse": {
+            "center": [
+              18.01282619402059,
+              -256.7706034017982
+            ],
+            "semi_major": 61.27820857970314,
+            "semi_minor": 57.90888186980666,
+            "phi": 1.400788203214538
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2317,
+            146
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            968,
+            1539
+          ],
+          "line": {
+            "pt0": [
+              -283.01416015625,
+              235.32492065429688
+            ],
+            "pt1": [
+              288.01416015625,
+              237.2275390625
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A23",
@@ -357,7 +2130,88 @@
           581,
           574
         ]
-      }
+      },
+      "points": "eJx9FQlyxCBI4sH/f9YXdRpuUFNABSTKtW6D358+xuhELzIJW5G0ZPiwicATSCRgDMQKhk6KbARu3e2A90QiAXZKHDxglsXXXR9MYTdhkxg0JRxsjyBvAP+I8G3HIUvMT4Q9erfU18CnUkWbLv7r5Dm0fOrsac7V1HraOAOzmllxrb4EUmNoL2ZqjQYtNgtgLEj0IjorUwI5xg9PNybHLgn+4PMHOxfzxqXgbfgCJS2mqN0OGTVREMmp6TlFTyJqWomHh5O4EDVjskD6ADzbNaWyg87ieWH5BkJVDBGK6e2QpN59+PTokP453HcwCWe06Fa4BCYxJgRzkdz6otfdVbZPs+s9p/mN8yt8nTLRSsRQn4VpD9lwCsz6zxc2PzhEOiksGeKBeuMebhEikU7UrEI8AppSs3fgo10gPwWZaf5rij6R90WeF75xBe0ulkR7NDMU87Z5iutIB/Oi0Np5vcZIlcjjW/A/7t2gFvR6oNa6VtyKLZW26oqf5r41dyJcuGnOJveG8LhTwwaMuaTHvNtG+mf7A978HSk=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            418,
+            684
+          ],
+          "ellipse": {
+            "center": [
+              -264.04460177902416,
+              -3.191571288403043
+            ],
+            "semi_major": 61.482537600838214,
+            "semi_minor": 58.716013402097644,
+            "phi": 3.078133890991873
+          },
+          "indent": false,
+          "tangent_indexes": [
+            404,
+            697
+          ]
+        },
+        {
+          "fit_indexes": [
+            1504,
+            1756
+          ],
+          "ellipse": {
+            "center": [
+              158.15071488265446,
+              -4.024977589767373
+            ],
+            "semi_major": 58.04925300914396,
+            "semi_minor": 56.27538609682009,
+            "phi": 3.132987232494951
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1489,
+            1775
+          ]
+        },
+        {
+          "fit_indexes": [
+            2094,
+            137
+          ],
+          "ellipse": {
+            "center": [
+              -2.2560475654066656,
+              -242.79841796233288
+            ],
+            "semi_major": 58.91142521559265,
+            "semi_minor": 57.688475826300326,
+            "phi": 2.2903935243850753
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2077,
+            151
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            966,
+            1276
+          ],
+          "line": {
+            "pt0": [
+              -85.50872039794922,
+              256.7244873046875
+            ],
+            "pt1": [
+              223.54730224609375,
+              257.8992919921875
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A24",
@@ -369,7 +2223,88 @@
           581,
           595
         ]
-      }
+      },
+      "points": "eJylVUt2xSAIjSHo/rfW1XTUVpHPRc15gwKiRlAkCL9fP9/0fAR62Ef/A8Ke6Kb7Fcr70lmYPisRDIQ6DhLoRnUmpol5HGbzwMl4Muuf2YYwuzAqU2J6yGDSANSSe3plkJgXV6JwSxlkODulgGtQx8mkRefQ0qDhkukJKhU9Zx67OZyyd5HojkHql26drJL7bFUhN4XAmjmxAOhm07jJFai+CWbffLL7c3FqgWaquLZvn3fY9G2DkFoIpcph5Xgh2HW94n58npbjLiFTFsXjbbKDsnC6z8kct2MxZfF4suxll3a1KtBYOu5YeY5qf9e91eo0O8MQXnVDTudJlF0lbWzAFc5CmW05VjgRWjqos8hR0mFiyxkKP4SQarCmwYcxDVbjQn5VsA2hGWuDHJWUDbgmu4RdyiI/RZ6CII/o10xVbHDldIghc9nG84xphJmIVi8XgB/iK8tlY7kl2ZYXs1bszTMEZ2/VB37jEU/Dl3neAwdezFKgRPmyeuWpWaoUlVSfvJ2KMiRmxyjEWo2hVsrpBFFKD9gH0Xmq0/oK2J5Eeqy76xtGqIWkRWe1+DjGQHrq8tLCLHhNyad/Z8AgsQ==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            292,
+            543
+          ],
+          "ellipse": {
+            "center": [
+              -263.37451731733313,
+              -83.97943210295006
+            ],
+            "semi_major": 58.80041068781284,
+            "semi_minor": 56.56724039673888,
+            "phi": 0.18129376666317398
+          },
+          "indent": false,
+          "tangent_indexes": [
+            270,
+            560
+          ]
+        },
+        {
+          "fit_indexes": [
+            1523,
+            1784
+          ],
+          "ellipse": {
+            "center": [
+              148.54589519612722,
+              12.699675790176933
+            ],
+            "semi_major": 61.523344804954434,
+            "semi_minor": 58.76791225308694,
+            "phi": 3.112039097040795
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1501,
+            1797
+          ]
+        },
+        {
+          "fit_indexes": [
+            2117,
+            2359
+          ],
+          "ellipse": {
+            "center": [
+              29.784458328694754,
+              -174.13111297272283
+            ],
+            "semi_major": 56.98461351508336,
+            "semi_minor": 54.64642353405098,
+            "phi": 2.069693744704674
+          },
+          "indent": true,
+          "tangent_indexes": [
+            2096,
+            2390
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            765,
+            1277
+          ],
+          "line": {
+            "pt0": [
+              -248.92002868652344,
+              188.04183959960938
+            ],
+            "pt1": [
+              262.9200439453125,
+              308.7222900390625
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A25",
@@ -381,7 +2316,88 @@
           567,
           637
         ]
-      }
+      },
+      "points": "eJyNVQl2xSAIjBrj/a/XU/QEbRUYHPJJXhEHcWeJ+f3++WrnpLZKMyEVqKIuNqjVq4JTMSi7OHvRWZtardgbp8k9TqlGnUUPQJX7Pod6Oi9bnwxN0GvVxeYGMaWASbv13EZfWvlu5N6mLM6qHh8NIDuMbekoKgBu8aYGaMaeEp4Odu52QrM7pYlR+PIFCVKWInkBPArwQNn8QQNIbKCqzhi+VvaRgqNwdMzNnbQvKmfy2+JEBIjfR8Jc3V/V7j7NMMsyL5XpgQJHsdNk5vDWXUkdTbvSULkNJje4bVawRbaSrpcf/i8aR2rKGNekvgrApQgds96P5hWbuytnEqy6zqgtiKwxaRiPxTPHhyLSPLhKnZwV5Ekeav9u5CsCGMnZIgdd5wpKpG13J4+eizedWuOrtN+k3sLD1PwvxZL+FFiIJ08P6N3DvUNxRe96ZbNi23tY55mrwlCxKjyu/DQ/dD5q7XESrLbH3O1FiiPRPDyeSRHYUjKRMxV77tDxP+X+e2GN4/oHfYgeFA==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            460,
+            753
+          ],
+          "ellipse": {
+            "center": [
+              -262.9862335689358,
+              7.942632614159612
+            ],
+            "semi_major": 67.215451299566,
+            "semi_minor": 58.87127783449273,
+            "phi": 0.1827205385824282
+          },
+          "indent": false,
+          "tangent_indexes": [
+            448,
+            753
+          ]
+        },
+        {
+          "fit_indexes": [
+            1477,
+            1733
+          ],
+          "ellipse": {
+            "center": [
+              240.13282587717495,
+              6.314377289808056
+            ],
+            "semi_major": 58.223178748199956,
+            "semi_minor": 56.3765715566593,
+            "phi": 2.7864646940782007
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1463,
+            1757
+          ]
+        },
+        {
+          "fit_indexes": [
+            2020,
+            114
+          ],
+          "ellipse": {
+            "center": [
+              -4.369314851305931,
+              -234.64893936663415
+            ],
+            "semi_major": 59.72878637464742,
+            "semi_minor": 54.809833218202634,
+            "phi": 0.5572269647043435
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2005,
+            138
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            954,
+            1252
+          ],
+          "line": {
+            "pt0": [
+              -75.99763488769531,
+              263.9497375488281
+            ],
+            "pt1": [
+              221.9976348876953,
+              261.9967346191406
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A26",
@@ -393,7 +2409,88 @@
           588,
           560
         ]
-      }
+      },
+      "points": "eJyNVUliwCAIjCv/f1gvfVDbqMAMmrRFVpeogOT74+uz1BuKtYELMmTmlku6WYBEMg1MabJJC6zLJxkUJ2xZip2nTqqVFYKnvufO9+HyoO5KqYeEOnykVyl0qVM9LJimJDcwk7y73DjdehldCycNEGVibTFZcg3OXqyRC5CUJWu+k3GNq0Y0A3Fc9kNRLB7izOk1/aeZVxFxc3xDdBrIkLqMF4/P+qomtO7p54npal6G6jdK7nrH3YLhHd583PIfmOFIC6o+mMwvx2BGI4BQtDmOUbyMRkkZIEf34OlxmhwrNL0sl4QXhXnxGPucX7txiv982v3EWf6w+Lw3jW9bvrjyWL4s6b23rtAUjQ3eenOj9zrsm7r0JjzPNDNZdxtK2NCmdlLDtGHLFMKT9GiKE2qjl0d10R4dUKXVchT0rQa3WvGg9fsDJwHsGOY9vztAnGQxMTYQcC1auSoI8VYJ0+W18K59+Qov0GvsJVpgB3RZW5If91C0Mwv4VsdQvHFcTQG69ZE6cOf24yqsEEGUaP/FWMTlW4A5pBTGPX7mM2EjpGSDjB705NQMbWs7ZJSipVvj4/0ACCEfoA==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            464,
+            724
+          ],
+          "ellipse": {
+            "center": [
+              -176.64092782074303,
+              18.566967965986372
+            ],
+            "semi_major": 60.301338952152896,
+            "semi_minor": 54.95824876818056,
+            "phi": 3.0438257810841347
+          },
+          "indent": true,
+          "tangent_indexes": [
+            447,
+            737
+          ]
+        },
+        {
+          "fit_indexes": [
+            1604,
+            1849
+          ],
+          "ellipse": {
+            "center": [
+              157.77746652539534,
+              -27.18806876540456
+            ],
+            "semi_major": 57.22262533716903,
+            "semi_minor": 54.60167900770941,
+            "phi": 3.1383196340447457
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1591,
+            1871
+          ]
+        },
+        {
+          "fit_indexes": [
+            2172,
+            117
+          ],
+          "ellipse": {
+            "center": [
+              -35.794383313772705,
+              -244.42119365313695
+            ],
+            "semi_major": 59.16500391791556,
+            "semi_minor": 53.00937449214314,
+            "phi": 1.0356078892618603
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2156,
+            135
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            936,
+            1379
+          ],
+          "line": {
+            "pt0": [
+              -158.8936767578125,
+              273.0487365722656
+            ],
+            "pt1": [
+              283.8936767578125,
+              214.4197540283203
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A27",
@@ -405,7 +2502,88 @@
           581,
           574
         ]
-      }
+      },
+      "points": "eJyVVYF1xSAIjFHjBt1/qa7T1wgHHMaf1yKeiqgRkBxfP9+11ab8sSjfMOt5l9m5W7BUQ1ABFICyDcG8TLaSrUE4fDJR10q8ttqNIY3SOAQxYqE30Z1fo8S3LYR8dReVFdduOdc53q+Gedg+4hQ1EYwUn92jdDYNX6k1XyiYQ0D4FJ/7madWYff9xvPs5hLOv/koQofBccxWymQAaDiOyamMoUJXsdXCuilIA48jbgk7N3B0+E51s+pBpd6c9i+LQmpX3EQFiWHPUwwI44Sh2GRMT/kHzTfx3zffqpaXLV4XvQtXjX+v+DCc7bCIm0F2cVEOsBoDm8sir06D9rkIWJWROrTPRgTqkwEdbJnAE6SAPvy6Acu7nH45wXh20dqlvdo8quNMlGBAssRFRh0GWp3w3v3NW316HEFbkASKJ4OUZdzhAw4f4GvER2R7bu2LiR5ayz1dp6el1Ot5XZ7QjM0eqC07ZhnXnVLdqKfOQyWOtI7/Q9XZ4ea4I4VjODQ/n7c3EYbyyPHwBViUAVvvy2/6F3fzHZo=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            454,
+            710
+          ],
+          "ellipse": {
+            "center": [
+              -256.9867271522025,
+              -10.63207450315868
+            ],
+            "semi_major": 59.51620428646947,
+            "semi_minor": 55.10229092551247,
+            "phi": 2.92812141100438
+          },
+          "indent": false,
+          "tangent_indexes": [
+            441,
+            728
+          ]
+        },
+        {
+          "fit_indexes": [
+            1525,
+            1781
+          ],
+          "ellipse": {
+            "center": [
+              166.4585634632614,
+              10.652495152478089
+            ],
+            "semi_major": 58.70141195709961,
+            "semi_minor": 55.92909289190357,
+            "phi": 0.34830720355380745
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1511,
+            1796
+          ]
+        },
+        {
+          "fit_indexes": [
+            2120,
+            128
+          ],
+          "ellipse": {
+            "center": [
+              19.8443640428141,
+              -238.21193020192052
+            ],
+            "semi_major": 59.069266022363735,
+            "semi_minor": 55.21375404221396,
+            "phi": 1.6324719507862706
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2108,
+            142
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            940,
+            1305
+          ],
+          "line": {
+            "pt0": [
+              -171.99134826660156,
+              250.9059295654297
+            ],
+            "pt1": [
+              192.99134826660156,
+              271.2197570800781
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A28",
@@ -417,7 +2595,88 @@
           511,
           637
         ]
-      }
+      },
+      "points": "eJydVtl2xCAIDSHqez+6v92qbBc103OqAi5IEBiY6/vni59/trhY+pxHM8p373x3bK3PaFBDRLd3n8ughfVWOaxDpbOg+VVBjygwFFM0deSs7FBXURlDkfYyYJBSqqIqfQxFe2tjnPoY1XDIGEMk2xdNowLmdc3TY/jJ79oYdnY1yHr1KNNJMDKbKxTQRbHMZOE/8jlkDsre9whicT673+MN+syDV8O5dho2hkgO0N7l3xJaFmwaedpvB4xzCoIRTTqiXQKTXHPWsUBuLaB5v5phYbFrIuty0aQfFmVUO7Rqsu+Hta2YOG0gQVtw3OPEwLjPeL5scdzmob6+j+StbbMT2gsscuJIZ8BKZs6/WjNji2dAHmWWLtLVzWIpsb3utlNI+OHCrrZBoW9vOeyTWi4SV1DPZDG15ZrmMOG1ui8gZe5J9HMrL/iQiNuAQfp7mv1mtldrODnSSYaD4aY7/dc4PwFfrDpz07QaBgRFvaDMguBVxguPg5QlyGJewVK58FnksL005moI+dLKXvGKtxc88PlLKGTAmIkoaAemlwnwLgfr1qyoYB78d7Ja6NwK1JDnF9vrHzk=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            103,
+            365
+          ],
+          "ellipse": {
+            "center": [
+              5.901245673416413,
+              -154.56441496218363
+            ],
+            "semi_major": 57.55815728282273,
+            "semi_minor": 56.568876393236096,
+            "phi": 2.9434153005400607
+          },
+          "indent": true,
+          "tangent_indexes": [
+            85,
+            382
+          ]
+        },
+        {
+          "fit_indexes": [
+            712,
+            965
+          ],
+          "ellipse": {
+            "center": [
+              -254.27766932685438,
+              6.819418008072865
+            ],
+            "semi_major": 58.00819560538457,
+            "semi_minor": 56.35833484422238,
+            "phi": 0.5475121398503839
+          },
+          "indent": false,
+          "tangent_indexes": [
+            698,
+            986
+          ]
+        },
+        {
+          "fit_indexes": [
+            1773,
+            2045
+          ],
+          "ellipse": {
+            "center": [
+              254.83724910589487,
+              1.3923328763810447
+            ],
+            "semi_major": 59.49392952920453,
+            "semi_minor": 56.804561690797826,
+            "phi": 2.7209107857314376
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1760,
+            2056
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1192,
+            1554
+          ],
+          "line": {
+            "pt0": [
+              -205.0018310546875,
+              266.02520751953125
+            ],
+            "pt1": [
+              157.0018310546875,
+              260.250244140625
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A29",
@@ -429,7 +2688,88 @@
           553,
           609
         ]
-      }
+      },
+      "points": "eJyFVothxCAIjVFkr+4/R8doG/n5UHNFQEWNfDy436+f7/rAPdo9CLCuAhWm5X3Pfwv/bIYJqGSsCEl74GFXEbpGMzRgJUFp7INYK+yby+yKd/5ducPgnmi6GBpDWM2UNtCYQzOMNlDIgSangdoaSU8NW95djcWXTYnpZXWr8YCy2SCH7iqmZ1MrdDVJD1ThwhRtP6XXzIX83tSBoqFG/MKIp8kT28P6NgVJWTaAnLevv58/6XI4K5w/aldWgU5RmVXnEPCLW1BwMGL73nL0zdajb/bNHzZ9kF7JZ0ctT746OyeZBl6KIffeiQZK10fPg3cZQltwE+ihWNEPOIUs9z6egwRMhzXOp0K5YQQZa0/fLG3MJOGZxvKDd0atTdaA5SRDkJMMjdnl5k33UTYTrXBiZU8bKORwMVsuj0RuudyCFy/fc/jM5xmgLgjZXXp9Vx0OoVjiQ/skRxrWGSYWffJwLiG0RQq3RuRmv6R8OqzOeHu9EGq4K0dxvgyC+iNhpwY168Z/DJbPS5SOXBmdDvVR8rqVpFwPG76/hHkEj5JSeYwnuL5E+PEenyIDi/fXJ9rT0GhyirZfkMA934oYl+rz1Br8XZcIYCTexkmW47pt/QN4ziBw",
+      "tabs": [
+        {
+          "fit_indexes": [
+            205,
+            491
+          ],
+          "ellipse": {
+            "center": [
+              -182.1686119651154,
+              -40.45288718159029
+            ],
+            "semi_major": 66.06925137187986,
+            "semi_minor": 56.07543935623375,
+            "phi": 2.8951253378333606
+          },
+          "indent": true,
+          "tangent_indexes": [
+            188,
+            491
+          ]
+        },
+        {
+          "fit_indexes": [
+            1531,
+            1781
+          ],
+          "ellipse": {
+            "center": [
+              176.1720455381167,
+              5.649462140955813
+            ],
+            "semi_major": 58.720504941540476,
+            "semi_minor": 55.89627770790398,
+            "phi": 2.8401847008547856
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1512,
+            1799
+          ]
+        },
+        {
+          "fit_indexes": [
+            2110,
+            2364
+          ],
+          "ellipse": {
+            "center": [
+              11.814401661204025,
+              -184.78060734025166
+            ],
+            "semi_major": 58.74162861743615,
+            "semi_minor": 55.95662001000398,
+            "phi": 2.5286728233766445
+          },
+          "indent": true,
+          "tangent_indexes": [
+            2088,
+            2384
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            692,
+            1294
+          ],
+          "line": {
+            "pt0": [
+              -300.0697326660156,
+              205.58224487304688
+            ],
+            "pt1": [
+              302.0697326660156,
+              262.1159362792969
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A30",
@@ -441,7 +2781,71 @@
           595,
           560
         ]
-      }
+      },
+      "points": "eJyFVYd1xCAMRaZ4luw/VZa4d1b/gEmEUMEUoYLLz+e3ttasK2OBaWVQWi9GaYzRFVIiI6SNXDacVtiGvLEdoseKFUq6kS6sm9ydJQkGQu9tbduUtk2ZPqRs9jx7ymWpkNiO197gdXQd/E9HqM7cdVd1sIiZnQ69nVzmzkWoTqsT3daT4InTldmQ6aA5UY8W01XIsoBzAiQmRRqD8qeXR2K4BU2a5Fu/GQmWC4ruod1P0GMsLy0jaTE2hToNvl7vFDc6CYTqCzHBRMRFj8b3MZf5hZ2aROkK8Mk64msoFr1ttOywHUgwdTJnW/L3VzCcJpUy/jeDcEVRh4hDtQFUGAyYiojKAMn1GJ3aKjIaY0nJGB3pA4Ofpz69UlsxwqsMBQq1nQUOr550hyH4dGiGYQ5AWJzXdf+pt+/w91xyWKeZNbREMkqQohyLvQCQdLGV1rXFNn3sLp1de4Tt83l+P85If0UI1+dzDVCN38Zxyou+D+RYb8t/UQKP8ZZwm415CfPansLo1Ojp3zFdGtLH0mpAomni4a8X/twBX9lZHkA=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            463,
+            728
+          ],
+          "ellipse": {
+            "center": [
+              -243.28094612129186,
+              -16.53917741210026
+            ],
+            "semi_major": 60.359253296456046,
+            "semi_minor": 56.17487826542255,
+            "phi": 2.7628077036892993
+          },
+          "indent": false,
+          "tangent_indexes": [
+            453,
+            742
+          ]
+        },
+        {
+          "fit_indexes": [
+            1416,
+            1675
+          ],
+          "ellipse": {
+            "center": [
+              156.98294555214846,
+              49.3626358604145
+            ],
+            "semi_major": 60.92551561276531,
+            "semi_minor": 56.38521791427626,
+            "phi": 0.4448348531420203
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1399,
+            1693
+          ]
+        },
+        {
+          "fit_indexes": [
+            2018,
+            116
+          ],
+          "ellipse": {
+            "center": [
+              49.081216821579936,
+              -220.96522202992168
+            ],
+            "semi_major": 59.04065279148795,
+            "semi_minor": 52.678368450385705,
+            "phi": 1.173644803653272
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2001,
+            130
+          ]
+        }
+      ],
+      "edges": []
     },
     {
       "label": "A31",
@@ -453,7 +2857,88 @@
           525,
           658
         ]
-      }
+      },
+      "points": "eJydFVlyxSBIgsYTvfsfrDOdhh2Mvo8iiysqKLTP7w/2jlYe6Hjhg08RxnRdgCAyCqEIYmlEMQNeppDUG5FIwCeQ0/QubPSuImHIJESScLiZnkLItIF5zwdv4lKToigzbtOi5dnkjv3ofNgdUI6OBTed58Ybv6x6z5ZO9Sc7wlxXiBBLa3FfFpCUhI6qrZAoT/53vyN7Gd0mGdiWZlZxrtpZXsIIG+eaW0OfkOxRQR/fZU/bHrYDhI3ALyePm4mhOW+ELcs2YbbWiJpL7TEkNpsUG5yxhgAIXTOA/bPNr0q/y66DuYYh/AemXsz/slZx+bJRWUtuOF4mgrE1yy1nahYLTGeQO8FNuYO5qS09sB+fh2Zeddi0jpwnnbeB3apvitbjHdc9jxGOpth3xnxII68l3zzAToLwYHVhaZ4tnxdrJ4VnjugagZmG1r1Wpvg8zwHRnwP6gpYr0lDkD08im2wyjC+a9FQMkqAs0EUQQwvdFhotEeIS7T32vTOjl5IEwwSjXK7cYTq3zKdMsiOhMoI2JYbNCF67dwISypxgGdeYKIpkg8jAdqaRjLu4KvWVLD/ienbl05zdonU0N0aaMMKHOf0v/vk3jL6mx53GP7YjHxc=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            40,
+            293
+          ],
+          "ellipse": {
+            "center": [
+              -5.364153637950404,
+              -180.3842005392876
+            ],
+            "semi_major": 58.19666267809705,
+            "semi_minor": 52.8476600636678,
+            "phi": 0.591310937360014
+          },
+          "indent": true,
+          "tangent_indexes": [
+            20,
+            306
+          ]
+        },
+        {
+          "fit_indexes": [
+            637,
+            912
+          ],
+          "ellipse": {
+            "center": [
+              -262.471213742765,
+              -7.161864803755732
+            ],
+            "semi_major": 62.928914647100754,
+            "semi_minor": 56.63433206761327,
+            "phi": 0.15607364400652396
+          },
+          "indent": false,
+          "tangent_indexes": [
+            626,
+            925
+          ]
+        },
+        {
+          "fit_indexes": [
+            1923,
+            2169
+          ],
+          "ellipse": {
+            "center": [
+              172.99143308206425,
+              -20.47339546646759
+            ],
+            "semi_major": 59.098441480889285,
+            "semi_minor": 56.87432989708174,
+            "phi": 2.5766217612434894
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1907,
+            2186
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1132,
+            1704
+          ],
+          "line": {
+            "pt0": [
+              -246.02169799804688,
+              248.34986877441406
+            ],
+            "pt1": [
+              326.0216979980469,
+              222.28538513183594
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A32",
@@ -465,7 +2950,91 @@
           560,
           616
         ]
-      }
+      },
+      "points": "eJyNVQtigCAI1RS9+664u2wL5PMk24YIoon2IPr++PpsvbfravViKSzUTLQwk9Wuv5by4ssULL7Mbo71ou1mo858ty59id5JhTE0G5iQZyl2hZOGzAfJSSbXLeQy0gLCBETFweqrsajcWSkV6bcsRXQp3k0KzbstxqYsPXYuR+rcTlzn8238usLN1NXQ+rft6ugtb3pZ9/RrXVS97O0rvJERLARKFQBAE+wN3Lqvmz9XN1bjhrjefTr8M2gwD2bpNJRo7xTWAD1HDJjZl/o0KkukSHusZ0GCVzK4lC3JLOksGTwhKuZs/j4tQsj7J+B71NcjvxHWCGKK5nniMXdYqFXRmMcNORvQlwSQJsSDRoqVxymHeOQnn8OXhTw4qj0/tsRI6bDDsgTLWqIl7CF/tHhATdHMGxPEmJagerOVsnZNQvgk4bWFELVIazId6rEXZCvJq8y3vTZD3d8rPrOQHZpADVxnsp/WS5QOsfXPO774zfYqAOgMQhUG4DS6jHg24xQo+ZAQxfx/80207ej5GZxyV7SLX/a+nN4fN6fDUwdjv8MPXv8foQ==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            219,
+            481
+          ],
+          "ellipse": {
+            "center": [
+              -235.40484380521758,
+              -55.45285766168134
+            ],
+            "semi_major": 59.16120466527393,
+            "semi_minor": 57.11587483353813,
+            "phi": 0.027773451261654092
+          },
+          "indent": false,
+          "tangent_indexes": [
+            200,
+            498
+          ]
+        },
+        {
+          "fit_indexes": [
+            853,
+            1112
+          ],
+          "ellipse": {
+            "center": [
+              -20.660710743880266,
+              144.36738434528178
+            ],
+            "semi_major": 59.068098435672695,
+            "semi_minor": 56.78729326392722,
+            "phi": 1.4041889173890285
+          },
+          "indent": true,
+          "tangent_indexes": [
+            834,
+            1127
+          ]
+        },
+        {
+          "fit_indexes": [
+            1488,
+            1746
+          ],
+          "ellipse": {
+            "center": [
+              252.6203121269367,
+              17.00604859058779
+            ],
+            "semi_major": 60.43208615492437,
+            "semi_minor": 57.204033140242785,
+            "phi": 2.784238547052637
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1478,
+            1769
+          ]
+        },
+        {
+          "fit_indexes": [
+            1769,
+            187
+          ],
+          "ellipse": {
+            "center": [
+              23.19261728201232,
+              -158.64387057953758
+            ],
+            "semi_major": 182.61046658697043,
+            "semi_minor": 122.31657784478806,
+            "phi": 0.35124559245067855
+          },
+          "indent": false,
+          "tangent_indexes": [
+            1762,
+            204
+          ]
+        }
+      ],
+      "edges": []
     },
     {
       "label": "A33",
@@ -477,7 +3046,88 @@
           539,
           539
         ]
-      }
+      },
+      "points": "eJyFVYthxCAIjR+OBbv/DJ2grYACT70rICISJELI79fPd+t9kEMbUFutyg1RCDlpYFZZuAlhWsMORs372fpqEppaFiuKwgY9A4tyRQHj7JwTmZoPu3g0fBV1bUyg2qglReAh5SBbfpu4p0l26a11E7uQo6ZnpShSRTGRkGIwU5oVhQ9x546Jpk/BWp8F4yUiyQ4tvRPufIB2CFk8JZjlau3+7epdTllxRQFFsEwF0gmWsJUS/STItRR1M5FlvAQXS0A2lAimZOELXlwcCk2YhyhN5tNEY1HWHrG9oX8bAF7FUMQ525CnVMHN+8RqGiZvoD6lwMcRzBZNWV/nuvv9ep//lgUEtqmcltszm8cnHw67rPnUdEZGPcX3GQpg6VceV3Y5Usy4wo3w61t5bLUzCkpAefceML7yRt45Wl8tJVqM95gMlHpLp4xCk/l5Vs6zrFcd02sDL2u4olngr6PIsUknwKV3A/x+E4P8ercXWp8sz2HhRKwY+qa7ajb1JwM+NG+Wnm8+dscdM8lytn38N4CcdSm/wlsoG/xYjufCArdvxrQpMIB3h1ys/Dg6LO5R3J7dDejQvIvoWMWj4OQSA7U9CnD/B4VRIks=",
+      "tabs": [
+        {
+          "fit_indexes": [
+            224,
+            484
+          ],
+          "ellipse": {
+            "center": [
+              -175.2195970647471,
+              -16.885938840343233
+            ],
+            "semi_major": 61.94216285957925,
+            "semi_minor": 57.763022591773336,
+            "phi": 0.19656605081805592
+          },
+          "indent": true,
+          "tangent_indexes": [
+            210,
+            520
+          ]
+        },
+        {
+          "fit_indexes": [
+            857,
+            1136
+          ],
+          "ellipse": {
+            "center": [
+              -29.35625841970901,
+              169.17492328944593
+            ],
+            "semi_major": 64.55654858316288,
+            "semi_minor": 56.19729509332567,
+            "phi": 1.563633478301576
+          },
+          "indent": true,
+          "tangent_indexes": [
+            845,
+            1134
+          ]
+        },
+        {
+          "fit_indexes": [
+            1506,
+            1768
+          ],
+          "ellipse": {
+            "center": [
+              167.35832301394248,
+              20.80369560414609
+            ],
+            "semi_major": 60.092150041611866,
+            "semi_minor": 57.39597881229939,
+            "phi": 0.09052143532240663
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1493,
+            1787
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1990,
+            15
+          ],
+          "line": {
+            "pt0": [
+              266.0460205078125,
+              -225.38177490234375
+            ],
+            "pt1": [
+              -187.0460205078125,
+              -271.4860534667969
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A34",
@@ -489,7 +3139,88 @@
           588,
           644
         ]
-      }
+      },
+      "points": "eJytVVmW5SAIdYz731GtrE/LfNWY+ilEQPQx+kzK/35qa01n5UFEpKooUAjnKDSVOUXIMjOPkpnbQtQKYoQMTzeFXBXi5FHi4MAUuswDd37ZvqvFMCjUb6n9oQA5cUgTEj5z/4Y4nz9OeYXZtZanelegKF6TOYgz654NT2VQyRoo9rzNzTtdLW3lEvp7r4t3VrFox2VOSMFSmswJQTYyUsAIBNEZn1czxMwD3rVLkSGReiGHcG5rg471vvBl3dUommJGHOUwijWxyiUpTL4d3ZZ3/Ycin8rhYh4vx353t2heHCRNKnS7iT2+W+IsjDzinn0EMfYfc6LDVJ8+tkMjvdiftmBbNNxHvPJnbJte/jzU+PEwdBpOVCRp3RHupxT7cggWtr0cU/sPmlic4S9D/dg00TURgII8XfZyte25wq9TA7YCfiO6PYuMCFKMCNjiswANhhJGHYRK0hjKuCXxVCFZuoqPFj9ZCcfSezXHTtQRO9d4XgHqu5M1v76ol5W3nfDWkr7X/U9hdrVX8KERSDehh3jDoFvRLmRWt0vt3A5czg6Xs3e7TPF5hW8sfGtb+w8FGBzu",
+      "tabs": [
+        {
+          "fit_indexes": [
+            444,
+            694
+          ],
+          "ellipse": {
+            "center": [
+              -267.39787276116124,
+              -36.68317262326295
+            ],
+            "semi_major": 59.05440678699393,
+            "semi_minor": 58.276862287349594,
+            "phi": 0.3564223417320511
+          },
+          "indent": false,
+          "tangent_indexes": [
+            422,
+            711
+          ]
+        },
+        {
+          "fit_indexes": [
+            1683,
+            1942
+          ],
+          "ellipse": {
+            "center": [
+              155.91248296855002,
+              -5.6130653806031106
+            ],
+            "semi_major": 60.37245238912516,
+            "semi_minor": 55.206504386130725,
+            "phi": 0.24425017873631558
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1672,
+            1951
+          ]
+        },
+        {
+          "fit_indexes": [
+            2242,
+            123
+          ],
+          "ellipse": {
+            "center": [
+              8.764686873817686,
+              -259.77941828421626
+            ],
+            "semi_major": 61.0240952298964,
+            "semi_minor": 55.667519549756186,
+            "phi": 1.1946447901847093
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2230,
+            131
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            913,
+            1461
+          ],
+          "line": {
+            "pt0": [
+              -237.96182250976562,
+              218.6749725341797
+            ],
+            "pt1": [
+              309.9618225097656,
+              256.7895202636719
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A35",
@@ -501,7 +3232,88 @@
           581,
           609
         ]
-      }
+      },
+      "points": "eJx9FUlixCDINfz/b/OX3toqO2gGEBEXBAn5+/n99DFe6GALN4zeFm+trR55U+6gUkNipI6pCW9NzupMHQ2NzoY3EEeYSZrj0plwKLL8qvInkvOj7cZ+mwvem+qVtbUkHhuCXgO5WKeICMgDuGBMZlOQGQ5wNsfER7ObV0IG8hRNX7j7y+llnWv+lTcRtFLrolqYEIkWQ5AejMMmQJlFHilUYno42qqSYUeWWd75fAzjsCZ3l8EVvyuUVO81Lm4+POYyqNvlCIWEroZ5CGshbT8sJM05n9UswnXffbvXqkfUwbErLF4IVwMQ1363W283LgAPPBkm4oPthJlH8z6bd8+ruABuq5dG9OHISJO7DVoOpAhQBdAP32q5fPeu0FoXaq5VmmHlZZuyhsafOZ+I7uLZNWAGhpuYIRRqUgG0ONwzqnJBKEa0XutIoSPp6AdNPf7lwUX4Fb7NXbIoKGdUeHvygqFU9yDIi/Q8mxb0cd8a9S9iVvpfr8sF+tcw7Hc/0xkjC/KwDjnm4AIQI89Jo2nEFMGyjy9k8A86IR+S",
+      "tabs": [
+        {
+          "fit_indexes": [
+            423,
+            694
+          ],
+          "ellipse": {
+            "center": [
+              -280.2928069421934,
+              -14.012839940879942
+            ],
+            "semi_major": 63.19051141904762,
+            "semi_minor": 55.70526832307983,
+            "phi": 0.006463689779840021
+          },
+          "indent": false,
+          "tangent_indexes": [
+            423,
+            708
+          ]
+        },
+        {
+          "fit_indexes": [
+            1511,
+            1761
+          ],
+          "ellipse": {
+            "center": [
+              150.86993599250303,
+              24.38103708801251
+            ],
+            "semi_major": 58.88989031963539,
+            "semi_minor": 55.57549020571509,
+            "phi": 0.4398305334884762
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1488,
+            1785
+          ]
+        },
+        {
+          "fit_indexes": [
+            2136,
+            131
+          ],
+          "ellipse": {
+            "center": [
+              -10.901789688961916,
+              -242.60281134904778
+            ],
+            "semi_major": 57.52171924330293,
+            "semi_minor": 55.87264612341887,
+            "phi": 0.6715994850725018
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2119,
+            145
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            916,
+            1287
+          ],
+          "line": {
+            "pt0": [
+              -116.95387268066406,
+              247.97610473632812
+            ],
+            "pt1": [
+              253.95387268066406,
+              271.4808654785156
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A36",
@@ -513,7 +3325,88 @@
           511,
           581
         ]
-      }
+      },
+      "points": "eJyVVVuWwyAIjVHCR/e/illkR5HHRZP2FIQoIiFI4P33ftXWQdjgte2EchfX9RQeqZuBaqzDefaRYRP8uJ+g3M/Lqld1CHZoysxdAFJGzuakRUjStyuqObErrziFAO2hHiUfy6Sisw7nRBkCh47jQOZPh8LyYCeerOPC5o7q6eHDjY63CU1vivsTvn4N+/MV3cwWg5t8UynboqDQZxK3BTbBx12NkoS23Ok9mvv8ns8HCt7M78dlyd+8sC1+Fpf9/G7w4RVlX/HFFwleg3TaGcWSQhzDthVQ4nPYW4CC86rENzOfgihbExdpFgiaAwoF1ItcKlIVbVh9yLhWHkdyErgm5Rjlj+fwncdQHEMo4GCvB5M53d1lFAitRiUqULprqz3DuBC7J3tEwX38Ekr3RqiTFsv90yJFrUiYwSysHnOs/CCBVdpb9bIq9g+04HbWnuKtZDSPMawbVqxzqVdYx1iqobWZOA4dUJtTZ7NfpU6ImZkb4xRQNcf1iyxFJTvbTE7P0fiR8TLhD+PIUU/RizklsHG4U/Kfz3D58f4BAtkeAQ==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            262,
+            537
+          ],
+          "ellipse": {
+            "center": [
+              -254.66930414482798,
+              -3.3799117980330795
+            ],
+            "semi_major": 65.57142555503997,
+            "semi_minor": 56.78422481015378,
+            "phi": 2.755618588737295
+          },
+          "indent": false,
+          "tangent_indexes": [
+            262,
+            559
+          ]
+        },
+        {
+          "fit_indexes": [
+            1363,
+            1644
+          ],
+          "ellipse": {
+            "center": [
+              159.05523348071694,
+              -1.6910857122479581
+            ],
+            "semi_major": 68.25732295522953,
+            "semi_minor": 53.90048379861489,
+            "phi": 0.2073907706755187
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1366,
+            1658
+          ]
+        },
+        {
+          "fit_indexes": [
+            1978,
+            2234
+          ],
+          "ellipse": {
+            "center": [
+              -7.364609486412414,
+              -172.03827268252473
+            ],
+            "semi_major": 59.339849833795896,
+            "semi_minor": 56.63483026805149,
+            "phi": 2.3217122199418174
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1962,
+            2256
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            759,
+            1158
+          ],
+          "line": {
+            "pt0": [
+              -146.0742950439453,
+              242.381591796875
+            ],
+            "pt1": [
+              253.0742950439453,
+              254.1033935546875
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A37",
@@ -525,7 +3418,88 @@
           574,
           574
         ]
-      }
+      },
+      "points": "eJyNVVtixCAIXDXK/U+3371I28hzULMt4iiKEQHNz9f3u13X1SbfRaAJaFOVa2WoVdHaolJRKFxqKcJWqwLoN/3I/C5vYpuKPVJv6oBre5T62s9qfVPCsZ46oaEeau4GOSfWzNsAqJZ9zUktvBVkMXCHSdTMWWarW2/ctYdHCnU/IBZNgXpj9VSoDWIWyaBWQTaEEzAdlF53EZYeVxYEWGAiqUQToqRGlXSFtL4Fk2agJ+Du1w9UUoNx8W4KIMZ/cQM2cFNquiMlvFXVWSvRNnKaetZaZ54XncS/t6AngfIQHZWe1320/F+W8VQ5ToJtM6sGjT7GjRv1fWgdJQcdRwxVOsodpkxezCCYY/YvdyXpwM2PR60ZtHj7rQMvLz4p6dG0B0WAK27KRgwryn7GfFbiSkOYy2SFecMFX37TyUOEcYO7X5aibM8KYYz1FZH9xnBDknPjEMhawf/R9fMuC5KGRej8Gi8BaCC3fcyxpRmLZUvaC6QgS2gxpBJQO4P6xmK3cMr7hbql57BEubrnUPpNwc8q/7owifsvhk0euA==",
+      "tabs": [
+        {
+          "fit_indexes": [
+            457,
+            714
+          ],
+          "ellipse": {
+            "center": [
+              -255.58716363305103,
+              22.778676818563333
+            ],
+            "semi_major": 60.08390946258761,
+            "semi_minor": 56.31930565111589,
+            "phi": 2.8957440244097934
+          },
+          "indent": false,
+          "tangent_indexes": [
+            451,
+            735
+          ]
+        },
+        {
+          "fit_indexes": [
+            1519,
+            1777
+          ],
+          "ellipse": {
+            "center": [
+              166.84624101879825,
+              -10.015428595216402
+            ],
+            "semi_major": 61.21215877687399,
+            "semi_minor": 57.317897122101776,
+            "phi": 0.40488272983131735
+          },
+          "indent": true,
+          "tangent_indexes": [
+            1503,
+            1795
+          ]
+        },
+        {
+          "fit_indexes": [
+            2092,
+            121
+          ],
+          "ellipse": {
+            "center": [
+              -14.113180109798662,
+              -238.4236233176929
+            ],
+            "semi_major": 60.367182987951445,
+            "semi_minor": 53.80484775993438,
+            "phi": 0.6647702025768878
+          },
+          "indent": false,
+          "tangent_indexes": [
+            2084,
+            134
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            931,
+            1306
+          ],
+          "line": {
+            "pt0": [
+              -123.95411682128906,
+              266.8556823730469
+            ],
+            "pt1": [
+              250.95411682128906,
+              239.56455993652344
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "A38",
@@ -537,7 +3511,84 @@
           553,
           574
         ]
-      }
+      },
+      "points": "eJylVNmSxCAIlDAub/PR++OzERrEqzZV0xwaVOSw8vn9vPl1g5mvRhebBjvlydWXr+mMrQ7g48fWkO245XZuwi+T1x2xBh1DBRvFJD67mEpgE+UghjZY6sj/SvXJhWggV9SYTBvdCFVcCimBodJYBEr5pq6KK2wq4af719uUPSiNb+lIZKAfDBPFHhpbxdO47+a0ygRXVobIW1KWNkg2SORfhnTlIIMvVBIlsYr0tgxpDe89mh2PPprdQaGHNkMFiiebGj30OqEnIj5GzxU6/jSGAjVWmVFdQTKr0kMCBvXLSjw1lFSWmGmZ0bI0pUrjHC2COZ7BfFc/JbviURHqR7ROXhjDrjxH1NgdkzrvkbDOrqu0yi4HDvDTdWM7B/jQ6UM/7u7JsXVP3ZRgmILjZxw/4f4j/x/zj3tc4NngF6Srzi4e40sP1cP8PpIH+AM3yRyX",
+      "tabs": [
+        {
+          "fit_indexes": [
+            195,
+            455
+          ],
+          "ellipse": {
+            "center": [
+              -248.73807631708564,
+              -28.345128852370053
+            ],
+            "semi_major": 58.61717544700817,
+            "semi_minor": 56.59150110532208,
+            "phi": 2.9583211098896145
+          },
+          "indent": false,
+          "tangent_indexes": [
+            177,
+            470
+          ]
+        },
+        {
+          "fit_indexes": [
+            750,
+            1025
+          ],
+          "ellipse": {
+            "center": [
+              -11.759857096127702,
+              231.99097711336182
+            ],
+            "semi_major": 64.29287330329329,
+            "semi_minor": 57.63486783744978,
+            "phi": 1.6086368751398477
+          },
+          "indent": false,
+          "tangent_indexes": [
+            750,
+            1047
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "fit_indexes": [
+            1239,
+            1644
+          ],
+          "line": {
+            "pt0": [
+              247.13531494140625,
+              165.51483154296875
+            ],
+            "pt1": [
+              247.22430419921875,
+              -238.50497436523438
+            ]
+          }
+        },
+        {
+          "fit_indexes": [
+            1644,
+            5
+          ],
+          "line": {
+            "pt0": [
+              239.99374389648438,
+              -238.2467041015625
+            ],
+            "pt1": [
+              -130.99374389648438,
+              -242.52212524414062
+            ]
+          }
+        }
+      ]
     },
     {
       "label": "AA1",
