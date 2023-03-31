@@ -625,13 +625,23 @@ def align_ui(args):
 
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
+    def to_row(s):
+        row = 0
+        for i in s.upper():
+            row *= 26
+            row += ord(i) + 1 - ord('A')
+        return row
+
+    def to_col(s):
+        return int(s)
+
     rows = set()
     cols = set()
     for piece in pieces:
         m = re.fullmatch("([a-zA-Z]+)(\d+)", piece.piece.label)
         if m:
-            rows.add(m[1])
-            cols.add(int(m[2]))
+            rows.add(to_row(m[1]))
+            cols.add(to_col(m[2]))
 
     rows = dict((r, i) for i, r in enumerate(sorted(rows)))
     cols = dict((c, i) for i, c in enumerate(sorted(cols)))
@@ -639,7 +649,7 @@ def align_ui(args):
     for piece in pieces:
         m = re.fullmatch("([a-zA-Z]+)(\d+)", piece.piece.label)
         if m:
-            row, col = m[1], int(m[2])
+            row, col = to_row(m[1]), to_col(m[2])
             x = cols[col] * 1000.
             y = rows[row] * -1000.
             piece.coords.dxdy = np.array((x, y))
