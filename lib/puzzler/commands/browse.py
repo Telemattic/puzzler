@@ -156,7 +156,6 @@ class BrowseTk:
         self.draggable = None
 
     def canvas_configure(self, event):
-        print(f"{event=}")
         self.camera.viewport = (event.width, event.height)
         self.render()
 

@@ -156,6 +156,13 @@ class CairoRenderer(puzzler.render.Renderer):
 
         if font:
             ctx.set_scaled_font(font)
+        else:
+            font = ctx.get_scaled_font()
+
+        extents = font.text_extents(text)
+        # print(f"draw_text: text=\"{text}\" {extents=}")
+
+        xy = xy - np.array((extents.width, extents.height)) * .5
 
         ctx.move_to(*xy)
 
@@ -168,13 +175,14 @@ class CairoRenderer(puzzler.render.Renderer):
 
     def commit(self):
         surface = self.surface
+        surface.flush()
 
         if True:
             w, h = surface.get_width(), surface.get_height()
             stride = surface.get_stride()
-            print(f"surface: {w=} {h=} {stride=}")
             ystep = 1
-            image = PIL.Image.frombuffer('RGBA', (w,h), surface.get_data().tobytes(), 'raw', 'BGRA', stride, ystep)
+            image = PIL.Image.frombuffer('RGBA', (w,h), surface.get_data().tobytes(),
+                                         'raw', 'BGRA', stride, ystep)
             # image.save("yuck.png")
             displayed_image = PIL.ImageTk.PhotoImage(image=image)
         else:
