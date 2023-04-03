@@ -27,20 +27,30 @@ class Browser:
             ur = np.max(self.poly, 0)
             self.bbox   = tuple(ll.tolist() + ur.tolist())
             self.piece  = piece
-            self.tag    = None
 
     def __init__(self, puzzle, use_cairo):
 
         self.use_cairo = use_cairo
         
+        def to_row(s):
+            row = 0
+            for i in s.upper():
+                row *= 26
+                row += ord(i) + 1 - ord('A')
+            return row
+    
+        def to_col(s):
+            return int(s)
+    
+        def to_row_col(label):
+            m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
+            return (to_row(m[1]), to_col(m[2])) if m else (label, None)
+    
         pieces = []
         for p in puzzle.pieces:
             label = p.label
-            m = re.fullmatch("^(\w+)(\d+)", label)
-            if m:
-                pieces.append((m[1], int(m[2]), p))
-            else:
-                pieces.append((label, None, p))
+            r, c = to_row_col(label)
+            pieces.append((r, c, p))
         pieces.sort()
 
         self.outlines = [Browser.Outline(p[2]) for p in pieces]
@@ -51,27 +61,30 @@ class Browser:
         max_w = 2500 # 1400
         max_h = 1500 # 800
 
-        def compute_rows(cols):
-            tile_w = max_w // cols
-            tile_h = tile_w * bbox_h // bbox_w
-            rows   = max_h // tile_h
-            print(f"{cols=} {tile_w=} {tile_h=} {rows=}")
-            return rows
+        if False:
+
+            def compute_rows(cols):
+                tile_w = max_w // cols
+                tile_h = tile_w * bbox_h // bbox_w
+                rows   = max_h // tile_h
+                print(f"{cols=} {tile_w=} {tile_h=} {rows=}")
+                return rows
+                
+            cols = 1
+            while cols * compute_rows(cols) < len(self.outlines):
+                cols += 1
+    
+            self.cols = cols
+            self.rows = compute_rows(cols)
+        else:
+            self.rows = pieces[-1][0]
+            self.cols = pieces[-1][1]
             
-        cols = 1
-        while cols * compute_rows(cols) < len(self.outlines):
-            cols += 1
-
-        self.cols = cols
-        self.rows = compute_rows(cols)
-
         self.bbox_w = bbox_w
         self.bbox_h = bbox_h
-        self.tile_w = max_w // cols
-        self.tile_h = self.tile_w * bbox_h // bbox_w
-        self.scale  = min(self.tile_w / bbox_w, self.tile_h / bbox_h)
-        self.width  = self.tile_w * self.cols
-        self.height = self.tile_h * self.rows
+        self.scale  = min(max_w / (bbox_w * self.cols), max_h / (bbox_h * self.rows))
+        self.width  = int(bbox_w * self.scale * self.cols)
+        self.height = int(bbox_h * self.scale * self.rows)
 
         self.font = None
 
