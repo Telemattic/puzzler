@@ -127,7 +127,16 @@ class TabAligner:
         src_points = self.get_tab_points(src, src_tab_no)
         dst_points = self.get_tab_points(self.dst, dst_tab_no)
 
-        r, x, y = compute_rigid_transform(src_points, dst_points)
+        dst_vec = dst_points[0] - dst_points[1] + dst_points[2] - dst_points[1]
+        dst_angle = np.arctan2(dst_vec[1], dst_vec[0])
+
+        src_vec = src_points[0] - src_points[1] + src_points[2] - src_points[1]
+        src_angle = np.arctan2(src_vec[1], src_vec[0])
+
+        src_points_rotated = AffineTransform(dst_angle-src_angle).get_transform().apply_v2(src_points)
+
+        r, x, y = compute_rigid_transform(src_points_rotated, dst_points)
+        r += dst_angle - src_angle
 
         src_coords = AffineTransform(r, (x,y))
 
