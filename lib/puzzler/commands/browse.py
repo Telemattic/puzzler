@@ -45,15 +45,14 @@ class Browser:
         def to_row_col(label):
             m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
             return (to_row(m[1]), to_col(m[2])) if m else (label, None)
-    
-        pieces = []
-        for p in puzzle.pieces:
-            label = p.label
-            r, c = to_row_col(label)
-            pieces.append((r, c, p))
-        pieces.sort()
 
-        self.outlines = [Browser.Outline(p[2]) for p in pieces]
+        self.outlines = []
+        for p in puzzle.pieces:
+            r, c = to_row_col(p.label)
+            o = Browser.Outline(p)
+            o.row = r - 1
+            o.col = c - 1
+            self.outlines.append(o)
 
         bbox_w = max(o.bbox[2] - o.bbox[0] for o in self.outlines)
         bbox_h = max(o.bbox[3] - o.bbox[1] for o in self.outlines)
@@ -77,8 +76,8 @@ class Browser:
             self.cols = cols
             self.rows = compute_rows(cols)
         else:
-            self.rows = pieces[-1][0]
-            self.cols = pieces[-1][1]
+            self.rows = 1 + max(o.row for o in self.outlines)
+            self.cols = 1 + max(o.col for o in self.outlines)
             
         self.bbox_w = bbox_w
         self.bbox_h = bbox_h
@@ -87,8 +86,7 @@ class Browser:
         self.height = int(bbox_h * self.scale * self.rows)
 
         self.font = None
-
-        print(f"scale={self.scale:.3f}")
+        self.font2 = None
 
     def render(self, canvas, camera):
 
@@ -100,10 +98,11 @@ class Browser:
         r.transform(camera.matrix)
 
         self.font = r.make_font("Courier New", 18)
+        self.font2 = r.make_font("Courier New", 12)
 
         for i, o in enumerate(self.outlines):
-            x = (i %  self.cols)
-            y = (self.rows - 1 - (i // self.cols))
+            x = o.col
+            y = self.rows - 1 - o.row
             tx = (x + .5) * self.bbox_w
             ty = (y + .5) * self.bbox_h
             with puzzler.render.save(r):
@@ -123,9 +122,10 @@ class Browser:
             r.translate(-bbox_center)
 
             if p.tabs is not None:
-                for tab in p.tabs:
+                for i, tab in enumerate(p.tabs):
                     e = tab.ellipse
                     r.draw_ellipse(e.center, e.semi_major, e.semi_minor, e.phi, fill='cyan', outline='')
+                    r.draw_text(e.center, text=str(i), font=self.font2, fill='darkblue')
 
             if p.edges is not None:
                 for edge in p.edges:
