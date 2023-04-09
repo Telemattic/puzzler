@@ -159,7 +159,10 @@ class TabAligner:
             d = self.distance_image.query(src_points)
             dst_fit_points = (None, None)
 
-        mse = np.sum(d ** 2) / len(d)
+        if len(d):
+            mse = np.sum(d ** 2) / len(d)
+        else:
+            mse = None
 
         return (mse, src_fit_points, dst_fit_points)
 
