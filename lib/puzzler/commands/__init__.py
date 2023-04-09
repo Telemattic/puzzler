@@ -5,3 +5,4 @@ from . import init
 from . import points
 from . import scan
 from . import normals
+from . import match
