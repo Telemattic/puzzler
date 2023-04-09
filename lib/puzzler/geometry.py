@@ -28,6 +28,10 @@ class Ellipse:
         phi = self.phi
         return f"Ellipse(x,y={cx:.1f},{cy:.1f} {maj=:.1f} {min=:.1f} {phi=:.3f})"
 
+    def eccentricity(self):
+        r = self.semi_minor / self.semi_major
+        return math.sqrt(1 - r*r)
+
 def fit_ellipse_to_points(points):
     
     try:
