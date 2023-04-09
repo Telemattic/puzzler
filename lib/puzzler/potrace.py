@@ -132,3 +132,70 @@ def piece_to_path(piece, tempdir=None):
     path = root.find('svg:g', ns).find('svg:path', ns)
     
     return parse_path(path.attrib['d'], ll)
+
+class InterpolatePath:
+
+    def __init__(self, stepsize):
+        # how big are the steps
+        self.stepsize = stepsize
+        # arc length distance to the next step
+        self.nextstep = 0.
+        self.retval = []
+
+    def apply(self, path):
+
+        for i in path:
+            if isinstance(i,Line):
+                self.interpolate_line(i)
+            else:
+                self.interpolate_spline(i)
+
+        return np.array(self.retval)
+
+    def interpolate_line(self, line):
+        
+        v0 = np.array(line.v0)
+        v1 = np.array(line.v1)
+        ll = np.linalg.norm(v1 - v0)
+        uv = (v1 - v0) / ll
+
+        i = 0
+        while ll > self.nextstep:
+            v0 = v0 + uv * self.nextstep
+            ll -= self.nextstep
+            self.retval.append(v0)
+            i += 1
+            self.nextstep = self.stepsize
+
+        self.nextstep -= ll
+
+    def interpolate_spline(self, spline):
+
+        control_points = np.array([spline.p0, spline.p1, spline.p2, spline.p3])
+        v0 = np.array(spline.p0)
+        n = 50
+        for i in range(n):
+            t = (i+1)/n 
+            v1 = self.spline_eval(control_points, t)
+            ll = np.linalg.norm(v1 - v0)
+            if ll == 0.:
+                v0 = v1
+                continue
+            
+            uv = (v1 - v0) / ll
+            while ll > self.nextstep:
+                v0 = v0 + uv * self.nextstep
+                ll -= self.nextstep
+                self.retval.append(v0)
+                self.nextstep = self.stepsize
+                    
+            self.nextstep -= ll
+            v0 = v1
+
+    @staticmethod
+    def spline_eval(control_points, t):
+        while len(control_points) > 1:
+            p1 = control_points[:-1]
+            p2 = control_points[1:]
+            control_points = (1-t)*p1 + t*p2
+        return control_points[0]
