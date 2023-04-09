@@ -14,6 +14,7 @@ import puzzler.solver
 
 from tkinter import *
 from tkinter import ttk
+from tqdm import tqdm
 
 from dataclasses import dataclass, field
 
@@ -711,7 +712,7 @@ def output_tabs(args):
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
-        for dst in pieces:
+        for dst in tqdm(pieces, ascii=True):
             rows = []
             tab_aligner = puzzler.align.TabAligner(dst)
             for src in pieces:
@@ -751,7 +752,6 @@ def output_tabs(args):
                                      'src_index_1': sfp[1],
                                      'mse': mse,
                                      'neighbor': neighbor})
-            print(f"{dst.label}: {len(rows)} rows")
             writer.writerows(rows)
 
 def add_parser(commands):
