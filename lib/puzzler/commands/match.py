@@ -13,49 +13,176 @@ from matplotlib.figure import Figure
 class MatchTk:
 
     def __init__(self, parent, puzzle, labels):
-        
-        self.fig = Figure(figsize=(5, 4), dpi=100)
-        self.t = np.arange(0, 3, .01)
-        self.ax = self.fig.add_subplot()
-        self.line, = self.ax.plot(self.t, 2 * np.sin(2 * np.pi * self.t))
-        self.ax.set_xlabel("time [s]")
-        self.ax.set_ylabel("f(t)")
-        
-        self.canvas = FigureCanvasTkAgg(self.fig, master=parent)  # A tk.DrawingArea.
-        self.canvas.draw()
-        
-        # pack_toolbar=False will make it easier to use a layout manager later on.
-        toolbar = NavigationToolbar2Tk(self.canvas, parent, pack_toolbar=False)
-        toolbar.update()
-        
-        self.canvas.mpl_connect(
-            "key_press_event", lambda event: print(f"you pressed {event.key}"))
-        self.canvas.mpl_connect("key_press_event", key_press_handler)
-        
-        button_quit = tkinter.Button(master=parent, text="Quit", command=parent.destroy)
 
-        slider_update = tkinter.Scale(parent, from_=1, to=5, orient=tkinter.HORIZONTAL,
-                                      command=self.update_frequency, label="Frequency[Hz]")
+        piece = None
+        for p in puzzle.pieces:
+            if p.label == labels[0]:
+                piece = p
+        assert piece is not None
+        
+        self.puzzle = puzzle
+        self.piece = piece
 
-        # Packing order is important. Widgets are processed sequentially and if there
-        # is no space left, because the window is too small, they are not displayed.
-        # The canvas is rather flexible in its size, so we pack it last which makes
-        # sure the UI controls are displayed as long as possible.
-        button_quit.pack(side=tkinter.BOTTOM)
-        slider_update.pack(side=tkinter.BOTTOM)
-        toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-        self.canvas.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
+        self.frame = ttk.Frame(parent, padding=5)
+        self.frame.grid(column=0, row=0, sticky=(tkinter.N, tkinter.W, tkinter.E, tkinter.S))
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(0, weight=1)
 
-    def update_frequency(self, new_val):
-        # retrieve frequency
-        f = float(new_val)
+        self.puzzle_canvas = tkinter.Canvas(self.frame, width=800, height=800,
+                             background='white', highlightthickness=0)
+        self.puzzle_canvas.grid(column=0, row=0, sticky=(tkinter.N, tkinter.W, tkinter.S))
 
-        # update data
-        y = 2 * np.sin(2 * np.pi * f * self.t)
-        self.line.set_data(self.t, y)
+        # https://matplotlib.org/stable/gallery/user_interfaces/embedding_in_tk_sgskip.html
+        self.figure = Figure(figsize=(8,8), dpi=100, facecolor='white')
 
-        # required to update canvas and attached toolbar!
-        self.canvas.draw()
+        self.figure_canvas = FigureCanvasTkAgg(self.figure, master=parent)
+        self.figure_canvas.draw()
+        self.figure_canvas.get_tk_widget().grid(column=1, row=0, sticky=(tkinter.N, tkinter.E, tkinter.S))
+
+        self.controls = ttk.Frame(self.frame)
+        self.controls.grid(column=0, row=1, sticky=(tkinter.N, tkinter.W, tkinter.E, tkinter.S), pady=5)
+
+        ttk.Button(self.controls, text='potrace', command=self.potrace).grid(column=0, row=0)
+
+        ttk.Label(self.controls, text='Epsilon').grid(column=1, row=0)
+
+        self.var_stepsize = tkinter.DoubleVar(value=1.)
+        ttk.Entry(self.controls, width=8, textvariable=self.var_stepsize).grid(column=2, row=0)
+
+        self.var_render_potrace_path = tkinter.IntVar(value=1)
+        ttk.Checkbutton(self.controls, text='Path', command=self.render,
+                        variable=self.var_render_potrace_path).grid(column=3, row=0)
+
+        self.var_render_potrace_points = tkinter.IntVar(value=0)
+        ttk.Checkbutton(self.controls, text='Points', command=self.render,
+                        variable=self.var_render_potrace_points).grid(column=4, row=0)
+
+        self.var_render_potrace_lines = tkinter.IntVar(value=0)
+        ttk.Checkbutton(self.controls, text='Lines', command=self.render,
+                        variable=self.var_render_potrace_lines).grid(column=5, row=0)
+
+        self.var_render_perimeter = tkinter.IntVar(value=1)
+        ttk.Checkbutton(self.controls, text='Perimeter', command=self.render,
+                        variable=self.var_render_perimeter).grid(column=6, row=0)
+
+        self.potrace_path = None
+        self.render()
+        
+    def potrace(self):
+        self.potrace_path = puzzler.potrace.piece_to_path(self.piece)
+        self.render()
+
+        stepsize = self.var_stepsize.get()
+        points = puzzler.potrace.InterpolatePath(stepsize).apply(self.potrace_path)
+        n = len(points)
+        turning_angle = []
+        path_length = []
+        for i in range(n):
+            p0 = points[i-1] if i > 0 else points[n-1]
+            p1 = points[i]
+            p2 = points[i+1] if i+1 < n else points[0]
+                
+            x0, y0 = p2 - p1
+            x1, y1 = p1 - p0
+            t  = np.arctan2(x0*y1 - y0*x1, x0*x1 + y0*y1)
+            turning_angle.append(t)
+            path_length.append(stepsize)
+
+        path_length = np.array(path_length)
+        turning_angle = np.array(turning_angle)
+            
+        cum_path_length = np.cumsum(path_length)
+        cum_turning_angle = np.cumsum(turning_angle)
+
+        curvature = self.compute_curvature(cum_path_length, cum_turning_angle)
+
+        f = self.figure
+        for ax in f.axes.copy():
+            f.delaxes(ax)
+            
+        ax1 = f.add_subplot(3, 1, 1)
+        ax2 = f.add_subplot(3, 1, 2, sharex=ax1)
+        ax3 = f.add_subplot(3, 1, 3, sharex=ax1)
+        ax1.plot(cum_path_length, turning_angle)
+        ax1.set_ylabel('turning angle')
+        ax1.grid(True)
+        
+        ax2.plot(cum_path_length, cum_turning_angle)
+        ax2.set_ylabel('cum. turning angle')
+        ax2.grid(True)
+        
+        ax3.plot(np.arange(1,len(curvature)+1), curvature)
+        ax3.set_ylabel('curvature')
+        ax3.grid(True)
+
+        self.figure_canvas.draw()
+
+    @staticmethod
+    def compute_curvature(path_length, turning_angle):
+
+        retval = []
+        k = 5
+        ds = 50
+        smin = path_length.min()
+        smax = path_length.max()
+        s = smin
+        while s < smax:
+            samples = np.linspace(s+ds, s+ds+k, num=k)
+            c = np.average(np.interp(samples, path_length, turning_angle)) - np.interp(s, path_length, turning_angle)
+            retval.append(c)
+            s += 1
+
+        return np.array(retval)
+
+    def get_camera_matrix(self):
+
+        t = puzzler.render.Transform()
+        
+        canvas_w = int(self.puzzle_canvas.configure('width')[4])
+        canvas_h = int(self.puzzle_canvas.configure('height')[4])
+        
+        camera_matrix = np.array(
+            ((1,  0,   0),
+             (0, -1, canvas_h-1),
+             (0,  0,   1)), dtype=np.float64)
+        t.multiply(camera_matrix)
+
+        bbox = self.piece.bbox
+        piece_w, piece_h = bbox[1] - bbox[0]
+
+        scale = 0.95 * min(canvas_w / piece_w, canvas_h / piece_h)
+        if scale < 1:
+            t.scale(scale)
+
+        t.translate(0.5 * (np.array((canvas_w, canvas_h)) - (bbox[0] + bbox[1])))
+
+        return t.matrix
+
+    def render(self):
+        canvas = self.puzzle_canvas
+        canvas.delete('all')
+
+        r = puzzler.renderer.canvas.CanvasRenderer(canvas)
+
+        r.transform(self.get_camera_matrix())
+
+        if self.var_render_perimeter.get():
+            r.draw_lines(self.piece.points, width=1, fill='black')
+
+        if self.potrace_path is not None:
+
+            interp_path = puzzler.potrace.InterpolatePath(self.var_stepsize.get()).apply(self.potrace_path)
+            
+            if self.var_render_potrace_path.get():
+                r.draw_lines(interp_path, fill='cyan', width='1')
+
+            if self.var_render_potrace_lines.get():
+                for i in self.potrace_path:
+                    if isinstance(i,puzzler.potrace.Line):
+                        r.draw_lines(np.array([i.v0, i.v1]), width=3, fill='pink')
+
+            if self.var_render_potrace_points.get():
+                r.draw_points(np.array(interp_path), radius=1, fill='green', outline='')
 
 def match(args):
 
