@@ -1,14 +1,13 @@
 import numpy as np
 import puzzler
+import scipy
 
 import tkinter
 from tkinter import ttk
 
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg, NavigationToolbar2Tk)
-# Implement the default Matplotlib key bindings.
-from matplotlib.backend_bases import key_press_handler
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+import matplotlib
 
 class MatchTk:
 
@@ -38,6 +37,8 @@ class MatchTk:
         self.figure_canvas = FigureCanvasTkAgg(self.figure, master=parent)
         self.figure_canvas.draw()
         self.figure_canvas.get_tk_widget().grid(column=1, row=0, sticky=(tkinter.N, tkinter.E, tkinter.S))
+        self.figure_canvas.mpl_connect('button_press_event', self.on_click)
+        self.figure_canvas.mpl_connect('motion_notify_event', self.on_motion)
 
         self.controls = ttk.Frame(self.frame)
         self.controls.grid(column=0, row=1, sticky=(tkinter.N, tkinter.W, tkinter.E, tkinter.S), pady=5)
@@ -66,7 +67,18 @@ class MatchTk:
                         variable=self.var_render_perimeter).grid(column=6, row=0)
 
         self.potrace_path = None
+        self.cursor_xdata = None
         self.render()
+
+    def on_click(self, event):
+        e = event
+        if e.inaxes:
+            print(f"on_click: {e.name=} {e.button=} {e.inaxes=} {e.xdata=:.1f} {e.ydata=:.5f}")
+
+    def on_motion(self, event):
+        if event.inaxes:
+            self.cursor_xdata = event.xdata
+            self.update_cursor()
         
     def potrace(self):
         self.potrace_path = puzzler.potrace.piece_to_path(self.piece)
@@ -74,24 +86,27 @@ class MatchTk:
 
         stepsize = self.var_stepsize.get()
         points = puzzler.potrace.InterpolatePath(stepsize).apply(self.potrace_path)
-        n = len(points)
-        turning_angle = []
-        path_length = []
-        for i in range(n):
-            p0 = points[i-1] if i > 0 else points[n-1]
-            p1 = points[i]
-            p2 = points[i+1] if i+1 < n else points[0]
-                
-            x0, y0 = p2 - p1
-            x1, y1 = p1 - p0
-            t  = np.arctan2(x0*y1 - y0*x1, x0*x1 + y0*y1)
-            turning_angle.append(t)
-            path_length.append(stepsize)
 
-        path_length = np.array(path_length)
-        turning_angle = np.array(turning_angle)
-            
-        cum_path_length = np.cumsum(path_length)
+        kdtree = scipy.spatial.KDTree(self.piece.points)
+        ii = kdtree.query(points)[1]
+        
+        # n = len(points)
+        # turning_angle = []
+        # path_length = []
+        # for i in range(n):
+        #     p0 = points[i-1] if i > 0 else points[n-1]
+        #     p1 = points[i]
+        #     p2 = points[i+1] if i+1 < n else points[0]
+        #         
+        #     x0, y0 = p2 - p1
+        #     x1, y1 = p1 - p0
+        #     t  = np.arctan2(x0*y1 - y0*x1, x0*x1 + y0*y1)
+        #     turning_angle.append(t)
+        #     path_length.append(stepsize)
+
+        turning_angle = self.compute_turning_angle(points, stepsize)
+        
+        cum_path_length = np.arange(len(turning_angle)) * stepsize
         cum_turning_angle = np.cumsum(turning_angle)
 
         curvature = self.compute_curvature(cum_path_length, cum_turning_angle)
@@ -103,6 +118,7 @@ class MatchTk:
         ax1 = f.add_subplot(3, 1, 1)
         ax2 = f.add_subplot(3, 1, 2, sharex=ax1)
         ax3 = f.add_subplot(3, 1, 3, sharex=ax1)
+        
         ax1.plot(cum_path_length, turning_angle)
         ax1.set_ylabel('turning angle')
         ax1.grid(True)
@@ -115,10 +131,35 @@ class MatchTk:
         ax3.set_ylabel('curvature')
         ax3.grid(True)
 
+        self.ii = ii
+        self.mc = matplotlib.widgets.MultiCursor(self.figure_canvas, (ax1, ax2, ax3), color='blue', linestyle='--', linewidth=1.)
+
         self.figure_canvas.draw()
 
     @staticmethod
-    def compute_curvature(path_length, turning_angle):
+    def cum_path_length_to_point_no(x, cum_path_length, points):
+        return np.interp(cpl, cum_path_length, points)
+
+    @staticmethod
+    def compute_turning_angle(points, stepsize):
+        
+        turning_angle = []
+        
+        n = len(points)
+        for i in range(n):
+            p0 = points[i-1] if i > 0 else points[n-1]
+            p1 = points[i]
+            p2 = points[i+1] if i+1 < n else points[0]
+                
+            x0, y0 = p2 - p1
+            x1, y1 = p1 - p0
+            t  = np.arctan2(x0*y1 - y0*x1, x0*x1 + y0*y1)
+            turning_angle.append(t)
+
+        return np.array(turning_angle)
+
+    @staticmethod
+    def compute_curvature(path_length, cum_turning_angle):
 
         retval = []
         k = 5
@@ -128,7 +169,8 @@ class MatchTk:
         s = smin
         while s < smax:
             samples = np.linspace(s+ds, s+ds+k, num=k)
-            c = np.average(np.interp(samples, path_length, turning_angle)) - np.interp(s, path_length, turning_angle)
+            c = (np.average(np.interp(samples, path_length, cum_turning_angle)) -
+                 np.interp(s, path_length, cum_turning_angle))
             retval.append(c)
             s += 1
 
@@ -183,6 +225,23 @@ class MatchTk:
 
             if self.var_render_potrace_points.get():
                 r.draw_points(np.array(interp_path), radius=1, fill='green', outline='')
+
+        self.update_cursor()
+
+    def update_cursor(self):
+
+        canvas = self.puzzle_canvas
+        canvas.delete('cursor')
+        if self.cursor_xdata is None:
+            return
+
+        i = int(self.cursor_xdata / self.var_stepsize.get())
+        if 0 <= i < len(self.ii):
+            i = self.ii[i]
+            c = self.piece.points[i]
+            r = puzzler.renderer.canvas.CanvasRenderer(canvas)
+            r.transform(self.get_camera_matrix())
+            r.draw_circle(c, radius=6, fill='', outline='red', tag='cursor')
 
 def match(args):
 
