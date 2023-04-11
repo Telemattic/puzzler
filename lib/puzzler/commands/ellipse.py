@@ -82,6 +82,8 @@ class TabComputer:
         self.perimeter = perimeter
         self.verbose   = verbose
         self.approx_poly = ApproxPolyComputer(self.perimeter, epsilon)
+        self.max_mse   = 500
+        self.min_angle = math.radians(220)
 
         self.tabs = []
 
@@ -95,12 +97,12 @@ class TabComputer:
             if tab is None:
                 continue
 
-            if tab['angle'] < math.radians(220):
+            if tab['angle'] < self.min_angle:
                 if self.verbose:
                     print("  angle for ellipse too small, rejecting")
                 continue
 
-            if tab['mse'] > 500:
+            if tab['mse'] > self.max_mse:
                 if self.verbose:
                     print("  MSE of fit too high, rejecting")
                 continue
@@ -126,12 +128,12 @@ class TabComputer:
             if tab is None:
                 continue
 
-            if tab['angle'] < math.radians(220):
+            if tab['angle'] < self.min_angle:
                 if self.verbose:
                     print("  angle for ellipse too small, rejecting")
                 continue
             
-            if tab['mse'] > 500:
+            if tab['mse'] > self.max_mse:
                 if self.verbose:
                     print("  MSE of fit too high, rejecting")
                 continue
@@ -141,6 +143,11 @@ class TabComputer:
             if e.semi_major / e.semi_minor > 1.8:
                 if self.verbose:
                     print("  ellipse too eccentric, rejecting")
+                continue
+
+            if e.semi_major > 90 and False:
+                if self.verbose:
+                    print("   ellipse too big, rejecting")
                 continue
 
             if self.indexes_overlap(tab):
@@ -387,9 +394,10 @@ class TabComputer:
 
 class EdgeComputer:
 
-    def __init__(self, perimeter, approx_poly, tabs):
+    def __init__(self, perimeter, approx_poly, tabs, verbose=True):
 
         self.perimeter = perimeter
+        self.verbose = verbose
         self.edges = []
 
         len_hull = self.length_convex_hull(approx_poly)
@@ -402,14 +410,28 @@ class EdgeComputer:
         candidates.sort(reverse=True)
 
         longest = candidates[0][0]
+
+        if self.verbose:
+            print(f"Identifying edges: length hull={len_hull:.1f}, longest candidate={longest:.1f} ...")
+
         for l, a, b in candidates:
+
+            if self.verbose:
+                print(f"considering candidate of length {l:.1f} from index {a} to {b}")
+            
             if l < longest * 0.5:
+                if self.verbose:
+                    print(f"done: too short relative to longest candidate")
                 break
 
             if l < len_hull * .15:
+                if self.verbose:
+                    print(f"done: too short relative to convex hull (ratio={l/len_hull:.3f})")
                 break
 
             if self.overlaps_tab(tabs, a, b):
+                if self.verbose:
+                    print(f"skipping, overlaps one or more already identified tabs")
                 continue
 
             points = self.points_for_line(a, b)
@@ -423,6 +445,10 @@ class EdgeComputer:
             if np.linalg.norm(pt1 - ptA) < np.linalg.norm(pt0 - ptA):
                 pt0, pt1 = pt1, pt0
             line = puzzler.geometry.Line(np.array((pt0, pt1)))
+
+            if self.verbose:
+                print(f"adding {line} from index {a} to {b}")
+            
             self.edges.append({'fit_indexes':(a,b), 'line':line})
 
     def overlaps_tab(self, tabs, a, b):
@@ -775,8 +801,9 @@ def feature_view(args):
 
 def feature_update(args):
 
+    tab_data = []
     puzzle = puzzler.file.load(args.puzzle)
-    for piece in tqdm(puzzle.pieces):
+    for piece in tqdm(puzzle.pieces, ascii=True):
         if piece.points is None:
             continue
 
@@ -785,22 +812,24 @@ def feature_update(args):
         perimeter = PerimeterLoader(piece)
 
         tc = TabComputer(perimeter, args.epsilon, False)
-        ec = EdgeComputer(perimeter, tc.approx_poly, tc.tabs)
+        ec = EdgeComputer(perimeter, tc.approx_poly, tc.tabs, False)
 
         piece.tabs = []
-        for tab in tc.tabs:
+        for i, tab in enumerate(sorted(tc.tabs, key=operator.itemgetter('indexes'))):
             piece.tabs.append(puzzler.feature.Tab(tab['indexes'], tab['ellipse'], tab['indent'], tab['tangents']))
-        piece.tabs.sort(key=operator.attrgetter('fit_indexes'))
+            tab_data.append((piece.label, i, tab['mse']))
 
         # print(" tabs:", ', '.join(f"{t.ellipse.semi_major/t.ellipse.semi_minor:.3f}" for t in piece.tabs))
                 
         piece.edges = []
-        for edge in ec.edges:
+        for edge in sorted(ec.edges, key=operator.itemgetter('fit_indexes')):
             piece.edges.append(puzzler.feature.Edge(edge['fit_indexes'], edge['line']))
             
-        piece.edges.sort(key=operator.attrgetter('fit_indexes'))
-
     puzzler.file.save(args.puzzle, puzzle)
+
+    print("piece,tab_no,mse")
+    for label, tab_no, mse in tab_data:
+        print(f"{label},{tab_no},{mse:.3f}")
 
 def add_parser(commands):
     
