@@ -150,6 +150,15 @@ class InterpolatePath:
             else:
                 self.interpolate_spline(i)
 
+        n = (len(self.retval) * 5) // 4
+        for i in path:
+            if isinstance(i,Line):
+                self.interpolate_line(i)
+            else:
+                self.interpolate_spline(i)
+            if len(self.retval) >= n:
+                break
+
         return np.array(self.retval)
 
     def interpolate_line(self, line):
