@@ -193,6 +193,28 @@ class BorderSolver:
     def link_pieces(self, scores):
 
         print(f"link_pieces: corners={len(self.corners)}, edges={len(self.edges)}")
+        # print(f"{scores=}")
+
+        expected_pairs = dict()
+        
+        if len(self.edges) > 100:
+            for i in range(1,38):
+                expected_pairs[f"A{i}"] = f"A{i+1}"
+                expected_pairs[f"AA{i+1}"] = f"AA{i}"
+            for i in range(0,26):
+                j = chr(i+ord('A'))
+                if i == 25:
+                    k = 'AA'
+                else:
+                    k = chr(i+1+ord('A'))
+                expected_pairs[f"{j}38"] = f"{k}38"
+                expected_pairs[f"{k}1"] = f"{j}1"
+            print(f"{expected_pairs=}")
+            print(f"{len(expected_pairs)=}")
+    
+            assert set(expected_pairs.keys()) == set(expected_pairs.values())
+    
+        border = set(self.corners + self.edges)
 
         pairs = dict()
         used = set()
@@ -203,8 +225,20 @@ class BorderSolver:
 
             # print(f"{dst} <- {best} (mse={ss[best][0]})")
 
+            expected = expected_pairs.get(dst)
+            if expected_pairs and expected != best:
+                if expected not in border:
+                    print(f"--> {expected=} not in border set! skipping {dst=}")
+                else:
+                    print(f"{dst} <- {best} ({expected=})")
+                    sss = sorted([(v[0], k) for k, v in ss.items()])
+                    print(sss)
+                continue
+
             if best in used:
-                print(f"best match match for {dst} is {best} and it's already been used!")
+                print(f"best match match for {dst} is {best} and it has already been used!")
+                sss = sorted([(v[0], k) for k, v in ss.items()])
+                print(sss)
                 continue
 
             # greedily assume the best fit will be available, if it
@@ -213,6 +247,8 @@ class BorderSolver:
             assert best not in used
             used.add(best)
             pairs[dst] = best
+
+        print(f"{pairs=}")
 
         # make sure the border pieces form a single ring
         visited = set()
@@ -642,6 +678,7 @@ class PuzzleSolver:
     def __init__(self, pieces, geometry=None):
         self.pieces = pieces
         self.geometry = geometry
+        self.constraints = None
         self.adjacency = None
         self.frontiers = None
         self.corners = []
@@ -658,17 +695,28 @@ class PuzzleSolver:
         bs = BorderSolver(self.pieces)
 
         scores = bs.score_matches()
+
+        if False:
+            coords = dict()
+            coords['A22'] = AffineTransform()
+            coords['A23'] = scores['A22']['A23'][1]
+            print(f"{coords=} {scores['A22']['A23']}")
+            self.geometry = Geometry(0., 0., coords)
+            return
+        
         border = bs.link_pieces(scores)
         print(f"{border=}")
         bs.estimate_puzzle_size(border)
 
-        constraints = bs.init_constraints(border)
+        self.constraints = bs.init_constraints(border)
         self.geometry = bs.init_placement(border)
 
-        print(f"{constraints=}")
+        print(f"{self.constraints=}")
         print(f"{self.geometry=}")
 
-        self.save_geometry()
+        ts = datetime.now()
+        self.save_geometry(ts)
+        self.save_constraints(ts)
         self.update_adjacency()
 
     def solve_field(self):
@@ -703,10 +751,16 @@ class PuzzleSolver:
             angle = src_coords.angle * (180. / math.pi)
             print(f"{i}: {src_label:3s} angle={angle:+6.1f} {r=:.3f} {mse=:5.1f} {src_tabs=} {corner=}")
 
-        _, _, label, coords, _, _ = fits[0]
+        _, _, src_label, coords, src_tabs, corner = fits[0]
             
-        self.geometry.coords[label] = coords
-        self.save_geometry()
+        for src_tab_no, dst in zip(src_tabs, corner):
+            self.constraints.append(TabConstraint((src_label, src_tab_no), dst))
+
+        self.geometry.coords[src_label] = coords
+
+        ts = datetime.now()
+        self.save_geometry(ts)
+        self.save_constraints(ts)
         self.update_adjacency()
 
         print(self.distance_query_cache.stats | {'cache_size': len(self.distance_query_cache.cache)})
@@ -749,16 +803,33 @@ class PuzzleSolver:
 
         return fits
 
-    def save_geometry(self):
+    def save_geometry(self, ts):
         
-        path = os.path.join(r'C:\temp\puzzler\coords',
-                            datetime.now().strftime('%Y%m%d-%H%M%S') + '.json')
+        path = os.path.join(r'C:\temp\puzzler\align',
+                            ts.strftime('geometry_%Y%m%d-%H%M%S') + '.json')
         
         g = self.geometry
         obj = {'width': g.width, 'height': g.height, 'coords':dict()}
         for k, v in g.coords.items():
             obj['coords'][k] = {'angle': v.angle, 'xy': list(v.dxdy)}
                 
+        with open(path, 'w') as f:
+            json.dump(obj, f, indent=2)
+
+    def save_constraints(self, ts):
+
+        path = os.path.join(r'C:\temp\puzzler\align',
+                            ts.strftime('constraints_%Y%m%d-%H%M%S') + '.json')
+        
+        obj = []
+        for i in self.constraints:
+            if isinstance(i, BorderConstraint):
+                obj.append({'kind':'edge', 'edge': list(i.edge), 'axis':i.axis})
+            elif isinstance(i, TabConstraint):
+                obj.append({'kind':'tab', 'a':list(i.a), 'b':list(i.b)})
+            else:
+                assert False
+
         with open(path, 'w') as f:
             json.dump(obj, f, indent=2)
 
