@@ -113,16 +113,12 @@ class DistanceImage:
 
 class TabAligner:
 
-    def __init__(self, dst, slow=False):
+    def __init__(self, dst):
         self.dst = dst
         self.kdtree = None
-        self.distance_image = None
-        if slow:
-            self.kdtree = scipy.spatial.KDTree(dst.points)
-        else:
-            self.distance_image = DistanceImage.Factory(dst)
-
-    def compute_alignment(self, dst_tab_no, src, src_tab_no):
+        self.distance_image = DistanceImage.Factory(dst)
+        
+    def compute_alignment(self, dst_tab_no, src, src_tab_no, refine=0):
 
         src_points = self.get_tab_points(src, src_tab_no)
         dst_points = self.get_tab_points(self.dst, dst_tab_no)
@@ -140,10 +136,100 @@ class TabAligner:
 
         src_coords = AffineTransform(r, (x,y))
 
-        mse, sfp, dfp = self.measure_fit_fast(src, src_tab_no, src_coords)
+        if refine:
+            src_mid = self.get_tab_midpoint(src, src_tab_no)
+            for _ in range(refine):
+                mse, src_coords, sfp, dfp = self.refine_alignment(src, src_coords, src_mid)
+        else:
+            mse, sfp, dfp = self.measure_fit_fast(src, src_tab_no, src_coords)
 
         return (mse, src_coords, sfp, dfp)
 
+    def refine_alignment(self, src, src_coords, sfp):
+
+        # starting at src.points[sfp] expand in both directions around the
+        # perimeter of the src to find the continuous section that is
+        # "close" to dst
+        #
+        # for each close point find the corresponding (point,normal) in dst
+        #
+        # compute a least squares optimization of fit
+
+        close_cutoff = 15
+    
+        n = len(src.points)
+        s = 50 # take every s'th point, chosen arbitrarily
+        num_samples_each_side = n // (s * 6)
+        src_indices = np.arange(sfp - num_samples_each_side * s, sfp + num_samples_each_side * s + 1, s) % n
+        src_points = src_coords.get_transform().apply_v2(src.points[src_indices])
+
+        if not self.kdtree:
+            self.kdtree = scipy.spatial.KDTree(self.dst.points)
+        distance, dst_indices = self.kdtree.query(src_points)
+
+        close_points = np.nonzero(distance < close_cutoff)
+        if len(close_points[0]) < 2:
+            return (None, src_coords, (None, None), (None, None))
+
+        close_src_points = src.points[src_indices[close_points]]
+        close_dst_points = self.dst.points[dst_indices[close_points]]
+        close_dst_normals = self.get_dst_normals(dst_indices[close_points])
+    
+        icp = puzzler.icp.IteratedClosestPoint()
+        
+        dst_body = icp.make_rigid_body(0., np.array((0., 0.)), fixed=True)
+        src_body = icp.make_rigid_body(src_coords.angle, src_coords.dxdy, fixed=False)
+
+        # print(f"{src_coords.angle=} {src_coords.dxdy=}")
+    
+        icp.add_body_correspondence(src_body, close_src_points, dst_body, close_dst_points, close_dst_normals)
+    
+        icp.solve()
+    
+        # print(f"{dst_body=}")
+        # print(f"{src_body=}")
+
+        self.src_vertexes = close_src_points
+        self.dst_vertexes = close_dst_points
+        self.dst_normals = close_dst_normals
+
+        src_coords = AffineTransform(src_body.angle, src_body.center)        
+
+        d = self.kdtree.query(src_coords.get_transform().apply_v2(close_src_points))[0]
+        src_fit_points = (src_indices[close_points[0][0]], src_indices[close_points[0][-1]])
+        dst_fit_points = (dst_indices[close_points[0][0]], dst_indices[close_points[0][-1]])
+        mse = np.sum(d ** 2) / len(d)
+
+        return (mse, src_coords, src_fit_points, dst_fit_points)
+
+    @staticmethod
+    def get_tab_midpoint(piece, tab_no):
+        tab = piece.tabs[tab_no]
+        a, b = tab.fit_indexes
+        if a > b:
+            n = len(piece.points)
+            mid = ((a + b + n) // 2) % n
+        else:
+            mid = (a + b) // 2
+
+        return mid
+
+    def get_dst_normals(self, dst_indices):
+
+        baseline = 10 # ?
+        points = self.dst.points
+        n = len(points)
+
+        p0 = points[(dst_indices - baseline) % n]
+        p1 = points[(dst_indices + baseline) % n]
+        v = p1 - p0
+        l = np.linalg.norm(v, axis=1)
+        v = v / l[:,np.newaxis]
+
+        normals = np.array((-v[:,1], v[:,0])).T
+        
+        return normals
+        
     def measure_fit_fast(self, src, src_tab_no, src_coords):
         
         sl, sr = src.tabs[src_tab_no].tangent_indexes
@@ -152,7 +238,7 @@ class TabAligner:
 
         src_fit_points = (sl, sr)
         
-        if self.kdtree:
+        if False:
             d, i = self.kdtree.query(src_points)
             dst_fit_points = (i[-1], i[0])
         else:
