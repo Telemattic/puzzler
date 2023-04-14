@@ -595,12 +595,15 @@ class AlignTk:
         cf2 = ttk.Frame(self.frame)
         cf2.grid(row=2, sticky=(W,E))
 
-        b5 = ttk.Button(cf2, text='Show Tab Alignment', command=self.show_tab_alignment)
+        b5 = ttk.Button(cf2, text='Reset Layout', command=self.reset_layout)
         b5.grid(column=0, row=0, sticky=W)
+
+        b6 = ttk.Button(cf2, text='Show Tab Alignment', command=self.show_tab_alignment)
+        b6.grid(column=1, row=0, sticky=W)
 
         self.var_show_tab_alignment = StringVar(value='')
         e1 = ttk.Entry(cf2, width=16, textvariable=self.var_show_tab_alignment)
-        e1.grid(column=1, row=0)
+        e1.grid(column=2, row=0)
 
         self.render_full = False
         self.render()
@@ -610,6 +613,41 @@ class AlignTk:
         if self.camera.viewport != viewport:
             self.camera.viewport = viewport
             self.render()
+
+    def reset_layout(self):
+        
+        def to_row(s):
+            row = 0
+            for i in s.upper():
+                row *= 26
+                row += ord(i) + 1 - ord('A')
+            return row
+
+        def to_col(s):
+            return int(s)
+
+        def to_row_col(label):
+            m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
+            return (to_row(m[1]), to_col(m[2])) if m else (None, None)
+
+        rows = set()
+        cols = set()
+        for p in self.pieces:
+            r, c = to_row_col(p.piece.label)
+            rows.add(r)
+            cols.add(c)
+
+        rows = dict((r, i) for i, r in enumerate(sorted(rows)))
+        cols = dict((c, i) for i, c in enumerate(sorted(cols)))
+
+        for p in self.pieces:
+            r, c = to_row_col(p.piece.label)
+            x = cols[c] * 1000.
+            y = rows[r] * -1000.
+            p.coords.angle = 0.
+            p.coords.dxdy = np.array((x, y))
+
+        self.render()
 
     def show_tab_alignment(self):
         s = self.var_show_tab_alignment.get().strip()
@@ -680,45 +718,45 @@ def align_ui(args):
 
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
-    def to_row(s):
-        row = 0
-        for i in s.upper():
-            row *= 26
-            row += ord(i) + 1 - ord('A')
-        return row
-
-    def to_col(s):
-        return int(s)
-
-    def to_row_col(label):
-        m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
-        return (to_row(m[1]), to_col(m[2])) if m else (None, None)
-
-    rows = set()
-    cols = set()
-    for piece in pieces:
-        r, c = to_row_col(piece.piece.label)
-        rows.add(r)
-        cols.add(c)
-
-    rows = dict((r, i) for i, r in enumerate(sorted(rows)))
-    cols = dict((c, i) for i, c in enumerate(sorted(cols)))
-
-    for piece in pieces:
-        r, c = to_row_col(piece.piece.label)
-        x = cols[c] * 1000.
-        y = rows[r] * -1000.
-        piece.coords.dxdy = np.array((x, y))
+    # def to_row(s):
+    #     row = 0
+    #     for i in s.upper():
+    #         row *= 26
+    #         row += ord(i) + 1 - ord('A')
+    #     return row
+    # 
+    # def to_col(s):
+    #     return int(s)
+    # 
+    # def to_row_col(label):
+    #     m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
+    #     return (to_row(m[1]), to_col(m[2])) if m else (None, None)
+    # 
+    # rows = set()
+    # cols = set()
+    # for piece in pieces:
+    #     r, c = to_row_col(piece.piece.label)
+    #     rows.add(r)
+    #     cols.add(c)
+    # 
+    # rows = dict((r, i) for i, r in enumerate(sorted(rows)))
+    # cols = dict((c, i) for i, c in enumerate(sorted(cols)))
+    # 
+    # for piece in pieces:
+    #     r, c = to_row_col(piece.piece.label)
+    #     x = cols[c] * 1000.
+    #     y = rows[r] * -1000.
+    #     piece.coords.dxdy = np.array((x, y))
 
     root = Tk()
     ui = AlignTk(root, pieces)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
-    # root.wm_resizable(0, 0)
 
+    ui.reset_layout()
     if args.geometry:
         ui.load_geometry(args.geometry)
-    
+
     root.mainloop()
 
 def output_tabs(args):
