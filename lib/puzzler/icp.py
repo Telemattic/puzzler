@@ -1,23 +1,22 @@
 import math
 import numpy as np
+from dataclasses import dataclass
 
 class IteratedClosestPoint:
 
+    @dataclass
     class RigidBody:
+        index: int
+        angle: float
+        center: np.array
+        fixed: bool
 
-        def __init__(self, i, angle, center, fixed):
-            self.index  = i
-            self.angle  = angle
-            self.center = center
-            self.fixed  = fixed
-
+    @dataclass
     class Axis:
-
-        def __init__(self, i, normal, value, fixed):
-            self.index = i
-            self.normal = normal
-            self.value = value
-            self.fixed = fixed
+        index: int
+        normal: np.array
+        value: float
+        fixed: bool
 
     def __init__(self):
         self.n_cols = 0
