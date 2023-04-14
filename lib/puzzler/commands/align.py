@@ -219,8 +219,10 @@ class PuzzleRenderer:
         self.adjacency = dict()
         self.renderer = None
         self.render_fast = None
-        self.canvas_w = int(self.canvas.cget('width'))
-        self.canvas_h = int(self.canvas.cget('height'))
+        self.canvas_w = self.camera.viewport[0]
+        self.canvas_h = self.camera.viewport[1]
+        self.normals = dict()
+        self.vertexes = dict()
 
     def render(self, render_fast):
         
@@ -301,6 +303,15 @@ class PuzzleRenderer:
             r.draw_polygon(points, outline=color, fill='', width=2, tag=tag)
 
             r.draw_text(np.array((0,0)), p.piece.label)
+
+            normals = self.normals.get(p.piece.label)
+            if normals is not None:
+                for n in normals:
+                    r.draw_lines(np.array((n[0], n[0] + n[1]*10)), fill='black', width=1)
+
+            vertexes = self.vertexes.get(p.piece.label)
+            if vertexes is not None:
+                r.draw_points(vertexes, fill='', outline=color, radius=6)
 
     def draw_rotate_handles(self, piece_id):
 
@@ -406,6 +417,8 @@ class AlignTk:
 
         self.draggable = None
         self.selection = None
+        self.render_normals = None
+        self.render_vertexes = None
 
         self._init_ui(parent)
 
@@ -455,6 +468,10 @@ class AlignTk:
         r.frontiers = self.solver.frontiers
         if self.var_render_adjacency.get():
             r.adjacency = self.solver.adjacency
+        if self.render_normals:
+            r.normals = self.render_normals
+        if self.render_vertexes:
+            r.vertexes = self.render_vertexes
         r.render(True)
 
         self.render_full += 1
@@ -470,6 +487,10 @@ class AlignTk:
         r.frontiers = self.solver.frontiers
         if self.var_render_adjacency.get():
             r.adjacency = self.solver.adjacency
+        if self.render_normals:
+            r.normals = self.render_normals
+        if self.render_vertexes:
+            r.vertexes = self.render_vertexes
         r.render(False)
 
         self.render_full = 0
@@ -533,7 +554,11 @@ class AlignTk:
         self.camera = Camera(np.array((0,0), dtype=np.float64), 1/3, viewport)
         
         self.frame = ttk.Frame(parent, padding=5)
-        self.frame.grid(sticky=(N, W, E, S))
+        self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(0, weight=1)
+        self.frame.grid_columnconfigure(0, weight=1)
+        self.frame.grid_rowconfigure(0, weight=1)
 
         self.canvas = Canvas(self.frame, width=viewport[0], height=viewport[1],
                              background='white', highlightthickness=0)
@@ -543,6 +568,7 @@ class AlignTk:
         self.canvas.bind("<ButtonRelease-1>", self.canvas_release)
         self.canvas.bind("<MouseWheel>", self.mouse_wheel)
         self.canvas.bind("<Motion>", self.motion)
+        self.canvas.bind("<Configure>", self.resize)
 
         self.controls = ttk.Frame(self.frame)
         self.controls.grid(row=1, sticky=(W,E))
@@ -579,6 +605,12 @@ class AlignTk:
         self.render_full = False
         self.render()
 
+    def resize(self, e):
+        viewport = (e.width, e.height)
+        if self.camera.viewport != viewport:
+            self.camera.viewport = viewport
+            self.render()
+
     def show_tab_alignment(self):
         s = self.var_show_tab_alignment.get().strip()
         m = re.fullmatch("([a-zA-Z]+\d+):(\d+)-([a-zA-Z]+\d+):(\d+)", s)
@@ -598,8 +630,27 @@ class AlignTk:
         src = pieces[src_label]
         
         tab_aligner = puzzler.align.TabAligner(dst.piece)
+
         mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no)
         print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
+
+        src_mid = tab_aligner.get_tab_midpoint(src.piece, src_tab_no)
+
+        mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
+        print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
+        
+        mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
+        print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
+
+        mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
+        print(f"refine=2: {mse=} {src_coords=} {sfp=} {dfp=}")
+        
+        self.render_vertexes = dict()
+        self.render_vertexes[src_label] = tab_aligner.src_vertexes
+        self.render_vertexes[dst_label] = tab_aligner.dst_vertexes
+        
+        self.render_normals = dict()
+        self.render_normals[dst_label] = list(zip(tab_aligner.dst_vertexes, tab_aligner.dst_normals))
 
         dst.coords = puzzler.align.AffineTransform(0., (0., 2000.))
         src.coords = puzzler.align.AffineTransform(src_coords.angle, src_coords.dxdy + dst.coords.dxdy)
@@ -663,7 +714,7 @@ def align_ui(args):
     ui = AlignTk(root, pieces)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
-    root.wm_resizable(0, 0)
+    # root.wm_resizable(0, 0)
 
     if args.geometry:
         ui.load_geometry(args.geometry)
@@ -708,17 +759,17 @@ def output_tabs(args):
     print(f"{len(pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
     with open(args.output, 'w', newline='') as f:
-        field_names = 'dst_label dst_tab_no dst_col_no dst_row_no src_label src_tab_no src_col_no src_row_no src_coord_x src_coord_y src_coord_angle src_index_0 src_index_1 mse neighbor'.split()
+        field_names = 'dst_label dst_tab_no dst_col_no dst_row_no src_label src_tab_no src_col_no src_row_no src_coord_x src_coord_y src_coord_angle src_index_0 src_index_1 mse neighbor rank'.split()
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
         for dst in tqdm(pieces, ascii=True):
-            rows = []
             tab_aligner = puzzler.align.TabAligner(dst)
-            for src in pieces:
-                if src is dst:
-                    continue
-                for dst_tab_no, dst_tab in enumerate(dst.tabs):
+            for dst_tab_no, dst_tab in enumerate(dst.tabs):
+                rows = []
+                for src in pieces:
+                    if src is dst:
+                        continue
                     for src_tab_no, src_tab in enumerate(src.tabs):
                         if dst_tab.indent == src_tab.indent:
                             continue
@@ -736,7 +787,7 @@ def output_tabs(args):
                             if dst_row_no == src_row_no + 1:
                                 neighbor = 'N'
                             
-                        mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src, src_tab_no)
+                        mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src, src_tab_no, refine=args.refine)
                         rows.append({'dst_label': dst.label,
                                      'dst_tab_no': dst_tab_no,
                                      'dst_col_no': dst_col_no,
@@ -752,7 +803,10 @@ def output_tabs(args):
                                      'src_index_1': sfp[1],
                                      'mse': mse,
                                      'neighbor': neighbor})
-            writer.writerows(rows)
+
+                for i, row in enumerate(sorted(rows, key=lambda row: 10000 if row['mse'] is None else row['mse']), start=1):
+                    row['rank'] = i
+                writer.writerows(rows)
 
 def add_parser(commands):
 
@@ -764,4 +818,5 @@ def add_parser(commands):
 
     parser_tabs = commands.add_parser("tabs", help="Output a CSV enumerating all possible tab matches")
     parser_tabs.add_argument("-o", "--output", help="output csv path")
+    parser_tabs.add_argument("-r", "--refine", help="number of refinement passes", default=0, type=int)
     parser_tabs.set_defaults(func=output_tabs)
