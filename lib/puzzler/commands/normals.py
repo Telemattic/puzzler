@@ -43,8 +43,8 @@ class Normals:
 
     def render(self, canvas):
 
-        r = puzzler.render.Renderer(canvas)
-        r.transform.multiply(self.get_camera_matrix())
+        r = puzzler.renderer.canvas.CanvasRenderer(canvas)
+        r.transform(self.get_camera_matrix())
 
         p = self.piece
         
