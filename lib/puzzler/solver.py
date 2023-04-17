@@ -1,5 +1,6 @@
 import puzzler
 import collections
+import csv
 from datetime import datetime
 import itertools
 import json
@@ -7,6 +8,7 @@ import math
 import numpy as np
 import operator
 import os
+import scipy
 from dataclasses import dataclass
 
 def pairwise_circular(iterable):
@@ -717,6 +719,7 @@ class PuzzleSolver:
         ts = datetime.now()
         self.save_geometry(ts)
         self.save_constraints(ts)
+        self.save_tab_matches(ts)
         self.update_adjacency()
 
     def solve_field(self):
@@ -761,6 +764,7 @@ class PuzzleSolver:
         ts = datetime.now()
         self.save_geometry(ts)
         self.save_constraints(ts)
+        self.save_tab_matches(ts)
         self.update_adjacency()
 
         print(self.distance_query_cache.stats | {'cache_size': len(self.distance_query_cache.cache)})
@@ -833,6 +837,46 @@ class PuzzleSolver:
         with open(path, 'w') as f:
             json.dump(obj, f, indent=2)
 
+    def save_tab_matches(self, ts=None):
+
+        if ts == None:
+            ts = datetime.now()
+
+        path = os.path.join(r'C:\temp\puzzler\align',
+                            ts.strftime('matches_%Y%m%d-%H%M%S') + '.csv')
+
+        tab_xy = []
+        radii = []
+        labels = []
+        for k, v in self.geometry.coords.items():
+            p = self.pieces[k]
+            centers = np.array([t.ellipse.center for t in p.tabs])
+            radii  += [t.ellipse.semi_major for t in p.tabs]
+            labels += [(p.label, i) for i in range(len(p.tabs))]
+            tab_xy += [xy for xy in v.get_transform().apply_v2(centers)]
+
+        rows = []
+
+        kdtree = scipy.spatial.KDTree(tab_xy)
+        neighbor_dist, neighbor_index = kdtree.query(tab_xy, 2)
+        for i, neighbors in enumerate(neighbor_index):
+            for j, k in enumerate(neighbors):
+                if k == i:
+                    continue
+                dst = labels[i]
+                src = labels[k]
+                distance = neighbor_dist[i][j]
+                if distance > radii[i]:
+                    continue
+                # print(f"{labels[i]} - {labels[k]} # {distance=:.1f}")
+                rows.append({'dst_label':dst[0], 'dst_tab_no':dst[1], 'src_label':src[0], 'src_tab_no':src[1], 'distance':distance})
+
+        with open(path, 'w', newline='') as f:
+            field_names = 'dst_label dst_tab_no src_label src_tab_no distance'.split()
+            writer = csv.DictWriter(f, field_names)
+            writer.writeheader()
+            writer.writerows(rows)
+                
     def load_geometry(self, path):
 
         with open(path) as f:
