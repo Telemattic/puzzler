@@ -156,10 +156,11 @@ class TabAligner:
         # compute a least squares optimization of fit
 
         close_cutoff = 15
+        medium_cutoff = 50
     
         n = len(src.points)
         s = 50 # take every s'th point, chosen arbitrarily
-        num_samples_each_side = n // (s * 6)
+        num_samples_each_side = n // (s * 5)
         src_indices = np.arange(sfp - num_samples_each_side * s, sfp + num_samples_each_side * s + 1, s) % n
         src_points = src_coords.get_transform().apply_v2(src.points[src_indices])
 
@@ -167,28 +168,34 @@ class TabAligner:
             self.kdtree = scipy.spatial.KDTree(self.dst.points)
         distance, dst_indices = self.kdtree.query(src_points)
 
-        close_points = np.nonzero(distance < close_cutoff)
+        print(f"{self.dst.points=} {dst_indices=}")
+        dst_normals = self.compute_normals(self.dst.points, dst_indices)
+        src_normals = src_coords.get_transform().apply_n2(self.compute_normals(src.points, src_indices))
+        dot_product = np.sum(dst_normals * src_normals, axis=1)
+
+        is_close = (distance < close_cutoff) | ((distance < medium_cutoff) & (dot_product < -0.9))
+        close_points = np.nonzero(is_close)
         if len(close_points[0]) < 2:
             return (None, src_coords, (None, None), (None, None))
 
-        close_src_points = src.points[src_indices[close_points]]
-        close_dst_points = self.dst.points[dst_indices[close_points]]
-        close_dst_normals = self.get_dst_normals(dst_indices[close_points])
-    
+        # print(f"{len(src_indices)=} {len(close_points[0])=} {close_points[0]=}")
+
+        close_src_indices = src_indices[close_points]
+        close_dst_indices = dst_indices[close_points]
+
+        close_src_points = src.points[close_src_indices]
+        close_dst_points = self.dst.points[close_dst_indices]
+        close_dst_normals = self.compute_normals(self.dst.points, close_dst_indices)
+        
         icp = puzzler.icp.IteratedClosestPoint()
         
         dst_body = icp.make_rigid_body(0., np.array((0., 0.)), fixed=True)
         src_body = icp.make_rigid_body(src_coords.angle, src_coords.dxdy, fixed=False)
 
-        # print(f"{src_coords.angle=} {src_coords.dxdy=}")
-    
         icp.add_body_correspondence(src_body, close_src_points, dst_body, close_dst_points, close_dst_normals)
     
         icp.solve()
     
-        # print(f"{dst_body=}")
-        # print(f"{src_body=}")
-
         self.src_vertexes = close_src_points
         self.dst_vertexes = close_dst_points
         self.dst_normals = close_dst_normals
@@ -196,11 +203,27 @@ class TabAligner:
         src_coords = AffineTransform(src_body.angle, src_body.center)        
 
         d = self.kdtree.query(src_coords.get_transform().apply_v2(close_src_points))[0]
-        src_fit_points = (src_indices[close_points[0][0]], src_indices[close_points[0][-1]])
-        dst_fit_points = (dst_indices[close_points[0][0]], dst_indices[close_points[0][-1]])
         mse = np.sum(d ** 2) / len(d)
 
-        return (mse, src_coords, src_fit_points, dst_fit_points)
+        d0 = self.kdtree.query(src_coords.get_transform().apply_v2(src.points[src_indices]))[0]
+        d1 = self.distance_image.query(src_coords.get_transform().apply_v2(src.points[src_indices]))
+        # distances less than zero correspond to points inside the
+        # piece, and should always be considered part of the error
+        d2 = d1[np.nonzero(is_close | (d1 < 0))]
+        mse2 = np.sum(d2 ** 2) / len(d2)
+
+        if False:
+            with np.printoptions(precision=3, suppress=True):
+                print(f"kdtree: {d=} {mse=}")
+                print(f"distance_image: {d0=} {d1=} {d2=} {mse2=}")
+                print(np.vstack((d0,d1,is_close)).T)
+
+        # dst is reversed to make ordering respect CW wrapping of
+        # points around perimeter
+        src_fit_points = (close_src_indices[0], close_src_indices[-1])
+        dst_fit_points = (close_dst_indices[-1], close_dst_indices[0])
+
+        return (mse2, src_coords, src_fit_points, dst_fit_points)
 
     @staticmethod
     def get_tab_midpoint(piece, tab_no):
@@ -214,16 +237,20 @@ class TabAligner:
 
         return mid
 
-    def get_dst_normals(self, dst_indices):
+    @staticmethod
+    def compute_normals(points, indices):
 
         baseline = 10 # ?
-        points = self.dst.points
         n = len(points)
 
-        p0 = points[(dst_indices - baseline) % n]
-        p1 = points[(dst_indices + baseline) % n]
+        p0 = points[(indices - baseline) % n]
+        p1 = points[(indices + baseline) % n]
         v = p1 - p0
         l = np.linalg.norm(v, axis=1)
+        # l can be zero when the perimeter is degenerate and the same
+        # (x,y) appears multiple times in it, e.g. see tab 3 of piece
+        # N34 from the 1000-piece puzzle
+        l = np.where(l > 0., l, 1.)
         v = v / l[:,np.newaxis]
 
         normals = np.array((-v[:,1], v[:,0])).T
