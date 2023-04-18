@@ -296,6 +296,10 @@ class PuzzleRenderer:
                     r.draw_points(lcr, fill='purple', radius=4)
 
             if self.render_fast:
+                # ll, ur = p.piece.bbox
+                # x0, y0 = ll
+                # x1, y1 = ur
+                # points = np.array([(x0,y0), (x1,y0), (x1,y1), (x0,y1)])
                 points = p.perimeter.points[p.approx.indexes]
             else:
                 points = p.piece.points
@@ -506,6 +510,7 @@ class AlignTk:
             if self.solver.corners:
                 self.parent.after_idle(self.do_tab_alignment)
             else:
+                self.solver.save_tab_matches()
                 self.var_solve_continuous.set(0)
 
     def update_coords(self):
@@ -579,7 +584,7 @@ class AlignTk:
         b2 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment)
         b2.grid(column=1, row=0, sticky=W)
 
-        self.var_render_adjacency = IntVar(value=1)
+        self.var_render_adjacency = IntVar(value=0)
         b3 = ttk.Checkbutton(self.controls, text="Adjacency", command=self.render,
                              variable=self.var_render_adjacency)
         b3.grid(column=2, row=0, sticky=W)
@@ -669,19 +674,20 @@ class AlignTk:
         
         tab_aligner = puzzler.align.TabAligner(dst.piece)
 
-        mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no)
-        print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
-
-        src_mid = tab_aligner.get_tab_midpoint(src.piece, src_tab_no)
-
-        mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
-        print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
-        
-        mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
-        print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
-
         mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
-        print(f"refine=2: {mse=} {src_coords=} {sfp=} {dfp=}")
+        print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
+
+        if False:
+            src_mid = tab_aligner.get_tab_midpoint(src.piece, src_tab_no)
+
+            mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
+            print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
+        
+            mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
+            print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
+
+        # mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
+        # print(f"refine=2: {mse=} {src_coords=} {sfp=} {dfp=}")
         
         self.render_vertexes = dict()
         self.render_vertexes[src_label] = tab_aligner.src_vertexes
@@ -717,36 +723,6 @@ def align_ui(args):
         labels |= set(by_label.keys())
 
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
-
-    # def to_row(s):
-    #     row = 0
-    #     for i in s.upper():
-    #         row *= 26
-    #         row += ord(i) + 1 - ord('A')
-    #     return row
-    # 
-    # def to_col(s):
-    #     return int(s)
-    # 
-    # def to_row_col(label):
-    #     m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
-    #     return (to_row(m[1]), to_col(m[2])) if m else (None, None)
-    # 
-    # rows = set()
-    # cols = set()
-    # for piece in pieces:
-    #     r, c = to_row_col(piece.piece.label)
-    #     rows.add(r)
-    #     cols.add(c)
-    # 
-    # rows = dict((r, i) for i, r in enumerate(sorted(rows)))
-    # cols = dict((c, i) for i, c in enumerate(sorted(cols)))
-    # 
-    # for piece in pieces:
-    #     r, c = to_row_col(piece.piece.label)
-    #     x = cols[c] * 1000.
-    #     y = rows[r] * -1000.
-    #     piece.coords.dxdy = np.array((x, y))
 
     root = Tk()
     ui = AlignTk(root, pieces)
