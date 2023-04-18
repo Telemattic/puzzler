@@ -5,25 +5,111 @@ import puzzler
 
 from tqdm import tqdm
 
+def to_row(s):
+    row = 0
+    for i in s.upper():
+        row *= 26
+        row += ord(i) + 1 - ord('A')
+    return row
+
+def to_col(s):
+    return int(s)
+
+def to_row_col(label):
+    m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
+    return (to_row(m[1]), to_col(m[2])) if m else (None, None)
+
+class TabsComputer:
+
+    def __init__(self, puzzle_path, refine):
+        self.puzzle = puzzler.file.load(puzzle_path)
+        self.pieces = dict((i.label, i) for i in self.puzzle.pieces)
+        self.refine = refine
+        self.tab_aligner = None
+
+    def compute_rows_for_dst(self, dst_label):
+
+        retval = []
+
+        dst = self.pieces[dst_label]
+        
+        for dst_tab_no, dst_tab in enumerate(dst.tabs):
+            rows = []
+            for src in self.pieces.values():
+                if src is dst:
+                    continue
+                for src_tab_no, src_tab in enumerate(src.tabs):
+                    if dst_tab.indent == src_tab.indent:
+                        continue
+
+                    rows.append(self.compute_alignment_for_dst_src(dst_label, dst_tab_no, src.label, src_tab_no))
+            for i, row in enumerate(sorted(rows, key=lambda row: 10000 if row['mse'] is None else row['mse']), start=1):
+                row['rank'] = i
+
+            retval += rows
+
+        return retval
+
+    def compute_alignment_for_dst_src(self, dst_label, dst_tab_no, src_label, src_tab_no):
+        
+        dst_row_no, dst_col_no = to_row_col(dst_label)
+        src_row_no, src_col_no = to_row_col(src_label)
+        neighbor = None
+        if dst_row_no == src_row_no:
+            if dst_col_no == src_col_no - 1:
+                neighbor = 'E'
+            if dst_col_no == src_col_no + 1:
+                neighbor = 'W'
+        elif dst_col_no == src_col_no:
+            if dst_row_no == src_row_no - 1:
+                neighbor = 'S'
+            if dst_row_no == src_row_no + 1:
+                neighbor = 'N'
+
+        dst = self.pieces[dst_label]
+        src = self.pieces[src_label]
+        
+        if not self.tab_aligner or self.tab_aligner.dst != dst:
+            self.tab_aligner = puzzler.align.TabAligner(dst)
+
+        mse, src_coords, sfp, dfp = self.tab_aligner.compute_alignment(
+            dst_tab_no, src, src_tab_no, refine=self.refine)
+        
+        return {'dst_label': dst_label,
+                'dst_tab_no': dst_tab_no,
+                'dst_col_no': dst_col_no,
+                'dst_row_no': dst_row_no,
+                'src_label': src_label,
+                'src_tab_no': src_tab_no,
+                'src_col_no': src_col_no,
+                'src_row_no': src_row_no,
+                'src_coord_x': src_coords.dxdy[0],
+                'src_coord_y': src_coords.dxdy[1],
+                'src_coord_angle': src_coords.angle,
+                'src_index_0': sfp[0],
+                'src_index_1': sfp[1],
+                'mse': mse,
+                'neighbor': neighbor}
+
+def worker(args, src_q, dst_q):
+
+    tabs_computer = TabsComputer(args.puzzle, args.refine)
+
+    job = src_q.get()
+    while job:
+
+        rows = tabs_computer.compute_rows_for_dst(job)
+
+        dst_q.put(rows)
+        job = src_q.get()
+
+    return
+    
 def output_tabs(args):
 
     puzzle = puzzler.file.load(args.puzzle)
 
     print("Tab alignment!")
-
-    def to_row(s):
-        row = 0
-        for i in s.upper():
-            row *= 26
-            row += ord(i) + 1 - ord('A')
-        return row
-
-    def to_col(s):
-        return int(s)
-
-    def to_row_col(label):
-        m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
-        return (to_row(m[1]), to_col(m[2])) if m else (None, None)
 
     def sort_key(piece):
         row, col = to_row_col(piece.label)
@@ -47,50 +133,10 @@ def output_tabs(args):
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
-        for dst in tqdm(pieces, ascii=True):
-            tab_aligner = puzzler.align.TabAligner(dst)
-            for dst_tab_no, dst_tab in enumerate(dst.tabs):
-                rows = []
-                for src in pieces:
-                    if src is dst:
-                        continue
-                    for src_tab_no, src_tab in enumerate(src.tabs):
-                        if dst_tab.indent == src_tab.indent:
-                            continue
-                        dst_row_no, dst_col_no = to_row_col(dst.label)
-                        src_row_no, src_col_no = to_row_col(src.label)
-                        neighbor = None
-                        if dst_row_no == src_row_no:
-                            if dst_col_no == src_col_no - 1:
-                                neighbor = 'E'
-                            if dst_col_no == src_col_no + 1:
-                                neighbor = 'W'
-                        elif dst_col_no == src_col_no:
-                            if dst_row_no == src_row_no - 1:
-                                neighbor = 'S'
-                            if dst_row_no == src_row_no + 1:
-                                neighbor = 'N'
-                            
-                        mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src, src_tab_no, refine=args.refine)
-                        rows.append({'dst_label': dst.label,
-                                     'dst_tab_no': dst_tab_no,
-                                     'dst_col_no': dst_col_no,
-                                     'dst_row_no': dst_row_no,
-                                     'src_label': src.label,
-                                     'src_tab_no': src_tab_no,
-                                     'src_col_no': src_col_no,
-                                     'src_row_no': src_row_no,
-                                     'src_coord_x': src_coords.dxdy[0],
-                                     'src_coord_y': src_coords.dxdy[1],
-                                     'src_coord_angle': src_coords.angle,
-                                     'src_index_0': sfp[0],
-                                     'src_index_1': sfp[1],
-                                     'mse': mse,
-                                     'neighbor': neighbor})
+        tabs_computer = TabsComputer(args.puzzle, args.refine)
 
-                for i, row in enumerate(sorted(rows, key=lambda row: 10000 if row['mse'] is None else row['mse']), start=1):
-                    row['rank'] = i
-                writer.writerows(rows)
+        for dst in tqdm(pieces, ascii=True):
+            writer.writerows(tabs_computer.compute_rows_for_dst(dst.label))
 
 def add_parser(commands):
 
