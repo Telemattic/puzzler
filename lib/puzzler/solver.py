@@ -8,6 +8,7 @@ import math
 import numpy as np
 import operator
 import os
+import re
 import scipy
 from dataclasses import dataclass
 
@@ -50,6 +51,10 @@ class BorderSolver:
         for p in self.pieces.values():
             n = len(p.edges)
             if n == 0:
+                continue
+
+            if len(self.pieces) > 1000 and not re.fullmatch("([A-Z]+(1|38))|((A|AA)\d+)", p.label):
+                print(f"Skipping {p.label}, not actually a border piece!")
                 continue
 
             (pred, succ) = self.compute_edge_info(p)
@@ -215,7 +220,15 @@ class BorderSolver:
             print(f"{len(expected_pairs)=}")
     
             assert set(expected_pairs.keys()) == set(expected_pairs.values())
-    
+
+            retval = [min(self.corners)]
+            curr = expected_pairs[retval[0]]
+            while curr != retval[0]:
+                retval.append(curr)
+                curr = expected_pairs[curr]
+
+            return retval[::-1]
+
         border = set(self.corners + self.edges)
 
         pairs = dict()
