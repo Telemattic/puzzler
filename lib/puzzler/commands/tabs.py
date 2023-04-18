@@ -2,6 +2,7 @@ import csv
 import numpy as np
 import re
 import puzzler
+import multiprocessing as mp
 
 from tqdm import tqdm
 
@@ -133,14 +134,40 @@ def output_tabs(args):
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
-        tabs_computer = TabsComputer(args.puzzle, args.refine)
+        if args.num_workers:
+            src_q = mp.Queue()
+            dst_q = mp.Queue()
 
-        for dst in tqdm(pieces, ascii=True):
-            writer.writerows(tabs_computer.compute_rows_for_dst(dst.label))
+            workers = [mp.Process(target=worker, args=(args, src_q, dst_q)) for _ in range(args.num_workers)]
+            for p in workers:
+                p.start()
+
+            for p in pieces:
+                src_q.put(p.label)
+                
+            num_jobs = len(pieces)
+            pbar = tqdm(total=num_jobs, ascii=True)
+            while num_jobs > 0:
+                job = dst_q.get()
+                num_jobs -= 1
+                pbar.update()
+                writer.writerows(job)
+
+            for _ in workers:
+                src_q.put(None)
+
+            for p in workers:
+                p.join()
+
+        else:
+            tabs_computer = TabsComputer(args.puzzle, args.refine)
+            for dst in tqdm(pieces, ascii=True):
+                writer.writerows(tabs_computer.compute_rows_for_dst(dst.label))
 
 def add_parser(commands):
 
     parser_tabs = commands.add_parser("tabs", help="Output a CSV enumerating all possible tab matches")
     parser_tabs.add_argument("-o", "--output", help="output csv path")
     parser_tabs.add_argument("-r", "--refine", help="number of refinement passes", default=0, type=int)
+    parser_tabs.add_argument("-n", "--num-workers",  help="number of workers", default=0, type=int)
     parser_tabs.set_defaults(func=output_tabs)
