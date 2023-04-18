@@ -168,7 +168,6 @@ class TabAligner:
             self.kdtree = scipy.spatial.KDTree(self.dst.points)
         distance, dst_indices = self.kdtree.query(src_points)
 
-        print(f"{self.dst.points=} {dst_indices=}")
         dst_normals = self.compute_normals(self.dst.points, dst_indices)
         src_normals = src_coords.get_transform().apply_n2(self.compute_normals(src.points, src_indices))
         dot_product = np.sum(dst_normals * src_normals, axis=1)

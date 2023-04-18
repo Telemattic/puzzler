@@ -830,7 +830,7 @@ def add_parser(commands):
     parser_align.add_argument("-g", "--geometry", help="geometry file")
     parser_align.set_defaults(func=align_ui)
 
-    parser_tabs = commands.add_parser("tabs", help="Output a CSV enumerating all possible tab matches")
-    parser_tabs.add_argument("-o", "--output", help="output csv path")
-    parser_tabs.add_argument("-r", "--refine", help="number of refinement passes", default=0, type=int)
-    parser_tabs.set_defaults(func=output_tabs)
+    # parser_tabs = commands.add_parser("tabs", help="Output a CSV enumerating all possible tab matches")
+    # parser_tabs.add_argument("-o", "--output", help="output csv path")
+    # parser_tabs.add_argument("-r", "--refine", help="number of refinement passes", default=0, type=int)
+    # parser_tabs.set_defaults(func=output_tabs)
