@@ -9,15 +9,15 @@ import xml.etree.ElementTree as ET
 
 @dataclass
 class Line:
-    v0: tuple[float,float]
-    v1: tuple[float,float]
+    v0: "tuple[float,float]"
+    v1: "tuple[float,float]"
 
 @dataclass
 class Spline:
-    p0: tuple[float,float]
-    p1: tuple[float,float]
-    p2: tuple[float,float]
-    p3: tuple[float,float]
+    p0: "tuple[float,float]"
+    p1: "tuple[float,float]"
+    p2: "tuple[float,float]"
+    p3: "tuple[float,float]"
 
 class Tokens:
 

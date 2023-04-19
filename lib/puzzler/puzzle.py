@@ -18,7 +18,7 @@ class Puzzle:
         @dataclass
         class Source:
             id: str
-            rect: tuple[int, int, int, int]
+            rect: "tuple[int, int, int, int]"
 
         def __post_init__(self):
             if self.points is not None and len(self.points):
@@ -31,13 +31,13 @@ class Puzzle:
         label:  str
         source: Source
         points: np.array
-        tabs:   list[puzzler.feature.Tab]
-        edges:  list[puzzler.feature.Edge]
-        bbox:   tuple[np.array, np.array] = field(init=False)
-        radius: float = field(init=False)
+        tabs:   "list[puzzler.feature.Tab]"
+        edges:  "list[puzzler.feature.Edge]"
+        bbox:   "tuple[np.array, np.array]" = field(init=False)
+        radius: "float" = field(init=False)
 
-    scans: dict[str, Scan]
-    pieces: list[Piece]
+    scans: "dict[str, Scan]"
+    pieces: "list[Piece]"
 
 class Parser:
 

@@ -22,14 +22,14 @@ def pairwise_circular(iterable):
 class BorderConstraint:
     """BorderConstraint associates an edge, identified by a (label, edge_no) tuple,
 with an axis"""
-    edge: tuple[str,int]
+    edge: "tuple[str,int]"
     axis: int
 
 @dataclass
 class TabConstraint:
     """TabConstraint associates a pair of tabs, each identified by a (piece_label, tab_no) tuple"""
-    a: tuple[str,int]
-    b: tuple[str,int]
+    a: "tuple[str,int]"
+    b: "tuple[str,int]"
 
 AffineTransform = puzzler.align.AffineTransform
 
@@ -37,7 +37,7 @@ AffineTransform = puzzler.align.AffineTransform
 class Geometry:
     width: float
     height: float
-    coords: dict[str,AffineTransform]
+    coords: "dict[str,AffineTransform]"
 
 class BorderSolver:
 
