@@ -1,4 +1,5 @@
 import collections
+import csv
 import cv2 as cv
 import itertools
 import math
@@ -698,7 +699,28 @@ class AlignTk:
         src.coords = puzzler.align.AffineTransform(src_coords.angle, src_coords.dxdy + dst.coords.dxdy)
 
         self.render()
-                
+
+def load_buddies(path):
+    
+    buddies = dict()
+    with open(path, newline='') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            dst = (row['dst_label'], int(row['dst_tab_no']))
+            src = (row['src_label'], int(row['src_tab_no']))
+            rank = int(row['rank'])
+            if rank == 1:
+                buddies[dst] = src
+
+    return buddies
+
+def test_buddies(pieces, buddies_path):
+
+    buddies = load_buddies(buddies_path)
+    buddies = [(a, b) for a, b in buddies.items() if buddies.get(b) == a]
+    
+    bb = puzzler.align.BosomBuddies(pieces, buddies)
+    
 def align_ui(args):
 
     puzzle = puzzler.file.load(args.puzzle)
@@ -712,10 +734,11 @@ def align_ui(args):
         if len(p.edges) == 2:
             p.edges = p.edges[::-1]
 
-    labels = set(args.labels)
+    if args.buddies:
+        test_buddies(by_label, args.buddies)
+        return
 
-    if args.edges:
-        labels |= set('A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 B1 B11 C1 C11 D1 D11 E1 E12 F1 F11 G1 G11 H1 H11 I1 I2 I3 I4 I5 I6 I7 I8 I9 I10 I11'.split())
+    labels = set(args.labels)
 
     if not labels:
         labels |= set(by_label.keys())
@@ -737,6 +760,6 @@ def add_parser(commands):
 
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
     parser_align.add_argument("labels", nargs='*')
-    parser_align.add_argument("-e", "--edges", help="add all edges", action='store_true')
     parser_align.add_argument("-g", "--geometry", help="geometry file")
+    parser_align.add_argument("-b", "--buddies", help="buddy file")
     parser_align.set_defaults(func=align_ui)

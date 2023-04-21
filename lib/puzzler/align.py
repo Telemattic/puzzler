@@ -3,6 +3,7 @@ import math
 import numpy as np
 import cv2 as cv
 import scipy
+from dataclasses import dataclass, field
 
 class AffineTransform:
 
@@ -561,3 +562,78 @@ class MultiTargetError:
             print(f"  <MTE2> {inner_sse=:.1f} {sse=:.1f} {num_points=}")
 
         return sse / num_points
+
+class BosomBuddies:
+
+    @dataclass
+    class Buddies:
+        dst: tuple[str,int]
+        src: tuple[str,int]
+        src_coords: AffineTransform
+        signatures: list[tuple] = field(default_factory=list)
+
+    def __init__(self, pieces, buddies):
+        self.pieces = pieces
+        self.buddies = [self.make_buddies(dst, src) for dst, src in buddies]
+
+    def make_buddies(self, dst, src):
+
+        dst_label, dst_tab_no = dst
+        dst_piece = self.pieces[dst_label]
+
+        src_label, src_tab_no = src
+        src_piece = self.pieces[src_label]
+        
+        aligner = TabAligner(dst_piece)
+        src_coords = aligner.compute_alignment(dst_tab_no, src_piece, src_tab_no, refine=2)[1]
+        
+        buddies = BosomBuddies.Buddies(dst, src, src_coords)
+        
+        if s := self.make_signature(buddies, dst_tab_no-1, src_tab_no+1):
+            buddies.signatures.append(s)
+        if s := self.make_signature(buddies, dst_tab_no+1, src_tab_no-1):
+            # reverse the signature so they are consistently CW 
+            buddies.signatures.append(((s[0][2], s[0][1], s[0][0]), (s[1][1], s[1][0])))
+
+        print(buddies)
+
+        return buddies
+
+    def make_signature(self, buddies, dst_tab_no, src_tab_no):
+
+        dst_label = buddies.dst[0]
+        src_label = buddies.src[0]
+        
+        dst_piece = self.pieces[dst_label]
+        src_piece = self.pieces[src_label]
+
+        dst_tab_no %= len(dst_piece.tabs)
+        src_tab_no %= len(src_piece.tabs)
+
+        src_xform = buddies.src_coords.get_transform()
+
+        dst_tab_normal = self.get_tab_normal(dst_piece, dst_tab_no)
+        src_tab_normal = src_xform.apply_n2(self.get_tab_normal(src_piece, src_tab_no))
+        
+        dot_product = np.sum(dst_tab_normal * src_tab_normal)
+        if dot_product < .5:
+            return None
+
+        dst_tab = dst_piece.tabs[dst_tab_no]
+        src_tab = src_piece.tabs[src_tab_no]
+
+        d = np.linalg.norm(dst_tab.ellipse.center - src_xform.apply_v2(src_tab.ellipse.center))
+        return ((dst_tab.indent, d, src_tab.indent), ((dst_label, dst_tab_no), (src_label, src_tab_no)))
+
+    def get_tab_normal(self, piece, tab_no):
+        t = piece.tabs[tab_no]
+        v = piece.points[np.array(t.tangent_indexes)] - t.ellipse.center
+        v = v / np.linalg.norm(v, axis=1)
+        v = np.sum(v, axis=0)
+        v = v / np.linalg.norm(v)
+        if not t.indent:
+            v = -v
+        return v
+
+    def score_match(self, dst, dst_sig_no, src, src_sig_no):
+        pass
