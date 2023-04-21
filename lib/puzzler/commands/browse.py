@@ -4,6 +4,7 @@ import numpy as np
 import puzzler
 import puzzler.renderer.canvas
 import puzzler.renderer.cairo
+import puzzler.renderer.opengl
 import re
 
 from tkinter import *
@@ -28,9 +29,9 @@ class Browser:
             self.bbox   = tuple(ll.tolist() + ur.tolist())
             self.piece  = piece
 
-    def __init__(self, puzzle, use_cairo):
+    def __init__(self, puzzle, renderer):
 
-        self.use_cairo = use_cairo
+        self.renderer = renderer
         
         def to_row(s):
             row = 0
@@ -90,9 +91,12 @@ class Browser:
 
     def render(self, canvas, camera):
 
-        if self.use_cairo:
+        if self.renderer == 'opengl':
+            r = puzzler.renderer.opengl.OpenGLRenderer(canvas)
+        elif self.renderer == 'cairo':
             r = puzzler.renderer.cairo.CairoRenderer(canvas)
         else:
+            canvas.delete('all')
             r = puzzler.renderer.canvas.CanvasRenderer(canvas)
 
         r.transform(camera.matrix)
@@ -132,14 +136,15 @@ class Browser:
                     r.draw_lines(edge.line.pts, width=4, fill='pink')
 
             r.draw_polygon(o.poly, outline='black', fill='', width=1)
+            # r.draw_polygon(p.points, outline='black', fill='', width=1)
 
         r.draw_text(np.zeros(2), text=p.label, font=self.font, fill='black')
 
 class BrowseTk:
 
-    def __init__(self, parent, puzzle, use_cairo=False):
+    def __init__(self, parent, puzzle, renderer):
 
-        self.browser = Browser(puzzle, use_cairo)
+        self.browser = Browser(puzzle, renderer)
 
         w, h = self.browser.width, self.browser.height
 
@@ -151,8 +156,14 @@ class BrowseTk:
         
         self.frame.grid_rowconfigure(0, weight=1)
         self.frame.grid_columnconfigure(0, weight=1)
-        
-        self.canvas = Canvas(self.frame, width=w, height=h, background='white', highlightthickness=0)
+
+        if renderer == 'opengl':
+            self.canvas = puzzler.renderer.opengl.OpenGLFrame(
+                self.frame, width=w, height=h, background='white', highlightthickness=0)
+        else:
+            self.canvas = Canvas(
+                self.frame, width=w, height=h, background='white', highlightthickness=0)
+            
         self.canvas.grid(column=0, row=0, rowspan=2, sticky=(N, W, E, S))
 
         self.canvas.bind("<MouseWheel>", self.mouse_wheel)
@@ -170,7 +181,8 @@ class BrowseTk:
 
     def canvas_configure(self, event):
         self.camera.viewport = (event.width, event.height)
-        self.render()
+        if self.browser.renderer != 'opengl':
+            self.render()
 
     def mouse_wheel(self, event):
         f = pow(1.2, 1 if event.delta > 0 else -1)
@@ -199,8 +211,6 @@ class BrowseTk:
 
     def render(self):
 
-        self.canvas.delete('all')
-
         self.displayed_image = self.browser.render(self.canvas, self.camera)
 
 def browse(args):
@@ -208,13 +218,17 @@ def browse(args):
     puzzle = puzzler.file.load(args.puzzle)
     
     root = Tk()
-    ui = BrowseTk(root, puzzle, args.cairo)
+    ui = BrowseTk(root, puzzle, args.renderer)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: browse")
     root.mainloop()
 
 def add_parser(commands):
     parser_browse = commands.add_parser("browse", help="browse pieces")
-    parser_browse.add_argument("-c", "--cairo", action='store_const', const=True, default=False,
-                               help="use cairo rendering (default: tk)")
+    parser_browse.add_argument("-c", "--cairo", dest='renderer', action='store_const', const='cairo',
+                               default='tk', help="use cairo rendering (default: tk)")
+    parser_browse.add_argument("-g", "--opengl", dest='renderer', action='store_const', const='opengl',
+                               default='tk', help="use opengl rendering (default: tk)")
+    parser_browse.add_argument("-t", "--tk",  dest='renderer', action='store_const', const='tk',
+                               default='tk', help="use tk rendering (default: tk)")
     parser_browse.set_defaults(func=browse)
