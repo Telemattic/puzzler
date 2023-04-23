@@ -112,12 +112,36 @@ class DistanceImage:
 
         return self.dist_image[rows, cols]
 
+class NormalsComputer:
+
+    def __init__(self, baseline = 10):
+        self.baseline = baseline
+
+    def __call__(self, points, indices):
+
+        n = len(points)
+
+        p0 = points[(indices - self.baseline) % n]
+        p1 = points[(indices + self.baseline) % n]
+        v = p1 - p0
+        l = np.linalg.norm(v, axis=1)
+        # l can be zero when the perimeter is degenerate and the same
+        # (x,y) appears multiple times in it, e.g. see tab 3 of piece
+        # N34 from the 1000-piece puzzle
+        l = np.where(l > 0., l, 1.)
+        v = v / l[:,np.newaxis]
+
+        normals = np.array((-v[:,1], v[:,0])).T
+        
+        return normals
+
 class TabAligner:
 
     def __init__(self, dst):
         self.dst = dst
         self.kdtree = None
         self.distance_image = DistanceImage.Factory(dst)
+        self.compute_normals = NormalsComputer()
         
     def compute_alignment(self, dst_tab_no, src, src_tab_no, refine=0):
 
@@ -237,26 +261,6 @@ class TabAligner:
 
         return mid
 
-    @staticmethod
-    def compute_normals(points, indices):
-
-        baseline = 10 # ?
-        n = len(points)
-
-        p0 = points[(indices - baseline) % n]
-        p1 = points[(indices + baseline) % n]
-        v = p1 - p0
-        l = np.linalg.norm(v, axis=1)
-        # l can be zero when the perimeter is degenerate and the same
-        # (x,y) appears multiple times in it, e.g. see tab 3 of piece
-        # N34 from the 1000-piece puzzle
-        l = np.where(l > 0., l, 1.)
-        v = v / l[:,np.newaxis]
-
-        normals = np.array((-v[:,1], v[:,0])).T
-        
-        return normals
-        
     def measure_fit_fast(self, src, src_tab_no, src_coords):
         
         sl, sr = src.tabs[src_tab_no].tangent_indexes
@@ -566,43 +570,43 @@ class MultiTargetError:
 class BosomBuddies:
 
     @dataclass
-    class Buddies:
-        dst: tuple[str,int]
-        src: tuple[str,int]
-        src_coords: AffineTransform
-        signatures: list[tuple] = field(default_factory=list)
+    class Raft:
+        coords: dict[str,AffineTransform]
+        joints: list[tuple]
+        traces: list[tuple]
 
     def __init__(self, pieces, buddies):
         self.pieces = pieces
-        self.buddies = [self.make_buddies(dst, src) for dst, src in buddies]
+        self.rafts = [self.make_raft(dst, src) for dst, src in buddies]
 
-    def make_buddies(self, dst, src):
+    def make_raft(self, dst, src):
 
         dst_label, dst_tab_no = dst
         dst_piece = self.pieces[dst_label]
+        dst_coords = AffineTransform()
 
         src_label, src_tab_no = src
         src_piece = self.pieces[src_label]
         
         aligner = TabAligner(dst_piece)
         src_coords = aligner.compute_alignment(dst_tab_no, src_piece, src_tab_no, refine=2)[1]
+
+        raft = BosomBuddies.Raft({dst_label: dst_coords, src_label: src_coords}, [(dst, src)], [])
         
-        buddies = BosomBuddies.Buddies(dst, src, src_coords)
-        
-        if s := self.make_signature(buddies, dst_tab_no-1, src_tab_no+1):
-            buddies.signatures.append(s)
-        if s := self.make_signature(buddies, dst_tab_no+1, src_tab_no-1):
-            # reverse the signature so they are consistently CW 
-            buddies.signatures.append(((s[0][2], s[0][1], s[0][0]), (s[1][1], s[1][0])))
+        if t := self.make_trace(raft, (dst_label, dst_tab_no-1), (src_label, src_tab_no+1)):
+            raft.traces.append(t)
+            
+        if t := self.make_trace(raft, (src_label, src_tab_no-1), (dst_label, dst_tab_no+1)):
+            raft.traces.append(t)
 
-        print(buddies)
+        # print(raft)
 
-        return buddies
+        return raft
 
-    def make_signature(self, buddies, dst_tab_no, src_tab_no):
+    def make_trace(self, raft, dst, src):
 
-        dst_label = buddies.dst[0]
-        src_label = buddies.src[0]
+        dst_label, dst_tab_no = dst
+        src_label, src_tab_no = src
         
         dst_piece = self.pieces[dst_label]
         src_piece = self.pieces[src_label]
@@ -610,9 +614,10 @@ class BosomBuddies:
         dst_tab_no %= len(dst_piece.tabs)
         src_tab_no %= len(src_piece.tabs)
 
-        src_xform = buddies.src_coords.get_transform()
+        dst_xform = raft.coords[dst_label].get_transform()
+        src_xform = raft.coords[src_label].get_transform()
 
-        dst_tab_normal = self.get_tab_normal(dst_piece, dst_tab_no)
+        dst_tab_normal = dst_xform.apply_n2(self.get_tab_normal(dst_piece, dst_tab_no))
         src_tab_normal = src_xform.apply_n2(self.get_tab_normal(src_piece, src_tab_no))
         
         dot_product = np.sum(dst_tab_normal * src_tab_normal)
@@ -622,7 +627,8 @@ class BosomBuddies:
         dst_tab = dst_piece.tabs[dst_tab_no]
         src_tab = src_piece.tabs[src_tab_no]
 
-        d = np.linalg.norm(dst_tab.ellipse.center - src_xform.apply_v2(src_tab.ellipse.center))
+        d = np.linalg.norm(dst_xform.apply_v2(dst_tab.ellipse.center)
+                           - src_xform.apply_v2(src_tab.ellipse.center))
         return ((dst_tab.indent, d, src_tab.indent), ((dst_label, dst_tab_no), (src_label, src_tab_no)))
 
     def get_tab_normal(self, piece, tab_no):
@@ -635,5 +641,197 @@ class BosomBuddies:
             v = -v
         return v
 
-    def score_match(self, dst, dst_sig_no, src, src_sig_no):
+    def get_trace_segments(self, raft, trace_no):
         pass
+
+    def score_match(self, dst, dst_trace_no, src, src_trace_no):
+        pass
+
+class RaftAligner:
+
+    def __init__(self, pieces, dst_raft, dst_trace_no):
+
+        self.pieces = pieces
+        self.dst_raft = dst_raft
+        self.dst_trace_no = dst_trace_no
+        self.dst_points = self.get_points_for_trace(dst_raft, dst_trace_no)
+        self.compute_normals = NormalsComputer()
+        self.raft_distance_computer = RaftDistanceComputer(self.pieces, self.dst_raft)
+
+    def compute_alignment_for_trace(self, src_raft, src_trace_no):
+
+        # flip the returned points to make the sequence consistent
+        # with the dst trace (all traces are wound CW, so aligning two
+        # traces requires reversing one of them)
+        src_points = np.flipud(self.get_points_for_trace(src_raft, src_trace_no))
+
+        dst_vec = self.dst_points[-1] - self.dst_points[0]
+        dst_angle = np.arctan2(dst_vec[1], dst_vec[0])
+
+        src_vec = src_points[-1] - src_points[0]
+        src_angle = np.arctan2(src_vec[1], src_vec[0])
+
+        src_points_rotated = AffineTransform(dst_angle-src_angle, (0,0)).get_transform().apply_v2(src_points)
+
+        r, x, y = compute_rigid_transform(src_points_rotated, self.dst_points)
+
+        # with np.printoptions(precision=1):
+        #     print(f"{dst_angle=:.3f} {src_angle=:.3f}")
+        #     print(f"{src_points=}")
+        #     print(f"{src_points_rotated=}")
+        #     print(f"{r=:.3f} {x=:.1f} {y=:.1f}")
+
+        r += dst_angle - src_angle
+
+        return AffineTransform(r, (x,y))
+
+    def get_points_for_trace(self, raft, trace_no):
+        points = []
+        for label, tab_no in raft.traces[trace_no][1]:
+            piece = self.pieces[label]
+            coords = raft.coords[label]
+            pt = piece.tabs[tab_no].ellipse.center
+            points.append(coords.get_transform().apply_v2(pt))
+
+        return np.array(points)
+
+    def measure_fit_for_trace(self, src_raft, src_trace_no, src_coords):
+
+        sse = 0.
+        npoints = 0
+        
+        src_labels = set(label for label, _ in src_raft.traces[src_trace_no][1])
+        for src_label in src_labels:
+            src_piece = self.pieces[src_label]
+            src_xform = src_coords.get_transform().multiply(src_raft.coords[src_label].get_transform().matrix)
+            fit_sse, fit_npoints = self.measure_fit_for_piece(src_piece, src_xform)
+            sse += fit_sse
+            npoints += fit_npoints
+
+        return sse / npoints
+
+    def measure_fit_for_piece(self, src_piece, src_xform):
+
+        close_cutoff = 10
+        medium_cutoff = 50
+        
+        n = len(src_piece.points)
+        s = 50 # take every s'th point, chosen arbitrarily
+        src_indices = np.arange(0, n, s)
+        src_points = src_xform.apply_v2(src_piece.points[src_indices])
+        src_normals = src_xform.apply_n2(self.compute_normals(src_piece.points, src_indices))
+
+        distance, dst_normals = self.raft_distance_computer.query_distance_and_normals(src_points)
+
+        # we are interested in parallel surfaces, i.e. places where
+        # surface normals of the two pieces are pointing in opposite
+        # directions, so the dot product is ~ -1
+        dot_product = np.sum(dst_normals * src_normals, axis=1)
+
+        # we want to always count overlaps, as they represent a bad state
+        #
+        # distance is signed, with points overlapping a piece having a
+        # negative distance (more negative is more interior), so this
+        # will always include interior points, which is exactly what
+        # we want
+        is_close_or_interior = (distance < close_cutoff) | ((distance < medium_cutoff) & (dot_product < -0.9))
+
+        distance = distance[np.nonzero(is_close_or_interior)]
+        sse = np.sum(distance ** 2)
+        npoints = len(distance)
+        return (sse, npoints)
+
+class RaftDistanceComputer:
+
+    def __init__(self, pieces, raft):
+
+        self.pieces = pieces
+        self.raft = raft
+        self.images = dict()
+        self.kdtrees = dict()
+        self.max_dist = 256
+        self.compute_normals = NormalsComputer()
+
+    def query_distance(self, points):
+
+        min_distance = np.full(len(points), self.max_dist)
+        
+        center, radius = self.get_bounding_circle(points)
+        for dst_label in self.get_overlapping_pieces_in_raft(center, radius + self.max_dist):
+
+            xform = self.get_transform_to_dst_frame(dst_label)
+            distance = self.get_distance_image(dst_label).query(xform.apply_v2(points))
+            min_distance = np.minimum(distance, min_distance)
+
+        return min_distance
+
+    def query_distance_and_normals(self, points):
+
+        min_distance = np.full(len(points), self.max_dist)
+        dst_normals = np.zeros((len(points),2))
+        
+        center, radius = self.get_bounding_circle(points)
+        for dst_label in self.get_overlapping_pieces_in_raft(center, radius + self.max_dist):
+
+            xform = self.get_transform_to_dst_frame(dst_label)
+            points2 = xform.apply_v2(points)
+            image_distance = self.get_distance_image(dst_label).query(points2)
+            ii = np.nonzero(image_distance < min_distance)
+            if 0 == len(ii):
+                continue
+
+            kdtree_distance, dst_indices = self.get_distance_kdtree(dst_label).query(points2[ii])
+
+            # we discard the kdtree_distance, as we want the signed
+            # distance, which we can only get from the distance
+            # image.
+            #
+            # We could take kdtree_distance * np.sign(image_distance)
+            # if we cared to get a more accurate signed distance
+            min_distance[ii] = image_distance[ii] 
+            dst_normals[ii] = self.compute_normals(self.pieces[dst_label].points, dst_indices)
+
+        return min_distance, dst_normals
+
+    @staticmethod
+    def get_bounding_circle(points):
+        bbox = (np.min(points, axis=0), np.max(points, axis=0))
+        center = 0.5 * (bbox[0] + bbox[1])
+        radius = 0.5 * np.linalg.norm(bbox[1] - bbox[0])
+        return (center, radius)
+
+    def get_overlapping_pieces_in_raft(self, src_center, src_radius):
+        retval = []
+        
+        assert len(self.raft.coords) <= 2, "reminder to make this not so dumb"
+        for dst_label, dst_coords in self.raft.coords.items():
+            dst_piece = self.pieces[dst_label]
+            dst_center = dst_coords.dxdy
+            distance = np.linalg.norm(src_center - dst_center)
+            if distance < src_radius + dst_piece.radius:
+                retval.append(dst_label)
+
+        return retval
+
+    def get_transform_to_dst_frame(self, dst_label):
+
+        coords = self.raft.coords[dst_label]
+        
+        xform = puzzler.render.Transform()
+        xform.rotate(-coords.angle).translate(-coords.dxdy)
+
+        return xform
+
+    def get_distance_image(self, dst_label):
+        if image := self.images.get(dst_label):
+            return image
+        image = DistanceImage.Factory(self.pieces[dst_label])
+        self.images[dst_label] = image
+        return image
+
+    def get_distance_kdtree(self, dst_label):
+        if kdtree := self.kdtrees.get(dst_label):
+            return kdtree
+        kdtree = scipy.spatial.KDTree(self.pieces[dst_label].points)
+        self.kdtrees[dst_label] = kdtree
+        return kdtree

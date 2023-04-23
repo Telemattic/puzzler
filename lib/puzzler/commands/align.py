@@ -720,6 +720,25 @@ def test_buddies(pieces, buddies_path):
     buddies = [(a, b) for a, b in buddies.items() if buddies.get(b) == a]
     
     bb = puzzler.align.BosomBuddies(pieces, buddies)
+
+    dst_raft = None
+    src_raft = None
+    for i in bb.rafts:
+        if "C1" in i.coords and "D1" in i.coords:
+            dst_raft = i
+        if "C2" in i.coords and "D2" in i.coords:
+            src_raft = i
+
+    print(f"{dst_raft=}")
+    print(f"{src_raft=}")
+
+    align_rafts = puzzler.align.RaftAligner(pieces, dst_raft, 0)
+    for i in range(len(src_raft.traces)):
+        print(f"measuring fit for trace {i}...")
+        src_coords = align_rafts.compute_alignment_for_trace(src_raft, i)
+        print(f"{src_coords=}")
+        mse = align_rafts.measure_fit_for_trace(src_raft, i, src_coords)
+        print(f"{mse=}")
     
 def align_ui(args):
 
