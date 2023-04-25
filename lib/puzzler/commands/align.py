@@ -609,6 +609,13 @@ class AlignTk:
         e1 = ttk.Entry(cf2, width=16, textvariable=self.var_show_tab_alignment)
         e1.grid(column=2, row=0)
 
+        b7 = ttk.Button(cf2, text='Show Raft Alignment', command=self.show_raft_alignment)
+        b7.grid(column=3, row=0)
+
+        self.var_show_raft_alignment = StringVar(value='')
+        e2 = ttk.Entry(cf2, width=32, textvariable=self.var_show_raft_alignment)
+        e2.grid(column=4, row=0)
+
         self.render_full = False
         self.render()
 
@@ -700,6 +707,52 @@ class AlignTk:
 
         self.render()
 
+    def show_raft_alignment(self):
+        s = self.var_show_raft_alignment.get().strip()
+        v = s.split(',')
+        
+        dst_raft_name = v[0]
+        dst_trace_no = int(v[1])
+        src_raft_name = v[2]
+        src_trace_no = int(v[3])
+
+        def frob_raft_name(s):
+            m = re.match("^([A-Z]+\d+):(\d+)=([A-Z]+\d+):(\d+)$", s)
+            return ((m[1], int(m[2])), (m[3], int(m[4])))
+
+        pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
+
+        bb = puzzler.align.BosomBuddies(pieces, [])
+
+        dst_raft = bb.make_raft(*frob_raft_name(dst_raft_name))
+        src_raft = bb.make_raft(*frob_raft_name(src_raft_name))
+
+        print(f"{dst_raft=}")
+        print(f"{src_raft=}")
+
+        align_rafts = puzzler.align.RaftAligner(pieces, dst_raft, dst_trace_no)
+        src_coords = align_rafts.compute_alignment_for_trace(src_raft, src_trace_no)
+        mse = align_rafts.measure_fit_for_trace(src_raft, src_trace_no, src_coords)
+
+        print(f"{mse=:.1f}")
+
+        dst_coords = puzzler.align.AffineTransform(0., (0., 2000.))
+        
+        pieces = dict([(i.piece.label, i) for i in self.pieces])
+
+        for label, coords in dst_raft.coords.items():
+            curr_m = dst_coords.get_transform().matrix
+            prev_m = coords.get_transform().matrix
+            pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+            
+        for label, coords in src_raft.coords.items():
+            curr_m = puzzler.align.AffineTransform(
+                src_coords.angle, src_coords.dxdy + dst_coords.dxdy).get_transform().matrix
+            prev_m = coords.get_transform().matrix
+            pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+
+        self.render()
+        
 def load_buddies(path):
     
     buddies = dict()
@@ -717,28 +770,47 @@ def load_buddies(path):
 def test_buddies(pieces, buddies_path):
 
     buddies = load_buddies(buddies_path)
-    buddies = [(a, b) for a, b in buddies.items() if buddies.get(b) == a]
+    buddies = [(a, b) for a, b in buddies.items() if buddies.get(b) == a and a > b]
     
     bb = puzzler.align.BosomBuddies(pieces, buddies)
 
-    dst_raft = None
-    src_raft = None
-    for i in bb.rafts:
-        if "C1" in i.coords and "D1" in i.coords:
-            dst_raft = i
-        if "C2" in i.coords and "D2" in i.coords:
-            src_raft = i
+    def format_raft(raft):
+        return '_'.join(f"{a}:{b}={c}:{d}" for (a, b), (c, d) in raft.joints)
 
-    print(f"{dst_raft=}")
-    print(f"{src_raft=}")
+    def are_traces_compatible(a, b):
+        sigA = a[0]
+        sigB = b[0]
+        return sigA[0] == (not sigB[2]) and sigA[2] == (not sigB[0])
 
-    align_rafts = puzzler.align.RaftAligner(pieces, dst_raft, 0)
-    for i in range(len(src_raft.traces)):
-        print(f"measuring fit for trace {i}...")
-        src_coords = align_rafts.compute_alignment_for_trace(src_raft, i)
-        print(f"{src_coords=}")
-        mse = align_rafts.measure_fit_for_trace(src_raft, i, src_coords)
-        print(f"{mse=}")
+    f = open('ranked_quads.csv', 'w', newline='')
+    writer = csv.DictWriter(f, fieldnames='dst_raft dst_trace_no src_raft src_trace_no mse rank'.split())
+    writer.writeheader()
+
+    for dst_raft in bb.rafts:
+        for dst_trace_no, dst_trace in enumerate(dst_raft.traces):
+            align_rafts = puzzler.align.RaftAligner(pieces, dst_raft, dst_trace_no)
+
+            rows = []
+            for src_raft in bb.rafts:
+                if src_raft == dst_raft:
+                    continue
+                for src_trace_no, src_trace in enumerate(src_raft.traces):
+                    if not are_traces_compatible(dst_raft.traces[0], src_trace):
+                        continue
+                    src_coords = align_rafts.compute_alignment_for_trace(src_raft, src_trace_no)
+                    mse = align_rafts.measure_fit_for_trace(src_raft, src_trace_no, src_coords)
+
+                    rows.append({'dst_raft': format_raft(dst_raft),
+                                 'dst_trace_no': dst_trace_no,
+                                 'src_raft': format_raft(src_raft),
+                                 'src_trace_no': src_trace_no,
+                                 'mse': mse,
+                                 'rank': 0})
+
+            for i, row in enumerate(sorted(rows, key=operator.itemgetter('mse')), start=1):
+                row['rank'] = i
+
+            writer.writerows(rows)
     
 def align_ui(args):
 
