@@ -721,12 +721,13 @@ class RaftAligner:
         src_points = src_xform.apply_v2(src_piece.points[src_indices])
         src_normals = src_xform.apply_n2(self.compute_normals(src_piece.points, src_indices))
 
-        distance, dst_normals = self.raft_distance_computer.query_distance_and_normals(src_points)
+        dst = self.raft_distance_computer.query_distance_and_normals(src_points)
+        distance = dst['distance']
 
         # we are interested in parallel surfaces, i.e. places where
         # surface normals of the two pieces are pointing in opposite
         # directions, so the dot product is ~ -1
-        dot_product = np.sum(dst_normals * src_normals, axis=1)
+        dot_product = np.sum(dst['normals'] * src_normals, axis=1)
 
         # we want to always count overlaps, as they represent a bad state
         #
@@ -768,7 +769,10 @@ class RaftDistanceComputer:
     def query_distance_and_normals(self, points):
 
         min_distance = np.full(len(points), self.max_dist)
+        dst_points = np.zeros((len(points), 2))
         dst_normals = np.zeros((len(points),2))
+        dst_labels = []
+        dst_label_nos = np.zeros(len(points), dtype=np.int32)
         
         center, radius = self.get_bounding_circle(points)
         for dst_label in self.get_overlapping_pieces_in_raft(center, radius + self.max_dist):
@@ -788,10 +792,17 @@ class RaftDistanceComputer:
             #
             # We could take kdtree_distance * np.sign(image_distance)
             # if we cared to get a more accurate signed distance
-            min_distance[ii] = image_distance[ii] 
+            min_distance[ii] = image_distance[ii]
+            dst_label_nos[ii] = len(dst_labels)
+            dst_labels.append(dst_label)
+            dst_points[ii] = self.pieces[dst_label].points[dst_indices]
             dst_normals[ii] = self.compute_normals(self.pieces[dst_label].points, dst_indices)
 
-        return min_distance, dst_normals
+        return {'points': dst_points,
+                'normals': dst_normals,
+                'distance': min_distance,
+                'dst_labels': dst_labels,
+                'dst_label_nos': dst_label_nos}
 
     @staticmethod
     def get_bounding_circle(points):
