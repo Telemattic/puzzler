@@ -48,7 +48,7 @@ class CairoRenderer(puzzler.render.Renderer):
     def restore(self):
         self.context.restore()
 
-    def draw_polygon(self, points, fill=None, outline=(0,0,0), width=1):
+    def draw_polygon(self, points, fill=None, outline=(0,0,0), width=1, tags=None):
 
         ctx = self.context
 
