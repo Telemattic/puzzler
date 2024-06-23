@@ -145,7 +145,7 @@ class TabComputer:
                     print("  ellipse too eccentric, rejecting")
                 continue
 
-            if e.semi_major > 90 and False:
+            if e.semi_major > 90:
                 if self.verbose:
                     print("   ellipse too big, rejecting")
                 continue
@@ -424,7 +424,7 @@ class EdgeComputer:
                     print(f"done: too short relative to longest candidate")
                 break
 
-            if l < len_hull * .15:
+            if l < len_hull * .10:
                 if self.verbose:
                     print(f"done: too short relative to convex hull (ratio={l/len_hull:.3f})")
                 break
@@ -445,6 +445,11 @@ class EdgeComputer:
             if np.linalg.norm(pt1 - ptA) < np.linalg.norm(pt0 - ptA):
                 pt0, pt1 = pt1, pt0
             line = puzzler.geometry.Line(np.array((pt0, pt1)))
+
+            if self.is_tab_aligned(tabs, line):
+                if self.verbose:
+                    print(f"skipping, is approximately aligned with one or more tabs")
+                continue
 
             if self.verbose:
                 print(f"adding {line} from index {a} to {b}")
@@ -473,6 +478,29 @@ class EdgeComputer:
                 return True
 
         return False
+
+    def is_tab_aligned(self, tabs, line):
+
+        v = line.pts[1] - line.pts[0]
+        v = v / np.linalg.norm(v)
+        line_normal = np.array((-v[1], v[0]))
+
+        for t in tabs:
+            tab_normal = self.get_tab_direction(t)
+            dot_product = np.sum(line_normal * tab_normal)
+            if dot_product > 0.7:
+                return True
+
+        return False
+
+    def get_tab_direction(self, t):
+        v = self.perimeter.points[np.array(t['tangents'])] - t['ellipse'].center
+        v = v / np.linalg.norm(v, axis=1)
+        v = np.sum(v, axis=0)
+        v = v / np.linalg.norm(v)
+        if not t['indent']:
+            v = -v
+        return v
 
     def points_for_line(self, a, b):
 
