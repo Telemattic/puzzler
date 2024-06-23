@@ -5,8 +5,10 @@ from contextlib import contextmanager
 
 class Transform:
 
-    def __init__(self):
-        self.matrix = np.identity(3)
+    def __init__(self, m=None):
+        if m is None:
+            m = np.identity(3)
+        self.matrix = m
 
     def multiply(self, m):
         self.matrix = self.matrix @ m
@@ -31,6 +33,9 @@ class Transform:
                       (s,  c, 0),
                       (0,  0, 1)))
         return self.multiply(m)
+
+    def inverse(t):
+        return Transform(np.linalg.inv(t.matrix))
 
     def apply_v2(self, points):
         if points.ndim == 1:
