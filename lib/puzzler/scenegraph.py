@@ -1,3 +1,5 @@
+import collections
+import cv2 as cv
 import json
 import numpy as np
 
@@ -389,4 +391,172 @@ class SceneGraphJSONEncoder(json.JSONEncoder):
 
 def to_json(sg):
     o = SceneGraphFormatter()(sg)
-    return SceneGraphJSONEncoder().encode(o)
+    return SceneGraphJSONEncoder(indent=0).encode(o)
+
+def project_point(matrix, pt):
+    pt = np.array((*pt, 1.)) @ matrix.T
+    return pt[:2]
+
+def project_bbox(matrix, bbox):
+    
+        ll, ur = bbox
+        x0, y0 = ll
+        x1, y1 = ur
+        points = np.array([(x0, y0, 1.), (x1, y0, 1.), (x1, y1, 1.), (x0, y1, 1.)])
+        points = points @ matrix.T
+        x, y = points[:,0], points[:,1]
+        x0, y0 = np.min(x), np.min(y)
+        x1, y1 = np.max(x), np.max(y)
+        return ((x0, y0), (x1, y1))
+
+def bbox_contains(bbox, pt):
+    ll, ur = bbox
+    return ll[0] <= pt[0] <= ur[0] and ll[1] <= pt[1] <= ur[1]
+
+class Predicate:
+
+    def contains(self, pt):
+        raise NotImplementedError
+
+class PolygonPredicate(Predicate):
+
+    def __init__(self, bbox, polygon, tags=None):
+        self.bbox = bbox
+        self.polygon = polygon
+        self._tags = tags
+
+    def tags(self):
+        return self._tags
+
+    def contains(self, pt):
+        return bbox_contains(self.bbox, pt) and 0. <= cv.pointPolygonTest(self.polygon, pt, measureDist=False)
+
+class TransformPredicate(Predicate):
+
+    def __init__(self, matrix, inverse, delegate):
+        self.matrix = matrix
+        self.inverse = inverse
+        self.bbox = project_bbox(self.matrix, delegate.bbox)
+        self.delegate = delegate
+
+    def tags(self):
+        return self.delegate.tags()
+
+    def contains(self, pt):
+        return bbox_contains(self.bbox, pt) and self.delegate.contains(project_point(self.inverse, pt))
+
+class HitTester:
+
+    def __init__(self, viewport):
+        self.viewport = viewport
+        self.cell_w = 64
+        self.cell_h = 64
+        self.cells = collections.defaultdict(list)
+        self.objects = []
+
+    def __call__(self, pt):
+        cell = self.cell_for_point(pt)
+        if cell not in self.cells:
+            return []
+        
+        retval = []
+        for oid in self.cells[cell]:
+            o = self.objects[oid]
+            if o.contains(pt):
+                retval.append((oid, o.tags()))
+        return retval
+
+    def cell_for_point(self, xy):
+        return int(xy[0]) // self.cell_w, int(xy[1]) // self.cell_h
+    
+    def cells_for_rect(self, pt0, pt1):
+        x0, y0 = self.cell_for_point(pt0)
+        x1, y1 = self.cell_for_point(pt1)
+        for i in range(x0,x1+1):
+            for j in range(y0,y1+1):
+                yield (i,j)
+
+    def add_object(self, pred):
+            
+        oid = len(self.objects)
+        self.objects.append(pred)
+
+        for cell in self.cells_for_rect(pred.bbox[0], pred.bbox[1]):
+            self.cells[cell].append(oid)
+
+def translate_matrix(xy):
+    x, y = xy
+    return np.array(((1, 0, x),
+                     (0, 1, y),
+                     (0, 0, 1)))
+
+def rotate_matrix(rad):
+    c, s = np.cos(rad), np.sin(rad)
+    return np.array(((c, -s, 0),
+                     (s,  c, 0),
+                     (0,  0, 1)))
+            
+class BuildHitTester(SceneGraphVisitor):
+
+    def __init__(self, camera, viewport):
+        self.hittester = HitTester(viewport)
+        self.matrix = np.identity(3)
+        self.inverse = np.identity(3)
+
+        self.matrix = camera
+        self.inverse = np.linalg.inv(self.matrix)
+
+    def __call__(self, node):
+        node.accept(self)
+        return self.hittester
+
+    def visit_sequence(self, s):
+        
+        prev_matrix = self.matrix
+        prev_inverse = self.inverse
+        
+        for n in s.nodes:
+            n.accept(self)
+
+        self.inverse = prev_inverse
+        self.matrix = prev_matrix
+
+    def visit_transform(self, t):
+        self.matrix = self.matrix @ t.matrix
+        self.inverse = np.linalg.inv(self.matrix)
+
+    def visit_translate(self, t):
+        self.matrix = self.matrix @ translate_matrix(t.xy)
+        self.inverse = translate_matrix(-np.array(t.xy)) @ self.inverse
+
+    def visit_rotate(self, t):
+        self.matrix = self.matrix @ rotate_matrix(t.rad)
+        self.inverse = rotate_matrix(-t.rad) @ self.inverse
+
+    def visit_boundingbox(self, b):
+        b.node.accept(self)
+
+    def visit_levelofdetail(self, n):
+        # just take the highest LOD to test against?
+        n.nodes[0].accept(self)
+
+    def visit_points(self, n):
+        pass
+
+    def visit_lines(self, n):
+        pass
+
+    def visit_circles(self, n):
+        pass
+
+    def visit_ellipse(self, n):
+        pass
+
+    def visit_polygon(self, p):
+        pred = PolygonPredicate(compute_bounding_box(p.points), p.points, p.props.get('tags'))
+        pred = TransformPredicate(self.matrix, self.inverse, pred)
+        self.hittester.add_object(pred)
+
+    def visit_text(self, n):
+        pass
+
