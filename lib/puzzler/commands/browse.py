@@ -43,6 +43,63 @@ class Browser:
             self.bbox   = tuple(ll.tolist() + ur.tolist())
             self.piece  = piece
 
+    def make_scenegraph(outlines, num_rows, bbox_w, bbox_h):
+
+        builder = puzzler.scenegraph.SceneGraphBuilder()
+
+        font1 = ("Courier New", 18)
+        font2 = ("Courier New", 12)
+
+        def do_outline(o):
+            x = o.col
+            y = num_rows - 1 - o.row
+            tx = (x + .5) * bbox_w
+            ty = (y + .5) * bbox_h
+            with puzzler.scenegraph.insert_sequence(builder):
+                builder.add_translate((tx, ty))
+                do_outline2(o)
+
+        def do_outline2(o):
+            p = o.piece
+
+            # want the corners of the outline bbox centered within the tile
+            bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
+
+            with puzzler.scenegraph.insert_sequence(builder):
+                builder.add_translate(-bbox_center)
+
+                bbox = puzzler.scenegraph.compute_bounding_box(p.points)
+                with puzzler.scenegraph.insert_boundingbox(builder, bbox):
+                    do_outline3(o)
+
+            builder.add_text(np.zeros(2), text=p.label, font=font1, fill='black')
+
+        def do_outline3(o):
+            
+            p = o.piece
+
+            if p.tabs is not None:
+                for i, tab in enumerate(p.tabs):
+                    e = tab.ellipse
+                    builder.add_ellipse(e.center, e.semi_major, e.semi_minor, e.phi, fill='cyan', outline='')
+                    builder.add_text(e.center, text=str(i), font=font2, fill='darkblue')
+
+            if p.edges is not None:
+                for edge in p.edges:
+                    builder.add_lines(edge.line.pts, width=4, fill='pink')
+
+            props = {'outline':'black', 'fill':'', 'width':1, 'tags':(p.label,)}
+            scales = [0.2, 0.06]
+            nodes = [builder.make_polygon(simplify_polygon(p.points, 0), **props),
+                     builder.make_polygon(simplify_polygon(p.points, 2), **props),
+                     builder.make_polygon(simplify_polygon(p.points, 5), **props)]
+            builder.add_levelofdetail(scales, nodes)
+
+        for o in outlines:
+            do_outline(o)
+
+        return builder.commit(None, None)
+
     def __init__(self, puzzle, renderer, use_scenegraph, screensize=None):
 
         self.renderer = renderer
@@ -109,7 +166,7 @@ class Browser:
         self.font2 = None
 
         if use_scenegraph:
-            self.scenegraph = self.sg_render()
+            self.scenegraph = Browser.make_scenegraph(self.outlines, self.rows, self.bbox_w, self.bbox_h)
             # with open('scenegraph_foo.json','w') as f:
             #     f.write(puzzler.scenegraph.to_json(self.scenegraph))
         else:
@@ -175,65 +232,6 @@ class Browser:
             # r.draw_polygon(p.points, outline='black', fill='', width=1)
 
         r.draw_text(np.zeros(2), text=p.label, font=self.font, fill='black')
-
-    def sg_render(self):
-
-        builder = puzzler.scenegraph.SceneGraphBuilder()
-
-        self.font = ("Courier New", 18)
-        self.font2 = ("Courier New", 12)
-
-        for i, o in enumerate(self.outlines):
-            x = o.col
-            y = self.rows - 1 - o.row
-            tx = (x + .5) * self.bbox_w
-            ty = (y + .5) * self.bbox_h
-            with puzzler.render.save(builder):
-                builder.add_translate((tx, ty))
-                self.sg_outline(builder, o)
-
-        return builder.commit(None, None)
-
-    def sg_outline(self, builder, o):
-
-        p = o.piece
-
-        # want the corners of the outline bbox centered within the tile
-        bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
-
-        with puzzler.render.save(builder):
-            builder.add_translate(-bbox_center)
-
-            bbox = puzzler.scenegraph.compute_bounding_box(p.points)
-            with puzzler.scenegraph.insert_boundingbox(builder, bbox):
-                self.sg_outline_helper(builder, o)
-
-        builder.add_text(np.zeros(2), text=p.label, font=self.font, fill='black')
-
-    def sg_outline_helper(self, builder, o):
-
-        p = o.piece
-
-        if p.tabs is not None:
-            for i, tab in enumerate(p.tabs):
-                e = tab.ellipse
-                builder.add_ellipse(e.center, e.semi_major, e.semi_minor, e.phi, fill='cyan', outline='')
-                builder.add_text(e.center, text=str(i), font=self.font2, fill='darkblue')
-
-        if p.edges is not None:
-            for edge in p.edges:
-                builder.add_lines(edge.line.pts, width=4, fill='pink')
-
-        props = {'outline':'black', 'fill':'', 'width':1, 'tags':(p.label,)}
-        if True:
-            scales = [0.2, 0.06]
-            nodes = [builder.make_polygon(simplify_polygon(p.points, 0), **props),
-                     builder.make_polygon(simplify_polygon(p.points, 2), **props),
-                     builder.make_polygon(simplify_polygon(p.points, 5), **props)]
-            builder.add_levelofdetail(scales, nodes)
-        else:
-            builder.add_polygon(o.poly, **props)
-
         
 class BrowseTk:
 

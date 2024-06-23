@@ -183,12 +183,19 @@ class SceneGraphBuilder:
         node = self.stack.pop()
         return SceneGraph(camera, viewport, node)
 
-    def save(self):
+    def sequence_begin(self):
         self.stack.append(Sequence())
 
-    def restore(self):
+    def sequence_end(self):
         node = self.stack.pop()
         self.add_node(node)
+
+    def boundingbox_begin(self):
+        self.stack.append(Sequence())
+
+    def boundingbox_end(self, bbox):
+        node = self.stack.pop()
+        self.add_boundingbox(bbox, node)
 
     def add_transform(self, m):
         self.add_node(Transform(m))
@@ -230,13 +237,20 @@ class SceneGraphBuilder:
         self.stack[-1].nodes.append(node)
 
 @contextmanager
-def insert_boundingbox(builder, bbox):
-    builder.save()
+def insert_sequence(builder):
+    builder.sequence_begin()
     try:
         yield builder
     finally:
-        node = builder.stack.pop()
-        builder.add_boundingbox(bbox, node)
+        builder.sequence_end()
+    
+@contextmanager
+def insert_boundingbox(builder, bbox):
+    builder.boundingbox_begin()
+    try:
+        yield builder
+    finally:
+        builder.boundingbox_end(bbox)
 
 class SceneGraphRenderer(SceneGraphVisitor):
 
