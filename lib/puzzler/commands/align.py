@@ -217,18 +217,27 @@ class PuzzleRenderer:
         self.frontiers = []
         self.adjacency = dict()
         self.renderer = None
+        self.font = None
         self.render_fast = None
         self.canvas_w = self.camera.viewport[0]
         self.canvas_h = self.camera.viewport[1]
         self.normals = dict()
         self.vertexes = dict()
+        self.use_cairo = False
 
     def render(self, render_fast):
         
-        self.canvas.delete('all')
-        self.renderer = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+        if self.use_cairo:
+            self.renderer = puzzler.renderer.cairo.CairoRenderer(self.canvas)
+        else:
+            self.canvas.delete('all')
+            self.renderer = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+            
         self.renderer.transform(self.camera.matrix)
 
+        # create the font *after* applying the camera transformation so that it is sized in screen space!
+        self.font = self.renderer.make_font('Courier New', 18)
+        
         self.render_fast = render_fast
 
         if self.adjacency:
@@ -246,6 +255,8 @@ class PuzzleRenderer:
         if self.frontiers:
             for f in self.frontiers:
                 self.draw_frontier(f)
+
+        return self.renderer.commit()
 
     def test_bbox(self, bbox):
 
@@ -303,9 +314,7 @@ class PuzzleRenderer:
             else:
                 points = p.piece.points
                 
-            r.draw_polygon(points, outline=color, fill='', width=2, tag=tag)
-
-            r.draw_text(np.array((0,0)), p.piece.label)
+            r.draw_polygon(points, outline=color, fill='', width=1, tags=tag)
 
             normals = self.normals.get(p.piece.label)
             if normals is not None:
@@ -315,6 +324,9 @@ class PuzzleRenderer:
             vertexes = self.vertexes.get(p.piece.label)
             if vertexes is not None:
                 r.draw_points(vertexes, fill='', outline=color, radius=6)
+
+        # we don't want the text rotated
+        r.draw_text(p.coords.dxdy, p.piece.label, font=self.font, tags=tag)
 
     def draw_rotate_handles(self, piece_id):
 
@@ -414,7 +426,7 @@ class PuzzleRenderer:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces):
+    def __init__(self, parent, pieces, use_cairo=False):
         self.pieces = pieces
         self.solver = puzzler.solver.PuzzleSolver({i.piece.label: i.piece for i in self.pieces}, None)
 
@@ -422,6 +434,7 @@ class AlignTk:
         self.selection = None
         self.render_normals = None
         self.render_vertexes = None
+        self.use_cairo = use_cairo
 
         self._init_ui(parent)
 
@@ -475,7 +488,10 @@ class AlignTk:
             r.normals = self.render_normals
         if self.render_vertexes:
             r.vertexes = self.render_vertexes
-        r.render(True)
+        if self.use_cairo:
+            r.use_cairo = True
+            
+        self.displayed_image = r.render(True)
 
         self.render_full += 1
         if 1 == self.render_full:
@@ -494,7 +510,10 @@ class AlignTk:
             r.normals = self.render_normals
         if self.render_vertexes:
             r.vertexes = self.render_vertexes
-        r.render(False)
+        if self.use_cairo:
+            r.use_cairo = True
+            
+        self.displayed_image = r.render(False)
 
         self.render_full = 0
 
@@ -528,6 +547,9 @@ class AlignTk:
         self.solver.update_adjacency()
         self.update_coords()
 
+    def load_constraints(self, path):
+        self.solver.load_constraints(path)
+
     def do_solve(self):
 
         self.solver.solve_border()
@@ -545,9 +567,12 @@ class AlignTk:
     def motion(self, event):
         xy0 = np.array((event.x, event.y, 1))
         xy1 = xy0 @ np.linalg.inv(self.camera.matrix).T
-        tags = self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1)
-        tags = [self.canvas.gettags(i) for i in tags]
-        self.var_label.set(f"{xy1[0]:.0f},{xy1[1]:.0f} " + ','.join(str(i) for i in tags))
+        # r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+        # r.transform(self.camera.matrix)
+        # xy2 = r.device_to_user(np.array((event.x, event.y)))
+        tags0 = self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1)
+        tags1 = [self.canvas.gettags(i) for i in tags0]
+        self.var_label.set(f"{xy1[0]:.0f},{xy1[1]:.0f} " + ','.join(str(i) for i in tags1) + '__' +  ','.join(str(i) for i in tags0))
 
     def _init_ui(self, parent):
 
@@ -837,13 +862,15 @@ def align_ui(args):
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces)
+    ui = AlignTk(root, pieces, use_cairo=args.cairo)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 
     ui.reset_layout()
     if args.geometry:
         ui.load_geometry(args.geometry)
+    if args.constraints:
+        ui.load_constraints(args.constraints)
 
     root.mainloop()
 
@@ -852,5 +879,7 @@ def add_parser(commands):
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
     parser_align.add_argument("labels", nargs='*')
     parser_align.add_argument("-g", "--geometry", help="geometry file")
+    parser_align.add_argument("-c", "--constraints", help="constraints file")
     parser_align.add_argument("-b", "--buddies", help="buddy file")
+    parser_align.add_argument("--cairo", action='store_true', help="use cairo renderer")
     parser_align.set_defaults(func=align_ui)
