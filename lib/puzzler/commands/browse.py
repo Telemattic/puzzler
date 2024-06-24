@@ -1,4 +1,3 @@
-import ctypes
 import cv2 as cv
 import math
 import numpy as np
@@ -15,13 +14,6 @@ from tkinter import ttk
 # Camera = puzzler.commands.align.Camera
 # MoveCamera = puzzler.commands.align.MoveCamera
 
-def set_process_dpi_awareness():
-
-    awareness = ctypes.c_int()
-    err = ctypes.windll.shcore.GetProcessDpiAwareness(0, ctypes.byref(awareness))
-    if err == 0 and awareness.value == 0:
-        err = ctypes.windll.shcore.SetProcessDpiAwareness(2)
-        
 def simplify_polygon(points, epsilon):
     approx  = cv.approxPolyDP(points, epsilon, True)
     poly = np.squeeze(approx)
@@ -81,7 +73,7 @@ class Browser:
             if p.tabs is not None:
                 for i, tab in enumerate(p.tabs):
                     e = tab.ellipse
-                    builder.add_ellipse(e.center, e.semi_major, e.semi_minor, e.phi, fill='cyan', outline='')
+                    builder.add_ellipse(e.center, e.semi_major, e.semi_minor, e.phi, fill='cyan', outline='', tags=(p.label,))
                     builder.add_text(e.center, text=str(i), font=font2, fill='darkblue')
 
             if p.edges is not None:
@@ -343,7 +335,6 @@ class BrowseTk:
 
 def browse(args):
 
-    set_process_dpi_awareness()
     puzzle = puzzler.file.load(args.puzzle)
     
     root = Tk()
