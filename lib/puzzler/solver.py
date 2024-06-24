@@ -121,10 +121,10 @@ class BorderSolver:
         icp = puzzler.icp.IteratedClosestPoint()
         
         axes = [
-            icp.make_axis(np.array((0, -1), dtype=np.float), 0., True),
-            icp.make_axis(np.array((1, 0), dtype=np.float)),
-            icp.make_axis(np.array((0, 1), dtype=np.float)),
-            icp.make_axis(np.array((-1, 0), dtype=np.float), 0., True)
+            icp.make_axis(np.array((0, -1), dtype=float), 0., True),
+            icp.make_axis(np.array((1, 0), dtype=float)),
+            icp.make_axis(np.array((0, 1), dtype=float)),
+            icp.make_axis(np.array((-1, 0), dtype=float), 0., True)
         ]
 
         bodies = dict()
@@ -172,7 +172,7 @@ class BorderSolver:
     def estimate_puzzle_size(self, border):
 
         axis = 3
-        size = np.zeros(4, dtype=np.float)
+        size = np.zeros(4, dtype=float)
         for label in border:
             p = self.pieces[label]
 
@@ -755,6 +755,14 @@ class PuzzleSolver:
                 fits.append((1., *v[0]))
 
             s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
+
+            # debugging hack to show the scoring on the known correct piece
+            if corner == (('Y4', 3), ('Z5', 0)):
+                for i in v[3:]:
+                    s.append(f"{i[1]}:{i[0]:.1f}")
+                    if i[1] == 'Y5':
+                        break
+                        
             print(f"{corner}: " + ", ".join(s))
 
         if not fits:
@@ -904,7 +912,27 @@ class PuzzleSolver:
             coords[k] = AffineTransform(angle, xy)
 
         self.geometry = Geometry(width, height, coords)
+
+    def load_constraints(self, path):
         
+        with open(path) as f:
+            ary = json.load(f)
+
+        constraints = []
+        for c in ary:
+            if c['kind'] == 'edge':
+                edge = tuple(c['edge'])
+                axis = c['axis']
+                constraints.append(BorderConstraint(edge, axis))
+            elif c['kind'] == 'tab':
+                a = tuple(c['a'])
+                b = tuple(c['b'])
+                constraints.append(TabConstraint(a, b))
+            else:
+                assert False
+
+        self.constraints = constraints
+       
     def update_adjacency(self):
 
         ac = AdjacencyComputer(self.pieces, [], self.geometry, self.distance_query_cache)
