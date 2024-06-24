@@ -3,6 +3,7 @@ import math
 import numpy as np
 import puzzler
 import puzzler.scenegraph
+import puzzler.sgbuilder
 import puzzler.renderer.canvas
 import puzzler.renderer.cairo
 import puzzler.renderer.opengl
@@ -39,57 +40,21 @@ class Browser:
 
         builder = puzzler.scenegraph.SceneGraphBuilder()
 
-        font1 = ("Courier New", 18)
-        font2 = ("Courier New", 12)
+        pieces = dict((o.piece.label, o.piece) for o in outlines)
+        factory = puzzler.sgbuilder.PieceSceneGraphFactory(pieces)
 
-        def do_outline(o):
+        for o in outlines:
             x = o.col
             y = num_rows - 1 - o.row
             tx = (x + .5) * bbox_w
             ty = (y + .5) * bbox_h
             with puzzler.scenegraph.insert_sequence(builder):
                 builder.add_translate((tx, ty))
-                do_outline2(o)
-
-        def do_outline2(o):
-            p = o.piece
-
-            # want the corners of the outline bbox centered within the tile
-            bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
-
-            with puzzler.scenegraph.insert_sequence(builder):
+                # want the corners of the outline bbox centered within the tile
+                bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
                 builder.add_translate(-bbox_center)
-
-                bbox = puzzler.scenegraph.compute_bounding_box(p.points)
-                with puzzler.scenegraph.insert_boundingbox(builder, bbox):
-                    do_outline3(o)
-
-            builder.add_text(np.zeros(2), text=p.label, font=font1, fill='black')
-
-        def do_outline3(o):
-            
-            p = o.piece
-
-            if p.tabs is not None:
-                for i, tab in enumerate(p.tabs):
-                    e = tab.ellipse
-                    builder.add_ellipse(e.center, e.semi_major, e.semi_minor, e.phi, fill='cyan', outline='', tags=(p.label,))
-                    builder.add_text(e.center, text=str(i), font=font2, fill='darkblue')
-
-            if p.edges is not None:
-                for edge in p.edges:
-                    builder.add_lines(edge.line.pts, width=4, fill='pink')
-
-            props = {'outline':'black', 'fill':'', 'width':1, 'tags':(p.label,)}
-            scales = [0.2, 0.06]
-            nodes = [builder.make_polygon(simplify_polygon(p.points, 0), **props),
-                     builder.make_polygon(simplify_polygon(p.points, 2), **props),
-                     builder.make_polygon(simplify_polygon(p.points, 5), **props)]
-            builder.add_levelofdetail(scales, nodes)
-
-        for o in outlines:
-            do_outline(o)
-
+                builder.add_node(factory(o.piece.label))
+                
         return builder.commit(None, None)
 
     def __init__(self, puzzle, renderer, use_scenegraph, screensize=None):
