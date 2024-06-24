@@ -1,6 +1,7 @@
 import collections
 import cv2 as cv
 import json
+import math
 import numpy as np
 
 from contextlib import contextmanager
@@ -413,15 +414,15 @@ def project_point(matrix, pt):
 
 def project_bbox(matrix, bbox):
     
-        ll, ur = bbox
-        x0, y0 = ll
-        x1, y1 = ur
-        points = np.array([(x0, y0, 1.), (x1, y0, 1.), (x1, y1, 1.), (x0, y1, 1.)])
-        points = points @ matrix.T
-        x, y = points[:,0], points[:,1]
-        x0, y0 = np.min(x), np.min(y)
-        x1, y1 = np.max(x), np.max(y)
-        return ((x0, y0), (x1, y1))
+    ll, ur = bbox
+    x0, y0 = ll
+    x1, y1 = ur
+    points = np.array([(x0, y0, 1.), (x1, y0, 1.), (x1, y1, 1.), (x0, y1, 1.)])
+    points = points @ matrix.T
+    x, y = points[:,0], points[:,1]
+    x0, y0 = np.min(x), np.min(y)
+    x1, y1 = np.max(x), np.max(y)
+    return ((x0, y0), (x1, y1))
 
 def bbox_contains(bbox, pt):
     ll, ur = bbox
@@ -432,10 +433,41 @@ class Predicate:
     def contains(self, pt):
         raise NotImplementedError
 
+class EllipsePredicate(Predicate):
+
+    def __init__(self, center, semi_major, semi_minor, phi, tags=None):
+        
+        c, s = math.cos(-phi), math.sin(-phi)
+        self.rot = np.array(((c, s), (-s, c)))
+        w, h = semi_major, semi_minor
+        points = center + (np.array([(-w, -h), (w, -h), (w, h), (-w, h)]) @ self.rot)
+        x, y = points[:,0], points[:,1]
+        x0, y0 = np.min(x), np.min(y)
+        x1, y1 = np.max(x), np.max(y)
+        self.bbox = ((x0, y0), (x1, y1))
+        self.center = center
+        self.semi_major = semi_major
+        self.semi_minor = semi_minor
+        self.phi = phi
+        self._tags = tags
+
+    def tags(self):
+        return self._tags
+
+    def contains(self, pt):
+        return bbox_contains(self.bbox, pt) and self.point_in_ellipse(pt)
+
+    def point_in_ellipse(self, pt):
+        x, y = (pt - self.center) @ self.rot # probably need inverse here
+        w, h = self.semi_major, self.semi_minor
+        w2, h2 = w * w, h * h
+        # (x/w)^2 + (y/h)^2 <= 1, multiply by (w^2)*(h^2) to eliminate division
+        return (x * x) * h2  + (y * y) * w2 < w2 * h2
+
 class PolygonPredicate(Predicate):
 
-    def __init__(self, bbox, polygon, tags=None):
-        self.bbox = bbox
+    def __init__(self, polygon, tags=None):
+        self.bbox = compute_bounding_box(polygon)
         self.polygon = polygon
         self._tags = tags
 
@@ -564,10 +596,12 @@ class BuildHitTester(SceneGraphVisitor):
         pass
 
     def visit_ellipse(self, n):
-        pass
+        pred = EllipsePredicate(n.center, n.semi_major, n.semi_minor, n.phi, n.props.get('tags'))
+        pred = TransformPredicate(self.matrix, self.inverse, pred)
+        self.hittester.add_object(pred)
 
     def visit_polygon(self, p):
-        pred = PolygonPredicate(compute_bounding_box(p.points), p.points, p.props.get('tags'))
+        pred = PolygonPredicate(p.points, p.props.get('tags'))
         pred = TransformPredicate(self.matrix, self.inverse, pred)
         self.hittester.add_object(pred)
 
