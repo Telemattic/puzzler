@@ -15,6 +15,7 @@ class CairoRenderer(puzzler.render.Renderer):
         self.surface = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
         self.context = cairo.Context(self.surface)
         self._colors = dict()
+        self.device_to_user_scale = 1.
 
         ctx = self.context
 
@@ -31,7 +32,9 @@ class CairoRenderer(puzzler.render.Renderer):
         yy = m[1][1]
         x0 = m[0][2]
         y0 = m[1][2]
-        self.context.transform(cairo.Matrix(xx, yx, xy, yy, x0, y0))
+        ctx = self.context
+        ctx.transform(cairo.Matrix(xx, yx, xy, yy, x0, y0))
+        self.device_to_user_scale = np.linalg.norm(ctx.device_to_user_distance(1,0))
 
     def translate(self, xy):
         self.context.translate(*xy)
@@ -55,8 +58,8 @@ class CairoRenderer(puzzler.render.Renderer):
         ctx.save()
 
         if outline and width:
-            (w, h) = ctx.device_to_user_distance(width, width)
-            ctx.set_line_width(math.fabs(w))
+            w = width * self.device_to_user_scale
+            ctx.set_line_width(w)
         
         ctx.move_to(*points[-1])
         for p in points:
@@ -87,14 +90,14 @@ class CairoRenderer(puzzler.render.Renderer):
 
         return color
 
-    def draw_lines(self, points, fill=(0, 0, 0), width=1):
+    def draw_lines(self, points, fill=(0, 0, 0), width=1, arrow=None):
 
         ctx = self.context
         ctx.save()
 
         if fill and width:
-            (w, h) = ctx.device_to_user_distance(width, width)
-            ctx.set_line_width(math.fabs(w))
+            w = width * self.device_to_user_scale
+            ctx.set_line_width(w)
             
         if fill:
             ctx.set_source_rgb(*self.get_color(fill))
@@ -103,22 +106,56 @@ class CairoRenderer(puzzler.render.Renderer):
             i = iter(x)
             return zip(i, i)
 
-        for p1, p2 in pairwise(points):
+        def with_arrow1(p1, p2):
             ctx.move_to(*p1)
             ctx.line_to(*p2)
+            arrow_len = 10 * self.device_to_user_scale
+            n = p1 - p2
+            line_len = np.linalg.norm(n)
+            nx, ny = (n / line_len) * min(arrow_len, line_len*.5)
+            ax = nx * 0.866 - ny * 0.5
+            ay = nx * 0.5 + ny * 0.866
+            bx = ax + ny
+            by = ay - nx
+            ctx.line_to(p2[0] + ax, p2[1] + ay)
+            ctx.line_to(p2[0] + bx, p2[1] + by)
+            ctx.line_to(*p2)
+
+        def with_arrow2(p1, p2):
+            ctx.move_to(*p1)
+            ctx.line_to(*p2)
+            arrow_len = 10 * self.device_to_user_scale
+            n = p1 - p2
+            line_len = np.linalg.norm(n)
+            nx, ny = (n / line_len) * min(arrow_len, line_len*.5)
+            ax = nx * 0.866 - ny * 0.5
+            ay = nx * 0.5 + ny * 0.866
+            bx = ax + ny
+            by = ay - nx
+            ctx.line_to(p2[0] + ax, p2[1] + ay)
+            ctx.move_to(*p2)
+            ctx.line_to(p2[0] + bx, p2[1] + by)
+            
+        if arrow == 'last':
+            for p1, p2 in pairwise(points):
+                with_arrow2(p1, p2)
+        else:
+            for p1, p2 in pairwise(points):
+                ctx.move_to(*p1)
+                ctx.line_to(*p2)
 
         ctx.stroke()
 
         ctx.restore()
 
-    def draw_ellipse(self, center, semi_major, semi_minor, phi, fill=None, outline=(0, 0, 0), width=1):
+    def draw_ellipse(self, center, semi_major, semi_minor, phi, fill=None, outline=(0, 0, 0), width=1, tags=None):
         
         ctx = self.context
         ctx.save()
         
         if outline and width:
-            (w, h) = ctx.device_to_user_distance(width, width)
-            ctx.set_line_width(math.fabs(w))
+            w = width * self.device_to_user_scale
+            ctx.set_line_width(w)
         
         ctx.translate(*center)
         ctx.rotate(phi)
@@ -149,7 +186,7 @@ class CairoRenderer(puzzler.render.Renderer):
             font = ctx.get_scaled_font()
         return font
 
-    def draw_text(self, xy, text, font=None, fill=(0, 0, 0)):
+    def draw_text(self, xy, text, font=None, fill=(0, 0, 0), tags=None):
 
         ctx = self.context
         ctx.save()
@@ -188,7 +225,8 @@ class CairoRenderer(puzzler.render.Renderer):
         else:
             surface.write_to_png('fnord.png')
             displayed_image = PhotoImage(file='fnord.png')
-            
+
+        self.canvas.delete('all')
         self.canvas.create_image((0, 0), image=displayed_image, anchor=NW)
         return displayed_image
 
