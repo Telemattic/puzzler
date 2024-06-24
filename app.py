@@ -1,8 +1,18 @@
 import argparse
+import ctypes
 import os
 import sys
 
+def set_process_dpi_awareness():
+
+    awareness = ctypes.c_int()
+    err = ctypes.windll.shcore.GetProcessDpiAwareness(0, ctypes.byref(awareness))
+    if err == 0 and awareness.value == 0:
+        err = ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        
 def main():
+
+    set_process_dpi_awareness()
 
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
     import puzzler
