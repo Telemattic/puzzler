@@ -52,7 +52,7 @@ class CanvasRenderer(puzzler.render.Renderer):
             bbox = np.array((xy-rr, xy+rr))
             self.canvas.create_oval(bbox.tolist(), **kw)
 
-    def draw_ellipse(self, center, semi_major, semi_minor, phi, fill=None, outline='black', width=1):
+    def draw_ellipse(self, center, semi_major, semi_minor, phi, fill=None, outline='black', width=1, tags=None):
         ellipse = puzzler.geometry.Ellipse(center, semi_major, semi_minor, phi)
         points = puzzler.geometry.get_ellipse_points(ellipse, npts=40)
         kw = {}
@@ -79,8 +79,7 @@ class CanvasRenderer(puzzler.render.Renderer):
 
         return name
 
-    def draw_text(self, xy, text, font=None, fill=None):
-        kw = {}
+    def draw_text(self, xy, text, font=None, fill=None, **kw):
         if font:
             kw['font'] = font
         if fill:
