@@ -51,6 +51,23 @@ class CairoRenderer(puzzler.render.Renderer):
     def restore(self):
         self.context.restore()
 
+    def draw_points(self, points, radius, fill=None, tags=None):
+
+        ctx = self.context
+        ctx.save()
+
+        r = radius * self.device_to_user_scale
+        two_pi = math.pi * 2.
+
+        for p in points:
+            ctx.arc(*p, r, 0., two_pi)
+
+        if fill:
+            ctx.set_source_rgb(*self.get_color(fill))
+        ctx.fill()
+
+        ctx.restore()
+
     def draw_polygon(self, points, fill=None, outline=(0,0,0), width=1, tags=None):
 
         ctx = self.context
@@ -90,7 +107,7 @@ class CairoRenderer(puzzler.render.Renderer):
 
         return color
 
-    def draw_lines(self, points, fill=(0, 0, 0), width=1, arrow=None):
+    def draw_lines(self, points, fill=(0, 0, 0), width=1, arrow=None, tags=None):
 
         ctx = self.context
         ctx.save()
@@ -106,7 +123,7 @@ class CairoRenderer(puzzler.render.Renderer):
             i = iter(x)
             return zip(i, i)
 
-        def with_arrow1(p1, p2):
+        def arrow1(p1, p2):
             ctx.move_to(*p1)
             ctx.line_to(*p2)
             arrow_len = 10 * self.device_to_user_scale
@@ -117,13 +134,12 @@ class CairoRenderer(puzzler.render.Renderer):
             ay = nx * 0.5 + ny * 0.866
             bx = ax + ny
             by = ay - nx
+            ctx.move_to(*p2)
             ctx.line_to(p2[0] + ax, p2[1] + ay)
             ctx.line_to(p2[0] + bx, p2[1] + by)
             ctx.line_to(*p2)
 
-        def with_arrow2(p1, p2):
-            ctx.move_to(*p1)
-            ctx.line_to(*p2)
+        def arrow2(p1, p2):
             arrow_len = 10 * self.device_to_user_scale
             n = p1 - p2
             line_len = np.linalg.norm(n)
@@ -132,17 +148,17 @@ class CairoRenderer(puzzler.render.Renderer):
             ay = nx * 0.5 + ny * 0.866
             bx = ax + ny
             by = ay - nx
+            ctx.move_to(*p2)
             ctx.line_to(p2[0] + ax, p2[1] + ay)
             ctx.move_to(*p2)
             ctx.line_to(p2[0] + bx, p2[1] + by)
+
+        ctx.move_to(*points[0])
+        for p in points[1:]:
+            ctx.line_to(*p)
             
         if arrow == 'last':
-            for p1, p2 in pairwise(points):
-                with_arrow2(p1, p2)
-        else:
-            for p1, p2 in pairwise(points):
-                ctx.move_to(*p1)
-                ctx.line_to(*p2)
+            arrow2(points[-2], points[-1])
 
         ctx.stroke()
 

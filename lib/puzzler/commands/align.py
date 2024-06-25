@@ -442,7 +442,8 @@ class PuzzleSGFactory:
         self.vertexes = dict()
 
         pieces_dict = dict((i.piece.label, i.piece) for i in pieces)
-        self.piece_factory = puzzler.sgbuilder.PieceSceneGraphFactory(pieces_dict)
+        self.piece_factory = puzzler.sgbuilder.PieceSceneGraphFactory(
+            pieces_dict, {'label.render':False, 'tabs.render':False, 'edges.render':False})
 
     def build(self):
 
@@ -475,10 +476,12 @@ class PuzzleSGFactory:
         with puzzler.sgbuilder.insert_sequence(sgb):
                 
             sgb.add_translate(p.coords.dxdy)
+
+            sgb.add_text(np.zeros(2), p.piece.label, font=('Courier New', 18))
+                
             sgb.add_rotate(p.coords.angle)
 
-            # ignoring color and tag ...
-            sgb.add_node(self.piece_factory(p.piece.label))
+            sgb.add_node(self.piece_factory(p.piece.label, {'points.outline':color, 'tags':(tag,)}))
 
             normals = self.normals.get(p.piece.label)
             if normals is not None:
@@ -487,7 +490,7 @@ class PuzzleSGFactory:
 
             vertexes = self.vertexes.get(p.piece.label)
             if vertexes is not None:
-                sgb.add_points(vertexes, fill='', outline=color, radius=6)
+                sgb.add_points(vertexes, radius=6, fill='', outline=color)
 
     def draw_rotate_handles(self, piece_id):
 
@@ -525,6 +528,8 @@ class PuzzleSGFactory:
             tabs[label].append(tab_no)
 
         piece_dict = dict((i.piece.label, i) for i in self.pieces)
+
+        sgb = self.scenegraphbuilder
         
         for l, tab_nos in tabs.items():
             p = piece_dict[l]
@@ -580,9 +585,9 @@ class PuzzleSGFactory:
                 points = ring_slice(p.piece.points, a, b+1)
                 if len(points) < 2:
                     # print(f"{src=} {dst=} {a=} {b=} {points=}")
-                    sgb.add_points(points, fill=fill, radius=8, tag=tag)
+                    sgb.add_points(points, radius=8, fill=fill, tags=(tag,))
                 else:
-                    sgb.add_lines(points, fill=fill, width=8, tag=tag)
+                    sgb.add_lines(points, width=8, fill=fill, tags=(tag,))
 
 class AlignTk:
 
@@ -711,6 +716,10 @@ class AlignTk:
         sg.root_node.accept(sgr)
 
         self.displayed_image = r.commit()
+
+        if False and self.var_render_adjacency.get():
+            with open('scenegraph_foo.json','w') as f:
+                f.write(puzzler.scenegraph.to_json(sg))
 
     def do_tab_alignment(self):
 

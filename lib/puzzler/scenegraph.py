@@ -214,8 +214,10 @@ class SceneGraphBuilder:
         self.add_node(Rotate(rad))
 
     def add_points(self, points, radius, **kw):
-        self.add_node(Points(points, radius, kw))
-
+        # self.add_node(Points(points, radius, kw))
+        kw['radius'] = radius
+        self.add_node(Points(points, kw))
+        
     def add_lines(self, points, **kw):
         self.add_node(Lines(points, kw))
 
@@ -361,7 +363,7 @@ class SceneGraphFormatter(SceneGraphVisitor):
         self._append({'class':'translate', 'xy':t.xy})
 
     def visit_rotate(self, r):
-        self._append({'class':'rotate', 'rad':t.rad})
+        self._append({'class':'rotate', 'rad':r.rad})
 
     def visit_boundingbox(self, b):
         self.stack.append([])

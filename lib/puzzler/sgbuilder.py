@@ -100,20 +100,24 @@ class PieceSceneGraphFactory:
         'points.outline':'black',
         'points.fill':'',
         'points.width':1,
+        'label.render':True,
         'label.font':('Courier New', 18),
         'label.fill':'black'
     }
     
-    def __init__(self, pieces, **kw):
+    def __init__(self, pieces, opt):
         self.pieces = pieces
-        self.opt = PieceSceneGraphFactory.defaults | kw
+        self.opt = PieceSceneGraphFactory.defaults | opt
         self._cache = dict()
         self.nodes = []
 
-    def __call__(self, label):
+    def __call__(self, label, props):
         node = self._cache.get(label)
         if node is None:
+            save_opt = self.opt
+            self.opt = self.opt | props
             self._cache[label] = node = self.do_piece(self.pieces[label])
+            self.opt = save_opt
         return node
 
     def do_piece(self, p):
@@ -128,7 +132,8 @@ class PieceSceneGraphFactory:
 
         self.do_outline(p)
 
-        self.do_label(p)
+        if self.opt['label.render']:
+            self.do_label(p)
 
         bbox = sg.compute_bounding_box(p.points)
 
