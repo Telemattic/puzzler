@@ -304,18 +304,15 @@ def browse(args):
     
     root = Tk()
     screensize = (root.winfo_screenwidth(), root.winfo_screenheight())
-    ui = BrowseTk(root, puzzle, args.renderer, args.scenegraph, screensize)
+    ui = BrowseTk(root, puzzle, args.renderer, args.mode == 'scenegraph', screensize)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: browse")
     root.mainloop()
 
 def add_parser(commands):
     parser_browse = commands.add_parser("browse", help="browse pieces")
-    parser_browse.add_argument("-c", "--cairo", dest='renderer', action='store_const', const='cairo',
-                               default='tk', help="use cairo rendering (default: tk)")
-    parser_browse.add_argument("-g", "--opengl", dest='renderer', action='store_const', const='opengl',
-                               default='tk', help="use opengl rendering (default: tk)")
-    parser_browse.add_argument("-t", "--tk",  dest='renderer', action='store_const', const='tk',
-                               default='tk', help="use tk rendering (default: tk)")
-    parser_browse.add_argument("-s", "--scenegraph", action='store_true', help="use scenegraph")
+    parser_browse.add_argument("-r", "--renderer", choices=['tk', 'cairo', 'opengl'], default='cairo',
+                               help="renderer (default: cairo)")
+    parser_browse.add_argument("-m", "--mode", choices=['scenegraph', 'immediate'], default='scenegraph',
+                               help="mode (default: scenegraph)")
     parser_browse.set_defaults(func=browse)

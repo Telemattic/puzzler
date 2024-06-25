@@ -862,7 +862,7 @@ def align_ui(args):
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, use_cairo=args.cairo)
+    ui = AlignTk(root, pieces, use_cairo=args.renderer == 'cairo')
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 
@@ -881,5 +881,6 @@ def add_parser(commands):
     parser_align.add_argument("-g", "--geometry", help="geometry file")
     parser_align.add_argument("-c", "--constraints", help="constraints file")
     parser_align.add_argument("-b", "--buddies", help="buddy file")
-    parser_align.add_argument("--cairo", action='store_true', help="use cairo renderer")
+    parser_align.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='tk',
+                               help="renderer (default: tk)")
     parser_align.set_defaults(func=align_ui)
