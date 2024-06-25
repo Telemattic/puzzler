@@ -312,7 +312,7 @@ def browse(args):
 def add_parser(commands):
     parser_browse = commands.add_parser("browse", help="browse pieces")
     parser_browse.add_argument("-r", "--renderer", choices=['tk', 'cairo', 'opengl'], default='cairo',
-                               help="renderer (default: cairo)")
+                               help="renderer (default: %(default)s)")
     parser_browse.add_argument("-m", "--mode", choices=['scenegraph', 'immediate'], default='scenegraph',
-                               help="mode (default: scenegraph)")
+                               help="mode (default: %(default)s)")
     parser_browse.set_defaults(func=browse)

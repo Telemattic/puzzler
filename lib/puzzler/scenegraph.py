@@ -275,7 +275,7 @@ class SceneGraphRenderer(SceneGraphVisitor):
         self.renderer.translate(t.xy)
 
     def visit_rotate(self, r):
-        self.renderer.rotate(t.rad)
+        self.renderer.rotate(r.rad)
 
     def visit_boundingbox(self, b):
         if self.is_bbox_visible(b.bbox):

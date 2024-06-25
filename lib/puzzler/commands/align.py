@@ -423,10 +423,170 @@ class PuzzleRenderer:
                     r.draw_points(points, fill=fill, radius=8, tag=tag)
                 else:
                     r.draw_lines(points, fill=fill, width=8, tag=tag)
+                    
+class PuzzleSGFactory:
+
+    def __init__(self, canvas, camera, pieces):
+        self.canvas = canvas
+        self.camera = camera
+        self.pieces = pieces
+        self.selection = None
+        self.frontiers = []
+        self.adjacency = dict()
+        self.renderer = None
+        self.font = None
+        self.render_fast = None
+        self.canvas_w = self.camera.viewport[0]
+        self.canvas_h = self.camera.viewport[1]
+        self.normals = dict()
+        self.vertexes = dict()
+
+        pieces_dict = dict((i.piece.label, i.piece) for i in pieces)
+        self.piece_factory = puzzler.sgbuilder.PieceSceneGraphFactory(pieces_dict)
+
+    def build(self):
+
+        self.scenegraphbuilder = puzzler.scenegraph.SceneGraphBuilder()
+            
+        # self.scenegraphbuilder.transform(self.camera.matrix)
+
+        if self.adjacency:
+            self.draw_adjacency(self.adjacency)
+
+        colors = ['red', 'green', 'blue']
+        for i, piece in enumerate(self.pieces):
+
+            color = colors[i%len(colors)]
+            self.draw_piece(piece, color, f"piece_{i}")
+
+        if self.selection is not None:
+            self.draw_rotate_handles(self.selection)
+
+        if self.frontiers:
+            for f in self.frontiers:
+                self.draw_frontier(f)
+
+        return self.scenegraphbuilder.commit(None, None)
+
+    def draw_piece(self, p, color, tag):
+
+        sgb = self.scenegraphbuilder
+            
+        with puzzler.sgbuilder.insert_sequence(sgb):
+                
+            sgb.add_translate(p.coords.dxdy)
+            sgb.add_rotate(p.coords.angle)
+
+            # ignoring color and tag ...
+            sgb.add_node(self.piece_factory(p.piece.label))
+
+            normals = self.normals.get(p.piece.label)
+            if normals is not None:
+                for n in normals:
+                    sgb.add_lines(np.array((n[0], n[0] + n[1]*10)), fill='black', width=1)
+
+            vertexes = self.vertexes.get(p.piece.label)
+            if vertexes is not None:
+                sgb.add_points(vertexes, fill='', outline=color, radius=6)
+
+    def draw_rotate_handles(self, piece_id):
+
+        p = self.pieces[piece_id]
+        sgb = self.scenegraphbuilder
+
+        with puzzler.sgbuilder.insert_sequence(sgb):
+
+            sgb.add_translate(p.coords.dxdy)
+            sgb.add_rotate(p.coords.angle)
+
+            r1  = 250
+            r2  = 300
+            phi = np.linspace(0, math.pi/2, num=20)
+            cos = np.cos(phi)
+            sin = np.sin(phi)
+            x   = np.concatenate((r1 * cos, r2 * np.flip(cos)))
+            y   = np.concatenate((r1 * sin, r2 * np.flip(sin)))
+            points = np.vstack((x, y)).T
+            tags = ('rotate', f'piece_{piece_id}')
+
+            for i in range(4):
+                with puzzler.render.save(r):
+                    sgb.add_rotate(i * math.pi / 2)
+                    sgb.add_polygon(points, outline='black', fill='', width=1, tags=tags)
+                    
+    def draw_frontier(self, frontier):
+
+        piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
+        
+        fe = puzzler.solver.FrontierExplorer(piece_dict, None)
+
+        tabs = collections.defaultdict(list)
+        for label, tab_no in fe.find_tabs(frontier):
+            tabs[label].append(tab_no)
+
+        piece_dict = dict((i.piece.label, i) for i in self.pieces)
+        
+        for l, tab_nos in tabs.items():
+            p = piece_dict[l]
+            with puzzler.sgbuilder.insert_sequence(sgb):
+                sgb.add_translate(p.coords.dxdy)
+                sgb.add_rotate(p.coords.angle)
+                for tab_no in tab_nos:
+                    p0, v = fe.get_tab_center_and_direction((l, tab_no))
+                    p1 = p0 + v * 100
+                    sgb.add_lines(np.array((p0, p1)), fill='red', width=1, arrow='last')
+
+        return
+
+        for l, a, b in frontier:
+            p = piece_dict[l]
+            with puzzler.render.save(r):
+                r.translate(p.coords.dxdy)
+                r.rotate(p.coords.angle)
+                r.draw_points(p.piece.points[a], fill='pink', radius=8)
+                
+        for l, a, b in frontier:
+            p = piece_dict[l]
+            with puzzler.render.save(r):
+                r.translate(p.coords.dxdy)
+                r.rotate(p.coords.angle)
+                r.draw_points(p.piece.points[b], fill='purple', radius=5)
+
+    def draw_adjacency(self, adjacency):
+        
+        self.piece_dict = dict((i.piece.label, i) for i in self.pieces)
+        
+        fills = ['purple', 'pink', 'yellow', 'orange', 'cyan']
+        i = 0
+        
+        for k1, v1 in adjacency.items():
+            for k2, v2 in v1.items():
+                self.draw_adjacency_list((k1, k2), v2, fills[i])
+                i = (i + 1) % len(fills)
+
+    def draw_adjacency_list(self, k, v, fill):
+
+        src, dst = k
+        p = self.piece_dict[src]
+
+        tag = src + ":" + dst
+
+        sgb = self.scenegraphbuilder
+
+        with puzzler.sgbuilder.insert_sequence(sgb):
+            sgb.add_translate(p.coords.dxdy)
+            sgb.add_rotate(p.coords.angle)
+            for a, b in v:
+                points = ring_slice(p.piece.points, a, b+1)
+                if len(points) < 2:
+                    # print(f"{src=} {dst=} {a=} {b=} {points=}")
+                    sgb.add_points(points, fill=fill, radius=8, tag=tag)
+                else:
+                    sgb.add_lines(points, fill=fill, width=8, tag=tag)
 
 class AlignTk:
 
-    def __init__(self, parent, pieces, use_cairo=False):
+    def __init__(self, parent, pieces, renderer, mode):
         self.pieces = pieces
         self.solver = puzzler.solver.PuzzleSolver({i.piece.label: i.piece for i in self.pieces}, None)
 
@@ -434,7 +594,8 @@ class AlignTk:
         self.selection = None
         self.render_normals = None
         self.render_vertexes = None
-        self.use_cairo = use_cairo
+        self.use_cairo = renderer == 'cairo'
+        self.use_scenegraph = mode == 'scenegraph'
 
         self._init_ui(parent)
 
@@ -478,6 +639,9 @@ class AlignTk:
             self.render()
 
     def render(self):
+
+        if self.use_scenegraph:
+            return self.sg_render()
         
         r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
         r.selection = self.selection
@@ -498,6 +662,9 @@ class AlignTk:
             self.parent.after_idle(self.full_render)
 
     def full_render(self):
+
+        if self.use_scenegraph:
+            return self.sg_render()
         
         self.render_full = -1
 
@@ -516,6 +683,34 @@ class AlignTk:
         self.displayed_image = r.render(False)
 
         self.render_full = 0
+
+    def sg_render(self):
+
+        f = PuzzleSGFactory(self.canvas, self.camera, self.pieces)
+
+        f.selection = self.selection
+        f.frontiers = self.solver.frontiers
+        if self.var_render_adjacency.get():
+            f.adjacency = self.solver.adjacency
+        if self.render_normals:
+            f.normals = self.render_normals
+        if self.render_vertexes:
+            f.vertexes = self.render_vertexes
+
+        sg = f.build()
+
+        if self.use_cairo:
+            r = puzzler.renderer.cairo.CairoRenderer(self.canvas)
+        else:
+            self.canvas.delete('all')
+            r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+
+        r.transform(self.camera.matrix)
+
+        sgr = puzzler.scenegraph.SceneGraphRenderer(r, self.camera.viewport, scale=self.camera.zoom)
+        sg.root_node.accept(sgr)
+
+        self.displayed_image = r.commit()
 
     def do_tab_alignment(self):
 
@@ -862,7 +1057,7 @@ def align_ui(args):
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, use_cairo=args.renderer == 'cairo')
+    ui = AlignTk(root, pieces, renderer=args.renderer, mode=args.mode)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 
@@ -882,5 +1077,7 @@ def add_parser(commands):
     parser_align.add_argument("-c", "--constraints", help="constraints file")
     parser_align.add_argument("-b", "--buddies", help="buddy file")
     parser_align.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='tk',
-                               help="renderer (default: tk)")
+                               help="renderer (default: %(default)s)")
+    parser_align.add_argument("-m", "--mode", choices=['scenegraph', 'immediate'], default='immediate',
+                               help="mode (default: %(default)s)")
     parser_align.set_defaults(func=align_ui)
