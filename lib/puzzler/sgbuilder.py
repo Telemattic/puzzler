@@ -141,6 +141,8 @@ class PieceSceneGraphFactory:
 
     def do_tabs(self, p):
 
+        tags = self.opt.get('tags', (p.label,))
+
         e_fill = self.opt['tabs.ellipse.fill']
         e_outline = self.opt['tabs.ellipse.outline']
 
@@ -150,7 +152,7 @@ class PieceSceneGraphFactory:
         for i, tab in enumerate(p.tabs):
             e = tab.ellipse
             self.add_node(sg.Ellipse(e.center, e.semi_major, e.semi_minor, e.phi,
-                                     {'fill':e_fill, 'outline':e_outline, 'tags':(p.label,)}))
+                                     {'fill':e_fill, 'outline':e_outline, 'tags':tags}))
             self.add_node(sg.Text(e.center, str(i), {'font':l_font, 'fill':l_fill}))
 
     def do_edges(self, p):
@@ -163,10 +165,11 @@ class PieceSceneGraphFactory:
 
     def do_outline(self, p):
 
+        tags = self.opt.get('tags', (p.label,))
         props = {'outline': self.opt['points.outline'],
                  'fill': self.opt['points.fill'],
                  'width': self.opt['points.width'],
-                 'tags':(p.label,)}
+                 'tags':tags}
         scales = [0.2, 0.06]
         nodes = [sg.Polygon(simplify_polygon(p.points, 0), props),
                  sg.Polygon(simplify_polygon(p.points, 2), props),

@@ -469,6 +469,12 @@ class EllipsePredicate(Predicate):
 class PolygonPredicate(Predicate):
 
     def __init__(self, polygon, tags=None):
+        if not isinstance(polygon, np.ndarray):
+            polygon = np.array(polygon)
+        if polygon.dtype.kind in 'iu':
+            polygon = np.array(polygon, dtype=np.int32)
+        else:
+            polygon = np.array(polygon, dtype=np.float32)
         self.bbox = compute_bounding_box(polygon)
         self.polygon = polygon
         self._tags = tags

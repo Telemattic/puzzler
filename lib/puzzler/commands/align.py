@@ -513,7 +513,7 @@ class PuzzleSGFactory:
             tags = ('rotate', f'piece_{piece_id}')
 
             for i in range(4):
-                with puzzler.render.save(r):
+                with puzzler.sgbuilder.insert_sequence(sgb):
                     sgb.add_rotate(i * math.pi / 2)
                     sgb.add_polygon(points, outline='black', fill='', width=1, tags=tags)
                     
@@ -589,6 +589,16 @@ class PuzzleSGFactory:
                 else:
                     sgb.add_lines(points, width=8, fill=fill, tags=(tag,))
 
+class CanvasHitTester:
+
+    def __init__(self, canvas):
+        self.canvas = canvas
+
+    def __call__(self, xy):
+        x, y = xy
+        oids = self.canvas.find('overlapping', x-1, y-1, x+1, y+1)
+        return [self.canvas.gettags(i) for i in oids]
+
 class AlignTk:
 
     def __init__(self, parent, pieces, renderer, mode):
@@ -608,7 +618,15 @@ class AlignTk:
 
         piece_no  = None
         drag_type = 'move'
-        for tag in self.canvas.gettags(self.canvas.find('withtag', 'current')):
+
+        if self.use_scenegraph and self.hittester:
+            tags = self.hittester((event.x, event.y))
+            tags = [i for _, subtags in tags for i in subtags]
+        else:
+            tags = self.canvas.gettags(self.canvas.find('withtag', 'current'))
+        
+        for tag in tags:
+            
             m = re.fullmatch("piece_(\d+)", tag)
             if m:
                 piece_no = int(m[1])
@@ -704,6 +722,9 @@ class AlignTk:
 
         sg = f.build()
 
+        ht = puzzler.scenegraph.BuildHitTester(
+            self.camera.matrix, self.camera.viewport)(sg.root_node)
+
         if self.use_cairo:
             r = puzzler.renderer.cairo.CairoRenderer(self.canvas)
         else:
@@ -716,6 +737,8 @@ class AlignTk:
         sg.root_node.accept(sgr)
 
         self.displayed_image = r.commit()
+
+        self.hittester = ht
 
         if False and self.var_render_adjacency.get():
             with open('scenegraph_foo.json','w') as f:
@@ -769,14 +792,13 @@ class AlignTk:
         self.render()
 
     def motion(self, event):
-        xy0 = np.array((event.x, event.y, 1))
-        xy1 = xy0 @ np.linalg.inv(self.camera.matrix).T
-        # r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
-        # r.transform(self.camera.matrix)
-        # xy2 = r.device_to_user(np.array((event.x, event.y)))
-        tags0 = self.canvas.find('overlapping', event.x-1, event.y-1, event.x+1, event.y+1)
-        tags1 = [self.canvas.gettags(i) for i in tags0]
-        self.var_label.set(f"{xy1[0]:.0f},{xy1[1]:.0f} " + ','.join(str(i) for i in tags1) + '__' +  ','.join(str(i) for i in tags0))
+        xy = np.array((event.x, event.y, 1)) @ np.linalg.inv(self.camera.matrix).T
+        if self.use_scenegraph and self.hittester:
+            tags = self.hittester((event.x, event.y))
+        else:
+            tags = CanvasHitTester(self.canvas)((event.x, event.y))
+        tags = ','.join(str(i) for i in tags)
+        self.var_label.set(f"{xy[0]:.0f},{xy[1]:.0f} {tags}")
 
     def _init_ui(self, parent):
 
