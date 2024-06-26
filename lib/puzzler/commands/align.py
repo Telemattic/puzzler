@@ -467,7 +467,12 @@ class PuzzleSGFactory:
             for f in self.frontiers:
                 self.draw_frontier(f)
 
-        return self.scenegraphbuilder.commit(None, None)
+        sg = self.scenegraphbuilder.commit(None, None)
+
+        lodf = puzzler.sgbuilder.LevelOfDetailFactory()
+        sg.root_node = lodf.visit_node(sg.root_node)
+
+        return sg
 
     def draw_piece(self, p, color, tag):
 

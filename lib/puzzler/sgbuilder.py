@@ -3,8 +3,12 @@ import cv2 as cv
 import numpy as np
 from contextlib import contextmanager
 
+def simplify_line(points, epsilon):
+    approx  = cv.approxPolyDP(points, epsilon, closed=False)
+    return np.squeeze(approx)
+
 def simplify_polygon(points, epsilon):
-    approx  = cv.approxPolyDP(points, epsilon, True)
+    approx  = cv.approxPolyDP(points, epsilon, closed=True)
     poly = np.squeeze(approx)
     return np.concatenate((poly, poly[:1,:]))
 
@@ -87,6 +91,39 @@ def insert_boundingbox(builder, bbox):
         yield builder
     finally:
         builder.boundingbox_end(bbox)
+
+class LevelOfDetailFactory(sg.SceneGraphCloner):
+
+    def __init__(self):
+        super().__init__()
+        self.scales = (0.2, 0.6)
+        self.epsilons = [0, 2, 5]
+
+    def visit_levelofdetail(self, l):
+        # don't visit the children of an LOD node, as we've already
+        # got an LOD node
+        self.append(l)
+
+    def visit_lines(self, l):
+        if len(l.lines) < 10:
+            self.append(l)
+            return
+        
+        nodes = []
+        for eps in self.epsilons:
+            points = simplify_line(l.lines, eps)
+            nodes.append(sg.Lines(points, l.props))
+
+        self.append(sg.LevelOfDetail(self.scales, nodes))
+
+    def visit_polygon(self, p):
+        
+        nodes = []
+        for eps in self.epsilons:
+            points = simplify_polygon(p.points, eps)
+            nodes.append(sg.Polygon(points, p.props))
+
+        self.append(sg.LevelOfDetail(self.scales, nodes))
 
 class PieceSceneGraphFactory:
 
@@ -172,11 +209,7 @@ class PieceSceneGraphFactory:
                  'fill': self.opt['points.fill'],
                  'width': self.opt['points.width'],
                  'tags':tags}
-        scales = [0.2, 0.06]
-        nodes = [sg.Polygon(simplify_polygon(p.points, 0), props),
-                 sg.Polygon(simplify_polygon(p.points, 2), props),
-                 sg.Polygon(simplify_polygon(p.points, 5), props)]
-        self.add_node(sg.LevelOfDetail(scales, nodes))
+        self.add_node(sg.Polygon(p.points, props))
 
     def do_label(self, p):
 

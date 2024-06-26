@@ -174,23 +174,66 @@ class SceneGraphVisitor:
     
     def visit_text(self, n):
         raise NotImplementedError
-    
-@contextmanager
-def insert_sequence(builder):
-    builder.sequence_begin()
-    try:
-        yield builder
-    finally:
-        builder.sequence_end()
-    
-@contextmanager
-def insert_boundingbox(builder, bbox):
-    builder.boundingbox_begin()
-    try:
-        yield builder
-    finally:
-        builder.boundingbox_end(bbox)
 
+class SceneGraphCloner:
+
+    def __init__(self):
+        self._stack = []
+
+    def visit_node(self, node):
+        node.accept(self)
+        return self._stack.pop()
+
+    def visit_nodes(self, nodes):
+        i = len(self._stack)
+        for n in nodes:
+            n.accept(self)
+        retval = self._stack[i:]
+        self._stack = self._stack[:i]
+        return retval
+
+    def visit_sequence(self, n):
+        children = self.visit_nodes(n.nodes)
+        self.append(Sequence(children))
+
+    def visit_transform(self, n):
+        self.append(n)
+
+    def visit_translate(self, n):
+        self.append(n)
+
+    def visit_rotate(self, n):
+        self.append(n)
+
+    def visit_boundingbox(self, n):
+        child = self.visit_node(n.node)
+        self.append(BoundingBox(n.bbox, child))
+
+    def visit_levelofdetail(self, n):
+        children = self.visit_nodes(n.nodes)
+        self.append(LevelOfDetail(n.scales, children))
+
+    def visit_points(self, n):
+        self.append(n)
+    
+    def visit_lines(self, n):
+        self.append(n)
+    
+    def visit_circles(self, n):
+        self.append(n)
+    
+    def visit_ellipse(self, n):
+        self.append(n)
+    
+    def visit_polygon(self, n):
+        self.append(n)
+    
+    def visit_text(self, n):
+        self.append(n)
+
+    def append(self, n):
+        self._stack.append(n)
+    
 class SceneGraphRenderer(SceneGraphVisitor):
 
     def __init__(self, renderer, viewport, scale=1.):

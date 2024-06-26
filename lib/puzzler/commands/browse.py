@@ -48,14 +48,19 @@ class Browser:
             y = num_rows - 1 - o.row
             tx = (x + .5) * bbox_w
             ty = (y + .5) * bbox_h
-            with puzzler.scenegraph.insert_sequence(builder):
+            with puzzler.sgbuilder.insert_sequence(builder):
                 builder.add_translate((tx, ty))
                 # want the corners of the outline bbox centered within the tile
                 bbox_center = np.array((o.bbox[0]+o.bbox[2], o.bbox[1]+o.bbox[3])) / 2
                 builder.add_translate(-bbox_center)
                 builder.add_node(factory(o.piece.label))
                 
-        return builder.commit(None, None)
+        sg = builder.commit(None, None)
+        
+        lodf = puzzler.sgbuilder.LevelOfDetailFactory()
+        sg.root_node = lodf.visit_node(sg.root_node)
+        
+        return sg
 
     def __init__(self, puzzle, renderer, use_scenegraph, screensize=None):
 
