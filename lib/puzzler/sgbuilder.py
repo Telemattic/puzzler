@@ -56,7 +56,7 @@ class SceneGraphBuilder:
         self.add_node(sg.Points(points, kw))
         
     def add_lines(self, points, **kw):
-        self.add_node(sg.Lines(points, kw))
+        self.add_node(sg.Lines(sg.make_array_CV_32(points), kw))
 
     def add_circles(self, points, radius, **kw):
         self.add_node(sg.Circles(points, radius, kw))
@@ -68,7 +68,7 @@ class SceneGraphBuilder:
         return sg.Polygon(points, kw)
 
     def add_polygon(self, points, **kw):
-        self.add_node(sg.Polygon(points, kw))
+        self.add_node(sg.Polygon(sg.make_array_CV_32(points), kw))
 
     def add_text(self, xy, text, **kw):
         self.add_node(sg.Text(xy, text, kw))
@@ -105,13 +105,13 @@ class LevelOfDetailFactory(sg.SceneGraphCloner):
         self.append(l)
 
     def visit_lines(self, l):
-        if len(l.lines) < 10:
+        if len(l.points) < 10:
             self.append(l)
             return
         
         nodes = []
         for eps in self.epsilons:
-            points = simplify_line(l.lines, eps)
+            points = simplify_line(l.points, eps)
             nodes.append(sg.Lines(points, l.props))
 
         self.append(sg.LevelOfDetail(self.scales, nodes))

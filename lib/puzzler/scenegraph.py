@@ -6,6 +6,24 @@ import numpy as np
 
 from contextlib import contextmanager
 
+def is_array_CV_32(data):
+
+    return isinstance(data, np.ndarray) and data.dtype in (np.int32, np.float32)
+
+def make_array_CV_32(data):
+
+    # cv::approxPolyDP and cv::pointPolygonTest require data that is
+    # CV_32F or CV_32S, make it so
+    
+    if not isinstance(data, np.ndarray):
+        data = np.array(data)
+
+    if data.dtype in (np.int32, np.float32):
+        return data
+        
+    dtype = np.int32 if data.dtype.kind in 'iu' else np.float32
+    return np.array(data, dtype=dtype)
+
 class SceneGraph:
 
     def __init__(self, camera_matrix, viewport, root_node):
@@ -86,9 +104,10 @@ class Points(Geometry):
 
 class Lines(Geometry):
 
-    def __init__(self, lines, props):
+    def __init__(self, points, props):
+        assert is_array_CV_32(points)
         super().__init__(props)
-        self.lines = lines
+        self.points = points
 
     def accept(self, v):
         v.visit_lines(self)
@@ -121,6 +140,7 @@ def compute_bounding_box(points):
 class Polygon(Geometry):
 
     def __init__(self, points, props):
+        assert is_array_CV_32(points)
         super().__init__(props)
         self.points = points
 
@@ -272,7 +292,7 @@ class SceneGraphRenderer(SceneGraphVisitor):
         self.renderer.draw_points(p.points, **p.props)
 
     def visit_lines(self, l):
-        self.renderer.draw_lines(l.lines, **l.props)
+        self.renderer.draw_lines(l.points, **l.props)
 
     def visit_circles(self, c):
         self.renderer.draw_circles(c.points, c.radius, **c.props)
@@ -361,7 +381,7 @@ class SceneGraphFormatter(SceneGraphVisitor):
         self._append({'class':'points', 'points': p.points, 'props': p.props})
 
     def visit_lines(self, l):
-        self._append({'class':'lines', 'lines': l.lines, 'props': l.props})
+        self._append({'class':'lines', 'points': l.points, 'props': l.props})
 
     def visit_circles(self, c):
         self._append({'class':'circles', 'centers': c.points, 'radius':c.radius, 'props': c.props})
@@ -448,12 +468,8 @@ class EllipsePredicate(Predicate):
 class PolygonPredicate(Predicate):
 
     def __init__(self, polygon, tags=None):
-        if not isinstance(polygon, np.ndarray):
-            polygon = np.array(polygon)
-        if polygon.dtype.kind in 'iu':
-            polygon = np.array(polygon, dtype=np.int32)
-        else:
-            polygon = np.array(polygon, dtype=np.float32)
+        # required for pointPolygonTest
+        assert is_array_CV_32(polygon)
         self.bbox = compute_bounding_box(polygon)
         self.polygon = polygon
         self._tags = tags
