@@ -447,7 +447,7 @@ class PuzzleSGFactory:
 
     def build(self):
 
-        self.scenegraphbuilder = puzzler.scenegraph.SceneGraphBuilder()
+        self.scenegraphbuilder = puzzler.sgbuilder.SceneGraphBuilder()
             
         # self.scenegraphbuilder.transform(self.camera.matrix)
 
@@ -795,6 +795,7 @@ class AlignTk:
         xy = np.array((event.x, event.y, 1)) @ np.linalg.inv(self.camera.matrix).T
         if self.use_scenegraph and self.hittester:
             tags = self.hittester((event.x, event.y))
+            tags = [i for _, i in tags]
         else:
             tags = CanvasHitTester(self.canvas)((event.x, event.y))
         tags = ','.join(str(i) for i in tags)

@@ -38,7 +38,7 @@ class Browser:
 
     def make_scenegraph(outlines, num_rows, bbox_w, bbox_h):
 
-        builder = puzzler.scenegraph.SceneGraphBuilder()
+        builder = puzzler.sgbuilder.SceneGraphBuilder()
 
         pieces = dict((o.piece.label, o.piece) for o in outlines)
         factory = puzzler.sgbuilder.PieceSceneGraphFactory(pieces)

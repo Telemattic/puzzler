@@ -11,61 +11,63 @@ def simplify_polygon(points, epsilon):
 class SceneGraphBuilder:
 
     def __init__(self):
-        self.stack = [Sequence()]
+        self.stack = [sg.Sequence()]
 
     def commit(self, camera, viewport):
         node = self.stack.pop()
-        return SceneGraph(camera, viewport, node)
+        return sg.SceneGraph(camera, viewport, node)
 
     def sequence_begin(self):
-        self.stack.append(Sequence())
+        self.stack.append(sg.Sequence())
 
     def sequence_end(self):
         node = self.stack.pop()
         self.add_node(node)
 
     def boundingbox_begin(self):
-        self.stack.append(Sequence())
+        self.stack.append(sg.Sequence())
 
     def boundingbox_end(self, bbox):
         node = self.stack.pop()
         self.add_boundingbox(bbox, node)
 
     def add_transform(self, m):
-        self.add_node(Transform(m))
+        self.add_node(sg.Transform(m))
 
     def add_translate(self, xy):
-        self.add_node(Translate(xy))
+        self.add_node(sg.Translate(xy))
 
     def add_boundingbox(self, bbox, node):
-        self.add_node(BoundingBox(bbox, node))
+        self.add_node(sg.BoundingBox(bbox, node))
 
     def add_levelofdetail(self, scales, nodes):
-        self.add_node(LevelOfDetail(scales, nodes))
+        self.add_node(sg.LevelOfDetail(scales, nodes))
 
     def add_rotate(self, rad):
-        self.add_node(Rotate(rad))
+        self.add_node(sg.Rotate(rad))
 
     def add_points(self, points, radius, **kw):
-        self.add_node(Points(points, radius, kw))
-
+        # self.add_node(Points(points, radius, kw))
+        kw['radius'] = radius
+        self.add_node(sg.Points(points, kw))
+        
     def add_lines(self, points, **kw):
-        self.add_node(Lines(points, kw))
+        self.add_node(sg.Lines(points, kw))
 
     def add_circles(self, points, radius, **kw):
-        self.add_node(points, radius, kw)
+        self.add_node(sg.Circles(points, radius, kw))
 
     def add_ellipse(self, center, semi_major, semi_minor, phi, **kw):
-        self.add_node(Ellipse(center, semi_major, semi_minor, phi, kw))
+        self.add_node(sg.Ellipse(center, semi_major, semi_minor, phi, kw))
 
     def make_polygon(self, points, **kw):
-        return Polygon(points, kw)
+        return sg.Polygon(points, kw)
 
     def add_polygon(self, points, **kw):
-        self.add_node(Polygon(points, kw))
+        self.add_node(sg.Polygon(points, kw))
 
     def add_text(self, xy, text, **kw):
-        self.add_node(Text(xy, text, kw))
+        self.add_node(sg.Text(xy, text, kw))
 
     def add_node(self, node):
         self.stack[-1].nodes.append(node)
@@ -105,13 +107,13 @@ class PieceSceneGraphFactory:
         'label.fill':'black'
     }
     
-    def __init__(self, pieces, opt):
+    def __init__(self, pieces, opt = dict()):
         self.pieces = pieces
         self.opt = PieceSceneGraphFactory.defaults | opt
         self._cache = dict()
         self.nodes = []
 
-    def __call__(self, label, props):
+    def __call__(self, label, props = dict()):
         node = self._cache.get(label)
         if node is None:
             save_opt = self.opt
