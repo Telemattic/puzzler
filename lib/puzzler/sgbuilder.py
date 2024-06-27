@@ -198,11 +198,12 @@ class PieceSceneGraphFactory:
 
     def do_edges(self, p):
 
-        l_width = self.opt['edges.lines.width']
-        l_fill = self.opt['edges.lines.fill']
+        props = {'width': self.opt['edges.lines.width'],
+                 'fill': self.opt['edges.lines.fill']}
 
         for edge in p.edges:
-            self.add_node(sg.Lines(edge.line.pts, {'width':l_width, 'fill':l_fill}))
+            points = sg.make_array_CV_32(edge.line.pts)
+            self.add_node(sg.Lines(points, props))
 
     def do_outline(self, p):
 
