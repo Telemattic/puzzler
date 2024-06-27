@@ -68,7 +68,7 @@ class CairoRenderer(puzzler.render.Renderer):
 
         ctx.restore()
 
-    def draw_polygon(self, points, fill=None, outline=(0,0,0), width=1, tags=None):
+    def draw_polygon(self, points, fill=None, outline=(0,0,0), width=1, tags=None, dashes=None):
 
         ctx = self.context
 
@@ -91,6 +91,8 @@ class CairoRenderer(puzzler.render.Renderer):
                 ctx.fill()
                 
         if outline:
+            if dashes:
+                ctx.set_dash([dash * self.device_to_user_scale for dash in dashes])
             ctx.set_source_rgba(*self.get_color(outline))
             ctx.stroke()
         
