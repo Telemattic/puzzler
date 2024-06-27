@@ -4,13 +4,14 @@ import numpy as np
 from contextlib import contextmanager
 
 def simplify_line(points, epsilon):
-    approx  = cv.approxPolyDP(points, epsilon, closed=False)
+    approx = cv.approxPolyDP(points, epsilon, closed=False)
     return np.squeeze(approx)
 
 def simplify_polygon(points, epsilon):
-    approx  = cv.approxPolyDP(points, epsilon, closed=True)
-    poly = np.squeeze(approx)
-    return np.concatenate((poly, poly[:1,:]))
+    approx = cv.approxPolyDP(points, epsilon, closed=True)
+    return np.squeeze(approx)
+# poly = np.squeeze(approx)
+# return np.concatenate((poly, poly[:1,:]))
 
 class SceneGraphBuilder:
 
@@ -147,6 +148,7 @@ class PieceSceneGraphFactory:
     def __init__(self, pieces, opt = dict()):
         self.pieces = pieces
         self.opt = PieceSceneGraphFactory.defaults | opt
+        self.levelofdetail = LevelOfDetailFactory()
         self._cache = dict()
         self.nodes = []
 
@@ -209,7 +211,9 @@ class PieceSceneGraphFactory:
                  'fill': self.opt['points.fill'],
                  'width': self.opt['points.width'],
                  'tags':tags}
-        self.add_node(sg.Polygon(p.points, props))
+        polygon = sg.Polygon(p.points, props)
+        lod = self.levelofdetail.visit_node(polygon)
+        self.add_node(lod)
 
     def do_label(self, p):
 
