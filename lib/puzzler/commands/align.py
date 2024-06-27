@@ -835,7 +835,6 @@ class AlignTk:
             if self.solver.corners:
                 self.parent.after_idle(self.do_tab_alignment)
             else:
-                self.solver.save_tab_matches()
                 self.var_solve_continuous.set(0)
 
     def update_coords(self):
@@ -848,14 +847,12 @@ class AlignTk:
             if c := g.coords.get(p.piece.label):
                 p.coords = c
 
-    def load_geometry(self, path):
-
-        self.solver.load_geometry(path)
-        self.solver.update_adjacency()
+    def load_solver(self, path):
+        self.solver = puzzler.solver.load_json(path, self.solver.pieces)
         self.update_coords()
-
-    def load_constraints(self, path):
-        self.solver.load_constraints(path)
+        
+        self.scenegraph = None
+        self.render()
 
     def do_solve(self):
 
@@ -1176,10 +1173,8 @@ def align_ui(args):
     root.title("Puzzler: align")
 
     ui.reset_layout()
-    if args.geometry:
-        ui.load_geometry(args.geometry)
-    if args.constraints:
-        ui.load_constraints(args.constraints)
+    if args.input:
+        ui.load_solver(args.input)
 
     root.mainloop()
 
@@ -1187,8 +1182,7 @@ def add_parser(commands):
 
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
     parser_align.add_argument("labels", nargs='*')
-    parser_align.add_argument("-g", "--geometry", help="geometry file")
-    parser_align.add_argument("-c", "--constraints", help="constraints file")
+    parser_align.add_argument("-i", "--input", help="initialize solver")
     parser_align.add_argument("-b", "--buddies", help="buddy file")
     parser_align.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='cairo',
                                help="renderer (default: %(default)s)")

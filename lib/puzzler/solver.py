@@ -729,11 +729,25 @@ class PuzzleSolver:
         print(f"{self.constraints=}")
         print(f"{self.geometry=}")
 
-        ts = datetime.now()
-        self.save_geometry(ts)
-        self.save_constraints(ts)
-        self.save_tab_matches(ts)
         self.update_adjacency()
+
+        ts = datetime.now()
+
+        path = self.next_path(ts.strftime('matches_%Y%m%d-%H%M%S'), 'csv')
+        self.save_tab_matches(path)
+        
+        path = self.next_path(ts.strftime('solver_%Y%m%d-%H%M%S'), 'json')
+        save_json(path, self)
+
+    def next_path(self, fname, ext):
+
+        dname = r'C:\temp\puzzler\align'
+        i = 0
+        while True:
+            path = os.path.join(dname, f"{fname}_{i}.{ext}")
+            if not os.path.exists(path):
+                return path
+            i += 1
 
     def solve_field(self):
         
@@ -782,13 +796,17 @@ class PuzzleSolver:
 
         self.geometry.coords[src_label] = coords
 
-        ts = datetime.now()
-        self.save_geometry(ts)
-        self.save_constraints(ts)
-        self.save_tab_matches(ts)
         self.update_adjacency()
 
         print(self.distance_query_cache.stats | {'cache_size': len(self.distance_query_cache.cache)})
+
+        ts = datetime.now()
+        
+        path = self.next_path(ts.strftime('matches_%Y%m%d-%H%M%S'), 'csv')
+        self.save_tab_matches(path)
+        
+        path = self.next_path(ts.strftime('solver_%Y%m%d-%H%M%S'), 'json')
+        save_json(path, self)
 
     def score_corner(self, corner):
 
@@ -828,43 +846,7 @@ class PuzzleSolver:
 
         return fits
 
-    def save_geometry(self, ts):
-        
-        path = os.path.join(r'C:\temp\puzzler\align',
-                            ts.strftime('geometry_%Y%m%d-%H%M%S') + '.json')
-        
-        g = self.geometry
-        obj = {'width': g.width, 'height': g.height, 'coords':dict()}
-        for k, v in g.coords.items():
-            obj['coords'][k] = {'angle': v.angle, 'xy': list(v.dxdy)}
-                
-        with open(path, 'w') as f:
-            json.dump(obj, f, indent=2)
-
-    def save_constraints(self, ts):
-
-        path = os.path.join(r'C:\temp\puzzler\align',
-                            ts.strftime('constraints_%Y%m%d-%H%M%S') + '.json')
-        
-        obj = []
-        for i in self.constraints:
-            if isinstance(i, BorderConstraint):
-                obj.append({'kind':'edge', 'edge': list(i.edge), 'axis':i.axis})
-            elif isinstance(i, TabConstraint):
-                obj.append({'kind':'tab', 'a':list(i.a), 'b':list(i.b)})
-            else:
-                assert False
-
-        with open(path, 'w') as f:
-            json.dump(obj, f, indent=2)
-
-    def save_tab_matches(self, ts=None):
-
-        if ts == None:
-            ts = datetime.now()
-
-        path = os.path.join(r'C:\temp\puzzler\align',
-                            ts.strftime('matches_%Y%m%d-%H%M%S') + '.csv')
+    def save_tab_matches(self, path):
 
         tab_xy = []
         radii = []
@@ -898,41 +880,6 @@ class PuzzleSolver:
             writer.writeheader()
             writer.writerows(rows)
                 
-    def load_geometry(self, path):
-
-        with open(path) as f:
-            obj = json.load(f)
-
-        width = obj['width']
-        height = obj['height']
-        coords = dict()
-        for k, v in obj['coords'].items():
-            angle = v['angle']
-            xy = np.array(v['xy'])
-            coords[k] = AffineTransform(angle, xy)
-
-        self.geometry = Geometry(width, height, coords)
-
-    def load_constraints(self, path):
-        
-        with open(path) as f:
-            ary = json.load(f)
-
-        constraints = []
-        for c in ary:
-            if c['kind'] == 'edge':
-                edge = tuple(c['edge'])
-                axis = c['axis']
-                constraints.append(BorderConstraint(edge, axis))
-            elif c['kind'] == 'tab':
-                a = tuple(c['a'])
-                b = tuple(c['b'])
-                constraints.append(TabConstraint(a, b))
-            else:
-                assert False
-
-        self.constraints = constraints
-       
     def update_adjacency(self):
 
         ac = AdjacencyComputer(self.pieces, [], self.geometry, self.distance_query_cache)
@@ -981,3 +928,176 @@ class PuzzleSolver:
                 print(f"fullpaths[{i}]={flatten_list(j)}", file=f)
             print(f"corners={corners}", file=f)
             print(f"good_corners={good_corners}", file=f)
+
+def load_json(path, pieces):
+
+    with open(path, 'r') as f:
+        s = f.read()
+
+    return from_json(pieces, s)
+
+def from_json(pieces, s):
+
+    def parse_geometry(o):
+        if o is None:
+            return None
+        
+        width = o['width']
+        height = o['height']
+        coords = dict()
+        for k, v in o['coords'].items():
+            coords[k] = parse_affine_transform(v)
+
+        return Geometry(width, height, coords)
+
+    def parse_affine_transform(o):
+        angle = o['angle']
+        dxdy = tuple(o['dxdy'])
+        return puzzler.align.AffineTransform(angle, dxdy)
+
+    def parse_constraints(o):
+        if o is None:
+            return None
+
+        return [parse_constraint(i) for i in o]
+
+    def parse_constraint(o):
+
+        if o['kind'] == 'edge':
+            edge = tuple(o['edge'])
+            axis = o['axis']
+            return BorderConstraint(edge, axis)
+
+        if o['kind'] == 'tab':
+            a = tuple(o['a'])
+            b = tuple(o['b'])
+            return TabConstraint(a, b)
+
+        assert False
+
+    def parse_adjacency(o):
+
+        def helper(o):
+            ret = collections.defaultdict(list)
+            for k, v in o.items():
+                ret[k] = [tuple(i) for i in v]
+
+            return ret
+
+        if o is None:
+            return None
+
+        return dict((k, helper(v)) for k, v in o.items())
+
+    def parse_frontiers(o):
+        if o is None:
+            return None
+
+        return [parse_frontier(i) for i in o]
+
+    def parse_frontier(o):
+        return [(a, tuple(b)) for a, b in o]
+
+    def parse_corners(o):
+
+        if o is None:
+            return None
+
+        return [parse_corner(i) for i in o]
+
+    def parse_corner(o):
+
+        return tuple((a,b) for a, b in o)
+
+    o = json.loads(s)
+
+    assert set(pieces.keys()) == set(o['pieces'])
+
+    geometry = parse_geometry(o['geometry'])
+    constraints = parse_constraints(o['constraints'])
+    adjacency = parse_adjacency(o['adjacency'])
+    frontiers = parse_frontiers(o['frontiers'])
+    corners = parse_corners(o['corners'])
+
+    solver = PuzzleSolver(pieces)
+    solver.geometry = geometry
+    solver.constraints = constraints
+    solver.adjacency = adjacency
+    solver.frontiers = frontiers
+    solver.corners = corners
+
+    return solver
+
+def save_json(path, solver):
+
+    with open(path, 'w') as f:
+        f.write(to_json(solver))
+
+def to_json(solver):
+
+    def format_pieces(pieces):
+        return sorted(pieces.keys())
+
+    def format_geometry(geometry):
+        if geometry is None:
+            return None
+
+        coords = dict((k, format_affine_transform(v))
+                      for k, v in geometry.coords.items())
+
+        return {'width':geometry.width,
+                'height':geometry.height,
+                'coords':coords}
+
+    def format_affine_transform(t):
+        return {'angle':t.angle, 'dxdy':t.dxdy.tolist()}
+
+    def format_constraints(constraints):
+        if constraints is None:
+            return None
+        return [format_constraint(i) for i in constraints]
+
+    def format_constraint(c):
+        if isinstance(c, BorderConstraint):
+            return {'kind':'edge', 'edge': list(c.edge), 'axis':c.axis}
+        
+        if isinstance(c, TabConstraint):
+            return {'kind':'tab', 'a':list(c.a), 'b':list(c.b)}
+
+        assert False
+
+    def format_adjacency(adjacency):
+        if adjacency is None:
+            return None
+
+        return dict((k,v) for k, v in adjacency.items())
+
+    def format_frontiers(frontiers):
+
+        return frontiers
+
+        if frontiers is None:
+            return None
+
+        return [format_frontier(i) for i in frontiers]
+
+    def format_frontier(f):
+
+        return str(f)
+
+    def format_corners(corners):
+
+        if corners is None:
+            return None
+
+        return corners
+
+    o = dict()
+    o['pieces'] = format_pieces(solver.pieces)
+    o['geometry'] = format_geometry(solver.geometry)
+    o['constraints'] = format_constraints(solver.constraints)
+    o['adjacency'] = format_adjacency(solver.adjacency)
+    o['frontiers'] = format_frontiers(solver.frontiers)
+    o['corners'] = format_corners(solver.corners)
+
+    return json.JSONEncoder(indent=0).encode(o)
