@@ -5,8 +5,11 @@ import itertools
 import math
 import numpy as np
 import operator
+import palettable.tableau
 import re
 import scipy
+import time
+import traceback
 import puzzler.feature
 import puzzler
 import puzzler.renderer.canvas
@@ -426,9 +429,10 @@ class PuzzleRenderer:
                     
 class PuzzleSGFactory:
 
-    def __init__(self, canvas, camera, pieces):
-        self.canvas = canvas
-        self.camera = camera
+    # HACK: initialized as singleton on first construction of PuzzleSGFactory
+    piece_factory = None
+
+    def __init__(self, pieces):
         self.pieces = pieces
         self.selection = None
         self.frontiers = []
@@ -436,14 +440,14 @@ class PuzzleSGFactory:
         self.renderer = None
         self.font = None
         self.render_fast = None
-        self.canvas_w = self.camera.viewport[0]
-        self.canvas_h = self.camera.viewport[1]
         self.normals = dict()
         self.vertexes = dict()
 
-        pieces_dict = dict((i.piece.label, i.piece) for i in pieces)
-        self.piece_factory = puzzler.sgbuilder.PieceSceneGraphFactory(
-            pieces_dict, {'label.render':False, 'tabs.render':False, 'edges.render':False})
+        if PuzzleSGFactory.piece_factory is None:
+            pieces_dict = dict((i.piece.label, i.piece) for i in pieces)
+            props = {'label.render':False, 'tabs.render':False, 'edges.render':False}
+            PuzzleSGFactory.piece_factory = puzzler.sgbuilder.PieceSceneGraphFactory(
+                pieces_dict, props)
 
     def build(self):
 
@@ -454,10 +458,11 @@ class PuzzleSGFactory:
         if self.adjacency:
             self.draw_adjacency(self.adjacency)
 
-        colors = ['red', 'green', 'blue']
+        colors = [tuple(c/255 for c in color) for color in palettable.tableau.Tableau_20.colors]
         for i, piece in enumerate(self.pieces):
 
             color = colors[i%len(colors)]
+            color = colors[hash(piece.piece.label)%len(colors)]
             self.draw_piece(piece, color, f"piece_{i}")
 
         if self.selection is not None:
@@ -486,7 +491,9 @@ class PuzzleSGFactory:
                 
             sgb.add_rotate(p.coords.angle)
 
-            sgb.add_node(self.piece_factory(p.piece.label, {'points.outline':color, 'tags':(tag,)}))
+            props = {'points.outline':color, 'points.fill':color+(0.25,), 'tags':(tag,)}
+            sgb.add_node(PuzzleSGFactory.piece_factory(p.piece.label, props))
+                                            
 
             normals = self.normals.get(p.piece.label)
             if normals is not None:
@@ -616,16 +623,23 @@ class AlignTk:
         self.render_vertexes = None
         self.use_cairo = renderer == 'cairo'
         self.use_scenegraph = mode == 'scenegraph'
+        self.scenegraph = None
+        self.hittester = None
 
         self._init_ui(parent)
 
+    def device_to_user(self, xy):
+        xy = np.array((*xy, 1)) @ np.linalg.inv(self.camera.matrix).T
+        return xy[:2]
+    
     def canvas_press(self, event):
 
         piece_no  = None
         drag_type = 'move'
 
-        if self.use_scenegraph and self.hittester:
-            tags = self.hittester((event.x, event.y))
+        if self.hittester:
+            xy = self.device_to_user((event.x, event.y))
+            tags = self.hittester(xy)
             tags = [i for _, subtags in tags for i in subtags]
         else:
             tags = self.canvas.gettags(self.canvas.find('withtag', 'current'))
@@ -637,6 +651,8 @@ class AlignTk:
                 piece_no = int(m[1])
             if tag == 'rotate':
                 drag_type = 'turn'
+
+        had_selection = self.selection is not None
 
         if piece_no is None:
             self.draggable = MoveCamera(self.camera)
@@ -651,20 +667,38 @@ class AlignTk:
 
         self.draggable.start(np.array((event.x, event.y)))
 
+        # HACK: assume hittester invalidated
+        # self.hittester = None
+        if self.selection is not None or had_selection:
+            self.scenegraph = None
         self.render()
         
     def canvas_drag(self, event):
 
-        if self.draggable:
-            self.draggable.drag(np.array((event.x, event.y)))
-            self.render()
+        if not self.draggable:
+            return
+        
+        self.draggable.drag(np.array((event.x, event.y)))
+        
+        # HACK: assume hittester invalidated
+        # self.hittester = None
+        if self.selection is not None:
+            self.scenegraph = None
+        self.render()
 
     def canvas_release(self, event):
                 
-        if self.draggable:
-            self.draggable.commit()
-            self.draggable = None
-            self.render()
+        if not self.draggable:
+            return
+        
+        self.draggable.commit()
+        self.draggable = None
+
+        # HACK: assume hittester invalidated
+        # self.hittester = None
+        if self.selection is not None:
+            self.scenegraph = None
+        self.render()
 
     def render(self):
 
@@ -714,7 +748,60 @@ class AlignTk:
 
     def sg_render(self):
 
-        f = PuzzleSGFactory(self.canvas, self.camera, self.pieces)
+        # ideally the scenegraph doesn't have to get rebuilt for a
+        # simple change in camera position
+
+        t_start = time.perf_counter()
+
+        if self.scenegraph is None:
+            self.scenegraph = self.build_scenegraph()
+            self.hittester = None
+
+        t_build = time.perf_counter()
+        
+        if self.hittester is None:
+            self.hittester = self.build_hittester()
+            
+        t_hittest = time.perf_counter()
+
+        if self.use_cairo:
+            r = puzzler.renderer.cairo.CairoRenderer(self.canvas)
+        else:
+            self.canvas.delete('all')
+            r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+
+        r.transform(self.camera.matrix)
+
+        sgr = puzzler.scenegraph.SceneGraphRenderer(
+            r, self.camera.viewport, scale=self.camera.zoom)
+        self.scenegraph.root_node.accept(sgr)
+
+        for o in self.hittester.objects:
+            if isinstance(o, puzzler.scenegraph.TransformPredicate):
+                points = sgr.bbox_corners(o.bbox)
+                r.draw_polygon(points, outline='gray', width=1, dashes=(3,6))
+
+        self.displayed_image = r.commit()
+
+        t_render = time.perf_counter()
+        
+        if False and self.var_render_adjacency.get():
+            with open('scenegraph_foo.json','w') as f:
+                f.write(puzzler.scenegraph.to_json(self.scenegraph))
+
+        if True:
+            print("-------------------------------------------------------")
+            print(f"sg={t_build-t_start:.3f} ht={t_hittest-t_build:.3f} render={t_render-t_hittest:.3f}")
+            for f in traceback.extract_stack():
+                filename = f.filename
+                prefix = 'C:\\home\\eldridge\\proj\\puzzler\\'
+                if filename.startswith(prefix):
+                    filename = '.\\' + filename[len(prefix):]
+                print(f"{filename}:{f.lineno}  {f.name}")
+    
+    def build_scenegraph(self):
+
+        f = PuzzleSGFactory(self.pieces)
 
         f.selection = self.selection
         f.frontiers = self.solver.frontiers
@@ -725,35 +812,35 @@ class AlignTk:
         if self.render_vertexes:
             f.vertexes = self.render_vertexes
 
-        sg = f.build()
+        return f.build()
+
+    def build_hittester(self):
 
         ht = puzzler.scenegraph.BuildHitTester(
-            self.camera.matrix, self.camera.viewport)(sg.root_node)
+            self.camera.matrix, self.camera.viewport)(self.scenegraph.root_node)
 
-        if self.use_cairo:
-            r = puzzler.renderer.cairo.CairoRenderer(self.canvas)
-        else:
-            self.canvas.delete('all')
-            r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+        bbox = puzzler.scenegraph.bbox_union([o.bbox for o in ht.objects])
+        print(f"hittester: scene_bbox={bbox}")
+        w, h = int(bbox[1][0]-bbox[0][0]), int(bbox[1][1]-bbox[0][1])
 
-        r.transform(self.camera.matrix)
+        # (w/d) * (h/d) ~= n --> d = sqrt(n/(w*h))
+        w = max(1,w)
+        h = max(1,h)
+        d = int(math.sqrt((w*h)/1024))
 
-        sgr = puzzler.scenegraph.SceneGraphRenderer(r, self.camera.viewport, scale=self.camera.zoom)
-        sg.root_node.accept(sgr)
+        x_cells = 1 + w // d
+        y_cells = 1 + h // d
+        n_cells = x_cells * y_cells
 
-        self.displayed_image = r.commit()
-
-        self.hittester = ht
-
-        if False and self.var_render_adjacency.get():
-            with open('scenegraph_foo.json','w') as f:
-                f.write(puzzler.scenegraph.to_json(sg))
+        print(f"{w=} {h=} -> cell={d}x{d} -> grid={x_cells}x{y_cells} {n_cells=}")
+        return ht
 
     def do_tab_alignment(self):
 
         self.solver.solve_field()
         self.update_coords()
-                    
+
+        self.scenegraph = None
         self.render()
 
         if self.var_solve_continuous.get():
@@ -786,7 +873,8 @@ class AlignTk:
 
         self.solver.solve_border()
         self.update_coords()
-                    
+
+        self.scenegraph = None
         self.render()
         
     def mouse_wheel(self, event):
@@ -797,9 +885,9 @@ class AlignTk:
         self.render()
 
     def motion(self, event):
-        xy = np.array((event.x, event.y, 1)) @ np.linalg.inv(self.camera.matrix).T
-        if self.use_scenegraph and self.hittester:
-            tags = self.hittester((event.x, event.y))
+        xy = self.device_to_user((event.x, event.y))
+        if self.hittester:
+            tags = self.hittester(xy, brute_force=False)
             tags = [i for _, i in tags]
         else:
             tags = CanvasHitTester(self.canvas)((event.x, event.y))
@@ -874,7 +962,6 @@ class AlignTk:
         e2.grid(column=4, row=0)
 
         self.render_full = False
-        self.render()
 
     def resize(self, e):
         viewport = (e.width, e.height)
@@ -915,6 +1002,7 @@ class AlignTk:
             p.coords.angle = 0.
             p.coords.dxdy = np.array((x, y))
 
+        self.scenegraph = None
         self.render()
 
     def show_tab_alignment(self):

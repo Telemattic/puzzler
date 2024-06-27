@@ -319,13 +319,15 @@ class SceneGraphRenderer(SceneGraphVisitor):
             self.fonts[fontspec] = font
         return font
 
-    def is_bbox_visible(self, bbox):
-
+    def bbox_corners(self, bbox):
         ll, ur = bbox
         x0, y0 = ll
         x1, y1 = ur
-        points = np.array([(x0,y0), (x1,y0), (x1,y1), (x0,y1)])
+        return np.array([(x0,y0), (x1,y0), (x1,y1), (x0,y1)])
 
+    def is_bbox_visible(self, bbox):
+
+        points = self.bbox_corners(bbox)
         screen = self.renderer.user_to_device(points)
         x = screen[:,0]
         y = screen[:,1]
@@ -396,6 +398,8 @@ class SceneGraphFormatter(SceneGraphVisitor):
         self._append({'class':'text', 'xy':t.xy, 'text':t.text, 'props':t.props})
 
     def _append(self, o):
+        if 'points' in o:
+            o = o | {'points':str(o['points'].shape)}
         self.stack[-1].append(o)
 
 class SceneGraphJSONEncoder(json.JSONEncoder):
@@ -428,6 +432,18 @@ def project_bbox(matrix, bbox):
 def bbox_contains(bbox, pt):
     ll, ur = bbox
     return ll[0] <= pt[0] <= ur[0] and ll[1] <= pt[1] <= ur[1]
+
+def bbox_union(bboxes):
+    x0, y0 = bboxes[0][0]
+    x1, y1 = bboxes[0][1]
+
+    for ll, ur in bboxes[1:]:
+        x0 = min(x0, ll[0])
+        y0 = min(y0, ll[1])
+        x1 = max(x1, ur[0])
+        y1 = max(y1, ur[1])
+
+    return ((x0, y0), (x1, y1))
 
 class Predicate:
 
@@ -497,13 +513,20 @@ class TransformPredicate(Predicate):
 class HitTester:
 
     def __init__(self, viewport):
-        self.viewport = viewport
-        self.cell_w = 64
-        self.cell_h = 64
+        self.cell_w = 256
+        self.cell_h = 256
         self.cells = collections.defaultdict(list)
         self.objects = []
 
-    def __call__(self, pt):
+    def __call__(self, pt, brute_force=False):
+
+        if brute_force:
+            retval = []
+            for oid, o in enumerate(self.objects):
+                if o.contains(pt):
+                    retval.append((oid, o.tags()))
+            return retval
+
         cell = self.cell_for_point(pt)
         if cell not in self.cells:
             return []
@@ -552,8 +575,8 @@ class BuildHitTester(SceneGraphVisitor):
         self.matrix = np.identity(3)
         self.inverse = np.identity(3)
 
-        self.matrix = camera
-        self.inverse = np.linalg.inv(self.matrix)
+        # self.matrix = camera
+        # self.inverse = np.linalg.inv(self.matrix)
 
     def __call__(self, node):
         node.accept(self)
