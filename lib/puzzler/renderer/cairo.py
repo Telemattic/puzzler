@@ -21,7 +21,7 @@ class CairoRenderer(puzzler.render.Renderer):
 
         ctx.save()
         ctx.rectangle(0, 0, w, h)
-        ctx.set_source_rgb(1, 1, 1)
+        ctx.set_source_rgba(1, 1, 1, 1)
         ctx.fill()
         ctx.restore()
 
@@ -63,7 +63,7 @@ class CairoRenderer(puzzler.render.Renderer):
             ctx.arc(*p, r, 0., two_pi)
 
         if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
+            ctx.set_source_rgba(*self.get_color(fill))
         ctx.fill()
 
         ctx.restore()
@@ -78,20 +78,20 @@ class CairoRenderer(puzzler.render.Renderer):
             w = width * self.device_to_user_scale
             ctx.set_line_width(w)
         
-        ctx.move_to(*points[-1])
-        for p in points:
+        ctx.move_to(*points[0])
+        for p in points[1:]:
             ctx.line_to(*p)
         ctx.close_path()
         
         if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
+            ctx.set_source_rgba(*self.get_color(fill))
             if outline:
                 ctx.fill_preserve()
             else:
                 ctx.fill()
                 
         if outline:
-            ctx.set_source_rgb(*self.get_color(outline))
+            ctx.set_source_rgba(*self.get_color(outline))
             ctx.stroke()
         
         ctx.restore()
@@ -117,7 +117,7 @@ class CairoRenderer(puzzler.render.Renderer):
             ctx.set_line_width(w)
             
         if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
+            ctx.set_source_rgba(*self.get_color(fill))
         
         def pairwise(x):
             i = iter(x)
@@ -179,14 +179,14 @@ class CairoRenderer(puzzler.render.Renderer):
         ctx.arc(0., 0., 1., 0, 2 * math.pi)
 
         if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
+            ctx.set_source_rgba(*self.get_color(fill))
             if outline:
                 ctx.fill_preserve()
             else:
                 ctx.fill()
                 
         if outline:
-            ctx.set_source_rgb(*self.get_color(outline))
+            ctx.set_source_rgba(*self.get_color(outline))
             ctx.stroke()
 
         ctx.restore()
@@ -220,7 +220,7 @@ class CairoRenderer(puzzler.render.Renderer):
         ctx.move_to(*xy)
 
         if fill:
-            ctx.set_source_rgb(*self.get_color(fill))
+            ctx.set_source_rgba(*self.get_color(fill))
         
         ctx.show_text(text)
 
