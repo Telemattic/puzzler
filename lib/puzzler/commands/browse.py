@@ -150,7 +150,7 @@ class Browser:
         if self.scenegraph:
             viewport = (canvas.winfo_width(), canvas.winfo_height())
             
-            self.hittester = puzzler.scenegraph.BuildHitTester(camera.matrix, viewport)(self.scenegraph.root_node)
+            self.hittester = puzzler.scenegraph.BuildHitTester()(self.scenegraph.root_node)
 
             sgr = puzzler.scenegraph.SceneGraphRenderer(r, viewport, scale=camera.zoom)
             self.scenegraph.root_node.accept(sgr)
@@ -292,10 +292,15 @@ class BrowseTk:
             self.draggable = None
             self.render()
 
+    def device_to_user(self, xy):
+        xy = np.array((*xy, 1)) @ np.linalg.inv(self.camera.matrix).T
+        return xy[:2]
+    
     def canvas_motion(self, event):
 
         if self.browser.hittester:
-            hits = self.browser.hittester((event.x, event.y))
+            xy = self.device_to_user((event.x, event.y))
+            hits = self.browser.hittester(xy)
             s = '; '.join(str(id)+':'+','.join(tags) for id, tags in hits)
             self.var_mouse.set(s)
 

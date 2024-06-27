@@ -776,8 +776,8 @@ class AlignTk:
             r, self.camera.viewport, scale=self.camera.zoom)
         self.scenegraph.root_node.accept(sgr)
 
-        for o in self.hittester.objects:
-            if isinstance(o, puzzler.scenegraph.TransformPredicate):
+        if False:
+            for o in self.hittester.objects:
                 points = sgr.bbox_corners(o.bbox)
                 r.draw_polygon(points, outline='gray', width=1, dashes=(3,6))
 
@@ -789,7 +789,7 @@ class AlignTk:
             with open('scenegraph_foo.json','w') as f:
                 f.write(puzzler.scenegraph.to_json(self.scenegraph))
 
-        if True:
+        if False:
             print("-------------------------------------------------------")
             print(f"sg={t_build-t_start:.3f} ht={t_hittest-t_build:.3f} render={t_render-t_hittest:.3f}")
             for f in traceback.extract_stack():
@@ -816,24 +816,12 @@ class AlignTk:
 
     def build_hittester(self):
 
-        ht = puzzler.scenegraph.BuildHitTester(
-            self.camera.matrix, self.camera.viewport)(self.scenegraph.root_node)
+        return puzzler.scenegraph.BuildHitTester()(self.scenegraph.root_node)
 
-        bbox = puzzler.scenegraph.bbox_union([o.bbox for o in ht.objects])
-        print(f"hittester: scene_bbox={bbox}")
-        w, h = int(bbox[1][0]-bbox[0][0]), int(bbox[1][1]-bbox[0][1])
-
-        # (w/d) * (h/d) ~= n --> d = sqrt(n/(w*h))
-        w = max(1,w)
-        h = max(1,h)
-        d = int(math.sqrt((w*h)/1024))
-
-        x_cells = 1 + w // d
-        y_cells = 1 + h // d
-        n_cells = x_cells * y_cells
-
-        print(f"{w=} {h=} -> cell={d}x{d} -> grid={x_cells}x{y_cells} {n_cells=}")
-        return ht
+    def do_render_adjacency(self):
+        
+        self.scenegraph = None
+        self.render()
 
     def do_tab_alignment(self):
 
@@ -887,7 +875,7 @@ class AlignTk:
     def motion(self, event):
         xy = self.device_to_user((event.x, event.y))
         if self.hittester:
-            tags = self.hittester(xy, brute_force=False)
+            tags = self.hittester(xy)
             tags = [i for _, i in tags]
         else:
             tags = CanvasHitTester(self.canvas)((event.x, event.y))
@@ -929,7 +917,8 @@ class AlignTk:
         b2.grid(column=1, row=0, sticky=W)
 
         self.var_render_adjacency = IntVar(value=0)
-        b3 = ttk.Checkbutton(self.controls, text="Adjacency", command=self.render,
+        b3 = ttk.Checkbutton(self.controls, text="Adjacency",
+                             command=self.do_render_adjacency,
                              variable=self.var_render_adjacency)
         b3.grid(column=2, row=0, sticky=W)
 
@@ -1201,8 +1190,8 @@ def add_parser(commands):
     parser_align.add_argument("-g", "--geometry", help="geometry file")
     parser_align.add_argument("-c", "--constraints", help="constraints file")
     parser_align.add_argument("-b", "--buddies", help="buddy file")
-    parser_align.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='tk',
+    parser_align.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='cairo',
                                help="renderer (default: %(default)s)")
-    parser_align.add_argument("-m", "--mode", choices=['scenegraph', 'immediate'], default='immediate',
+    parser_align.add_argument("-m", "--mode", choices=['scenegraph', 'immediate'], default='scenegraph',
                                help="mode (default: %(default)s)")
     parser_align.set_defaults(func=align_ui)

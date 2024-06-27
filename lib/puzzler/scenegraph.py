@@ -512,20 +512,16 @@ class TransformPredicate(Predicate):
 
 class HitTester:
 
-    def __init__(self, viewport):
-        self.cell_w = 256
-        self.cell_h = 256
+    def __init__(self, cell_size, objects):
+        self.cell_w, self.cell_h = cell_size
         self.cells = collections.defaultdict(list)
-        self.objects = []
+        self.objects = objects
 
-    def __call__(self, pt, brute_force=False):
+        for oid, o in enumerate(self.objects):
+            for cell in self.cells_for_rect(o.bbox[0], o.bbox[1]):
+                self.cells[cell].append(oid)
 
-        if brute_force:
-            retval = []
-            for oid, o in enumerate(self.objects):
-                if o.contains(pt):
-                    retval.append((oid, o.tags()))
-            return retval
+    def __call__(self, pt):
 
         cell = self.cell_for_point(pt)
         if cell not in self.cells:
@@ -548,14 +544,6 @@ class HitTester:
             for j in range(y0,y1+1):
                 yield (i,j)
 
-    def add_object(self, pred):
-            
-        oid = len(self.objects)
-        self.objects.append(pred)
-
-        for cell in self.cells_for_rect(pred.bbox[0], pred.bbox[1]):
-            self.cells[cell].append(oid)
-
 def translate_matrix(xy):
     x, y = xy
     return np.array(((1, 0, x),
@@ -570,17 +558,26 @@ def rotate_matrix(rad):
             
 class BuildHitTester(SceneGraphVisitor):
 
-    def __init__(self, camera, viewport):
-        self.hittester = HitTester(viewport)
+    def __init__(self):
         self.matrix = np.identity(3)
         self.inverse = np.identity(3)
 
-        # self.matrix = camera
-        # self.inverse = np.linalg.inv(self.matrix)
-
     def __call__(self, node):
+        self.objects = []
         node.accept(self)
-        return self.hittester
+        return HitTester(self.compute_cell_size(), self.objects)
+
+    def compute_cell_size(self):
+        bbox = bbox_union([o.bbox for o in self.objects])
+        w, h = int(bbox[1][0]-bbox[0][0]), int(bbox[1][1]-bbox[0][1])
+
+        # (w/d) * (h/d) ~= n --> d = sqrt(w*h/n)
+        w = max(1, w)
+        h = max(1, h)
+        d = int(math.sqrt(w * h / 1024))
+
+        return (d, d)
+
 
     def visit_sequence(self, s):
         
@@ -624,12 +621,12 @@ class BuildHitTester(SceneGraphVisitor):
     def visit_ellipse(self, n):
         pred = EllipsePredicate(n.center, n.semi_major, n.semi_minor, n.phi, n.props.get('tags'))
         pred = TransformPredicate(self.matrix, self.inverse, pred)
-        self.hittester.add_object(pred)
+        self.objects.append(pred)
 
     def visit_polygon(self, p):
         pred = PolygonPredicate(p.points, p.props.get('tags'))
         pred = TransformPredicate(self.matrix, self.inverse, pred)
-        self.hittester.add_object(pred)
+        self.objects.append(pred)
 
     def visit_text(self, n):
         pass
