@@ -168,6 +168,7 @@ def add_parser(commands):
 
     parser_tabs = commands.add_parser("tabs", help="Output a CSV enumerating all possible tab matches")
     parser_tabs.add_argument("-o", "--output", help="output csv path")
-    parser_tabs.add_argument("-r", "--refine", help="number of refinement passes", default=0, type=int)
-    parser_tabs.add_argument("-n", "--num-workers",  help="number of workers", default=0, type=int)
+    parser_tabs.add_argument("-r", "--refine",
+                             help="number of refinement passes (default %(default)s)", default=0, type=int)
+    parser_tabs.add_argument("-n", "--num-workers",  help="number of workers (default %(default)s)", default=0, type=int)
     parser_tabs.set_defaults(func=output_tabs)
