@@ -16,6 +16,8 @@ class CairoRenderer(puzzler.render.Renderer):
         self.context = cairo.Context(self.surface)
         self._colors = dict()
         self.device_to_user_scale = 1.
+        self.angle = 0.
+        self._stack = []
 
         ctx = self.context
 
@@ -40,31 +42,46 @@ class CairoRenderer(puzzler.render.Renderer):
         self.context.translate(*xy)
 
     def rotate(self, rad):
+        self.angle += rad
         self.context.rotate(rad)
 
     def user_to_device(self, points):
         return np.array([self.context.user_to_device(*p) for p in points])
 
     def save(self):
+        self._stack.append(self.angle)
         self.context.save()
 
     def restore(self):
         self.context.restore()
+        self.angle = self._stack.pop()
 
-    def draw_points(self, points, radius, fill=None, tags=None):
+    def draw_points(self, points, radius, fill=None, outline=None, tags=None, width=None):
 
         ctx = self.context
         ctx.save()
 
+        if outline and width:
+            w = width * self.device_to_user_scale
+            ctx.set_line_width(w)
+            
         r = radius * self.device_to_user_scale
         two_pi = math.pi * 2.
 
         for p in points:
+            ctx.new_sub_path() # avoid drawing lines between the points
             ctx.arc(*p, r, 0., two_pi)
 
         if fill:
             ctx.set_source_rgba(*self.get_color(fill))
-        ctx.fill()
+            if outline:
+                ctx.fill_preserve()
+            else:
+                ctx.fill()
+
+        if outline:
+            ctx.set_source_rgba(*self.get_color(outline))
+            ctx.stroke()
 
         ctx.restore()
 
@@ -195,19 +212,28 @@ class CairoRenderer(puzzler.render.Renderer):
 
     def make_font(self, face, size):
 
-        font = None
-        with puzzler.render.save(self):
-            ctx = self.context
-            ctx.select_font_face(face)
-            (w, h) = ctx.device_to_user_distance(size, size)
-            ctx.set_font_matrix(cairo.Matrix(xx=w, yy=h))
-            font = ctx.get_scaled_font()
+        ctx = self.context
+        ctx.save()
+
+        ctx.rotate(-self.angle)
+        
+        ctx.select_font_face(face)
+        (w, h) = ctx.device_to_user_distance(size, size)
+        ctx.set_font_matrix(cairo.Matrix(xx=w, yy=h))
+        font = ctx.get_scaled_font()
+
+        ctx.restore()
+        
         return font
 
     def draw_text(self, xy, text, font=None, fill=(0, 0, 0), tags=None):
 
         ctx = self.context
         ctx.save()
+
+        ctx.translate(*xy)
+
+        ctx.rotate(-self.angle)
 
         if font:
             ctx.set_scaled_font(font)
@@ -217,9 +243,7 @@ class CairoRenderer(puzzler.render.Renderer):
         extents = font.text_extents(text)
         # print(f"draw_text: text=\"{text}\" {extents=}")
 
-        xy = xy - np.array((extents.width, extents.height)) * .5
-
-        ctx.move_to(*xy)
+        ctx.move_to(-extents.width*.5, -extents.height*.5)
 
         if fill:
             ctx.set_source_rgba(*self.get_color(fill))
