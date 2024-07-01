@@ -880,6 +880,12 @@ class AlignTk:
         tags = ','.join(str(i) for i in tags)
         self.var_label.set(f"{xy[0]:.0f},{xy[1]:.0f} {tags}")
 
+    def canvas_map(self, event):
+        # it's a hack (because I don't know why it works) but without
+        # it I get a blank canvas until I do something to cause the
+        # canvas to get repainted (e.g. a mouse drag)
+        self.render()
+
     def _init_ui(self, parent):
 
         w, h = parent.winfo_screenwidth(), parent.winfo_screenheight()
@@ -904,6 +910,7 @@ class AlignTk:
         self.canvas.bind("<MouseWheel>", self.mouse_wheel)
         self.canvas.bind("<Motion>", self.motion)
         self.canvas.bind("<Configure>", self.resize)
+        self.canvas.bind("<Map>", self.canvas_map)
 
         self.controls = ttk.Frame(self.frame)
         self.controls.grid(row=1, sticky=(W,E))
