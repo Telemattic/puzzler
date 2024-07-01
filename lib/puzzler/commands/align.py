@@ -490,7 +490,6 @@ class PuzzleSGFactory:
 
             props = self.props | {'points.outline':color, 'points.fill':color+(0.25,), 'tabs.ellipse.fill':color+(0.25,), 'tags':(tag,)}
             sgb.add_node(PuzzleSGFactory.piece_factory(p.piece.label, props))
-                                            
 
             normals = self.normals.get(p.piece.label)
             if normals is not None:
@@ -640,7 +639,7 @@ class AlignTk:
             tags = [i for _, subtags in tags for i in subtags]
         else:
             tags = self.canvas.gettags(self.canvas.find('withtag', 'current'))
-        
+
         for tag in tags:
             
             m = re.fullmatch("piece_(\d+)", tag)
@@ -669,7 +668,7 @@ class AlignTk:
         if self.selection is not None or had_selection:
             self.scenegraph = None
         self.render()
-        
+
     def canvas_drag(self, event):
 
         if not self.draggable:
@@ -677,14 +676,13 @@ class AlignTk:
         
         self.draggable.drag(np.array((event.x, event.y)))
         
-        # HACK: assume hittester invalidated
-        # self.hittester = None
         if self.selection is not None:
             self.scenegraph = None
+            
         self.render()
 
     def canvas_release(self, event):
-                
+
         if not self.draggable:
             return
         
@@ -786,16 +784,16 @@ class AlignTk:
             with open('scenegraph_foo.json','w') as f:
                 f.write(puzzler.scenegraph.to_json(self.scenegraph))
 
-        if False:
+        if True:
             print("-------------------------------------------------------")
-            print(f"sg={t_build-t_start:.3f} ht={t_hittest-t_build:.3f} render={t_render-t_hittest:.3f}")
+            print(f"sg={t_build-t_start:.3f} ht={t_hittest-t_build:.3f} render={t_render-t_hittest:.3f} viewport={self.camera.viewport} scale={self.camera.zoom}")
             for f in traceback.extract_stack():
                 filename = f.filename
                 prefix = 'C:\\home\\eldridge\\proj\\puzzler\\'
                 if filename.startswith(prefix):
                     filename = '.\\' + filename[len(prefix):]
                 print(f"{filename}:{f.lineno}  {f.name}")
-    
+
     def build_scenegraph(self):
 
         f = PuzzleSGFactory(self.pieces)
@@ -1031,7 +1029,7 @@ class AlignTk:
 
             mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
             print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
-        
+            
             mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
             print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
 
