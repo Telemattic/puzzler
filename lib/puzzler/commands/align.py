@@ -203,11 +203,12 @@ def ring_range(a, b, n):
 
 class Piece:
 
-    def __init__(self, piece):
+    def __init__(self, piece, epsilon=None):
 
         self.piece = piece
-        self.perimeter = Perimeter(self.piece.points)
-        self.approx = ApproxPoly(self.perimeter, 10)
+        if epsilon is not None:
+            self.perimeter = Perimeter(self.piece.points)
+            self.approx = ApproxPoly(self.perimeter, epsilon)
         self.coords = puzzler.align.AffineTransform()
 
 class PuzzleRenderer:
@@ -442,19 +443,17 @@ class PuzzleSGFactory:
         self.render_fast = None
         self.normals = dict()
         self.vertexes = dict()
+        self.props = {'tabs.render':False, 'edges.render':False}
 
         if PuzzleSGFactory.piece_factory is None:
             pieces_dict = dict((i.piece.label, i.piece) for i in pieces)
-            props = {'label.render':False, 'tabs.render':False, 'edges.render':False}
             PuzzleSGFactory.piece_factory = puzzler.sgbuilder.PieceSceneGraphFactory(
-                pieces_dict, props)
+                pieces_dict)
 
     def build(self):
 
         self.scenegraphbuilder = puzzler.sgbuilder.SceneGraphBuilder()
             
-        # self.scenegraphbuilder.transform(self.camera.matrix)
-
         if self.adjacency:
             self.draw_adjacency(self.adjacency)
 
@@ -487,11 +486,9 @@ class PuzzleSGFactory:
                 
             sgb.add_translate(p.coords.dxdy)
 
-            sgb.add_text(np.zeros(2), p.piece.label, font=('Courier New', 18))
-                
             sgb.add_rotate(p.coords.angle)
 
-            props = {'points.outline':color, 'points.fill':color+(0.25,), 'tags':(tag,)}
+            props = self.props | {'points.outline':color, 'points.fill':color+(0.25,), 'tabs.ellipse.fill':color+(0.25,), 'tags':(tag,)}
             sgb.add_node(PuzzleSGFactory.piece_factory(p.piece.label, props))
                                             
 
@@ -502,7 +499,7 @@ class PuzzleSGFactory:
 
             vertexes = self.vertexes.get(p.piece.label)
             if vertexes is not None:
-                sgb.add_points(vertexes, radius=6, fill='', outline=color)
+                sgb.add_points(vertexes, radius=6, fill='', outline=color, width=1)
 
     def draw_rotate_handles(self, piece_id):
 
@@ -811,12 +808,18 @@ class AlignTk:
             f.normals = self.render_normals
         if self.render_vertexes:
             f.vertexes = self.render_vertexes
+        f.props['tabs.render'] = self.var_render_tabs.get() != 0
 
         return f.build()
 
     def build_hittester(self):
 
         return puzzler.scenegraph.BuildHitTester()(self.scenegraph.root_node)
+
+    def do_render_tabs(self):
+
+        self.scenegraph = None
+        self.render()
 
     def do_render_adjacency(self):
         
@@ -919,13 +922,19 @@ class AlignTk:
                              variable=self.var_render_adjacency)
         b3.grid(column=2, row=0, sticky=W)
 
+        self.var_render_tabs = IntVar(value=0)
+        b3 = ttk.Checkbutton(self.controls, text="Tabs",
+                             command=self.do_render_tabs,
+                             variable=self.var_render_tabs)
+        b3.grid(column=3, row=0, sticky=W)
+
         self.var_solve_continuous = IntVar(value=0)
         b4 = ttk.Checkbutton(self.controls, text="Continuous", variable=self.var_solve_continuous)
-        b4.grid(column=3, row=0, sticky=W)
+        b4.grid(column=4, row=0, sticky=W)
 
         self.var_label = StringVar(value="x,y")
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=80)
-        l1.grid(column=4, row=0, sticky=(E))
+        l1.grid(column=5, row=0, sticky=(E))
 
         cf2 = ttk.Frame(self.frame)
         cf2.grid(row=2, sticky=(W,E))
@@ -989,6 +998,8 @@ class AlignTk:
             p.coords.dxdy = np.array((x, y))
 
         self.scenegraph = None
+        self.render_normals = None
+        self.render_vertexes = None
         self.render()
 
     def show_tab_alignment(self):
@@ -1010,6 +1021,7 @@ class AlignTk:
         src = pieces[src_label]
         
         tab_aligner = puzzler.align.TabAligner(dst.piece)
+        tab_aligner.sample_interval = 10
 
         mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
         print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
@@ -1032,10 +1044,12 @@ class AlignTk:
         
         self.render_normals = dict()
         self.render_normals[dst_label] = list(zip(tab_aligner.dst_vertexes, tab_aligner.dst_normals))
+        self.render_normals[src_label] = list(zip(tab_aligner.src_vertexes, tab_aligner.src_normals))
 
         dst.coords = puzzler.align.AffineTransform(0., (0., 2000.))
         src.coords = puzzler.align.AffineTransform(src_coords.angle, src_coords.dxdy + dst.coords.dxdy)
 
+        self.scenegraph = None
         self.render()
 
     def show_raft_alignment(self):
@@ -1082,6 +1096,7 @@ class AlignTk:
             prev_m = coords.get_transform().matrix
             pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
 
+        self.scenegraph = None
         self.render()
         
 def load_buddies(path):
@@ -1165,7 +1180,9 @@ def align_ui(args):
     if not labels:
         labels |= set(by_label.keys())
 
-    pieces = [Piece(by_label[l]) for l in sorted(labels)]
+    # approx (simplified polygon) only needed for immediate mode rendering
+    epsilon = 10 if args.mode == 'immediate' else None
+    pieces = [Piece(by_label[l], epsilon) for l in sorted(labels)]
 
     root = Tk()
     ui = AlignTk(root, pieces, renderer=args.renderer, mode=args.mode)

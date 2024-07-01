@@ -153,11 +153,12 @@ class PieceSceneGraphFactory:
         self.nodes = []
 
     def __call__(self, label, props = dict()):
-        node = self._cache.get(label)
+        key = str({'label':label} | props)
+        node = self._cache.get(key)
         if node is None:
             save_opt = self.opt
             self.opt = self.opt | props
-            self._cache[label] = node = self.do_piece(self.pieces[label])
+            self._cache[key] = node = self.do_piece(self.pieces[label])
             self.opt = save_opt
         return node
 

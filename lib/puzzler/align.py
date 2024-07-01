@@ -142,6 +142,7 @@ class TabAligner:
         self.kdtree = None
         self.distance_image = DistanceImage.Factory(dst)
         self.compute_normals = NormalsComputer()
+        self.sample_interval = 50
         
     def compute_alignment(self, dst_tab_no, src, src_tab_no, refine=0):
 
@@ -184,7 +185,7 @@ class TabAligner:
         medium_cutoff = 50
     
         n = len(src.points)
-        s = 50 # take every s'th point, chosen arbitrarily
+        s = self.sample_interval # take every s'th point, chosen arbitrarily
         num_samples_each_side = n // (s * 5)
         src_indices = np.arange(sfp - num_samples_each_side * s, sfp + num_samples_each_side * s + 1, s) % n
         src_points = src_coords.get_transform().apply_v2(src.points[src_indices])
@@ -208,6 +209,8 @@ class TabAligner:
         close_dst_indices = dst_indices[close_points]
 
         close_src_points = src.points[close_src_indices]
+        close_src_normals = self.compute_normals(src.points, close_src_indices)
+        
         close_dst_points = self.dst.points[close_dst_indices]
         close_dst_normals = self.compute_normals(self.dst.points, close_dst_indices)
         
@@ -221,6 +224,7 @@ class TabAligner:
         icp.solve()
     
         self.src_vertexes = close_src_points
+        self.src_normals = close_src_normals
         self.dst_vertexes = close_dst_points
         self.dst_normals = close_dst_normals
 
