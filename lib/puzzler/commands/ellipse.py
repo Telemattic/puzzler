@@ -541,7 +541,7 @@ class EdgeComputer:
 
 class EllipseFitterTk:
 
-    def __init__(self, root, puzzle, label):
+    def __init__(self, root, puzzle, label, use_cairo=False):
         
         piece = None
         for p in puzzle.pieces:
@@ -556,6 +556,7 @@ class EllipseFitterTk:
         self.convexity_defects = None
         self.tabs = None
         self.edges = None
+        self.use_cairo = use_cairo
 
         self.run(root)
 
@@ -627,9 +628,12 @@ class EllipseFitterTk:
     def render(self):
 
         canvas = self.canvas
-        canvas.delete('all')
 
-        r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+        if self.use_cairo:
+            r = puzzler.renderer.cairo.CairoRenderer(self.canvas)
+        else:
+            canvas.delete('all')
+            r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
 
         r.transform(self.get_camera_matrix())
 
@@ -654,7 +658,7 @@ class EllipseFitterTk:
             if self.approx_pts is not None and self.signed_area is not None:
                 for xy, area in zip(self.approx_pts, self.signed_area):
                     color = 'red' if area >= 0 else 'blue'
-                    r.draw_points(xy, radius=4, fill=color, outline='')
+                    r.draw_points([xy], radius=4, fill=color, outline='')
 
         if self.var_render_approx_poly_index.get():
             if self.approx_pts is not None:
@@ -678,17 +682,22 @@ class EllipseFitterTk:
                             # print("FNORD!")
                             continue
                         p = self.perimeter.points[j]
-                        r.draw_points(p, radius=6, fill='green')
+                        r.draw_points([p], radius=6, fill='green')
                         r.draw_lines(np.array((center, p)), fill='green')
                     for j in tab['trimmed_indexes']:
                         p = self.perimeter.points[j]
-                        r.draw_points(p, radius=6, fill='cyan')
+                        r.draw_points([p], radius=6, fill='cyan')
 
         if self.var_render_lines.get():
             if self.edges is not None:
                 for edge in self.edges:
                     line = edge['line']
-                    r.draw_lines(line.pts, fill='blue', width='2')
+                    r.draw_lines(line.pts, fill='blue', width=2)
+
+        self.displayed_image = r.commit()
+
+    def canvas_map(self, event):
+        self.render()
 
     def motion(self, event):
         cm = self.get_camera_matrix()
@@ -810,17 +819,16 @@ class EllipseFitterTk:
                              background='white', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
         self.canvas.bind("<Motion>", self.motion)
+        self.canvas.bind("<Map>", self.canvas_map)
 
         self._init_controls(self.frame)
-
-        self.render()
 
 def feature_view(args):
 
     puzzle = puzzler.file.load(args.puzzle)
 
     root = Tk()
-    ui = EllipseFitterTk(root, puzzle, args.label)
+    ui = EllipseFitterTk(root, puzzle, args.label, args.renderer=='cairo')
     ui.var_epsilon.set(args.epsilon)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: features view")
@@ -871,4 +879,6 @@ def add_parser(commands):
     
     parser_view = commands.add_parser("view", help="view the feature computation")
     parser_view.add_argument("label")
+    parser_view.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='cairo',
+                               help="renderer (default: %(default)s)")
     parser_view.set_defaults(func=feature_view)
