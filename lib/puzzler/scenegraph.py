@@ -450,6 +450,28 @@ class Predicate:
     def contains(self, pt):
         raise NotImplementedError
 
+class CirclesPredicate(Predicate):
+
+    def __init__(self, centers, radius, tags=None):
+
+        ll = np.min(centers, 0) - np.array((radius+1, radius+1))
+        ur = np.max(centers, 0) + np.array((radius+1, radius+1))
+
+        self.bbox = (ll, ur)
+        self.centers = centers
+        self.radius = radius
+        self._tags = tags
+
+    def tags(self):
+        return self._tags
+
+    def contains(self, pt):
+        return bbox_contains(self.bbox, pt) and self.point_in_circle(pt)
+
+    def point_in_circle(self, pt):
+        dist = np.linalg.norm(self.centers - pt, axis=1)
+        return np.any(dist <= self.radius)
+
 class EllipsePredicate(Predicate):
 
     def __init__(self, center, semi_major, semi_minor, phi, tags=None):
@@ -610,13 +632,17 @@ class BuildHitTester(SceneGraphVisitor):
         n.nodes[0].accept(self)
 
     def visit_points(self, n):
-        pass
+        pred = CirclesPredicate(n.points, n.props.get('radius', 1), n.props.get('tags'))
+        pred = TransformPredicate(self.matrix, self.inverse, pred)
+        self.objects.append(pred)
 
     def visit_lines(self, n):
         pass
 
     def visit_circles(self, n):
-        pass
+        pred = CirclesPredicate(n.points, n.radius, n.props.get('tags'))
+        pred = TransformPredicate(self.matrix, self.inverse, pred)
+        self.objects.append(pred)
 
     def visit_ellipse(self, n):
         pred = EllipsePredicate(n.center, n.semi_major, n.semi_minor, n.phi, n.props.get('tags'))

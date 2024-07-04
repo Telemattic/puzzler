@@ -22,10 +22,11 @@ def to_row_col(label):
 
 class TabsComputer:
 
-    def __init__(self, puzzle_path, refine):
+    def __init__(self, puzzle_path, refine, sample_interval):
         self.puzzle = puzzler.file.load(puzzle_path)
         self.pieces = dict((i.label, i) for i in self.puzzle.pieces)
         self.refine = refine
+        self.sample_interval = sample_interval
         self.tab_aligner = None
 
     def compute_rows_for_dst(self, dst_label):
@@ -44,7 +45,9 @@ class TabsComputer:
                         continue
 
                     rows.append(self.compute_alignment_for_dst_src(dst_label, dst_tab_no, src.label, src_tab_no))
-            for i, row in enumerate(sorted(rows, key=lambda row: 10000 if row['mse'] is None else row['mse']), start=1):
+
+            rows.sort(key=lambda row: 10000 if row['mse'] is None else row['mse'])
+            for i, row in enumerate(rows, start=1):
                 row['rank'] = i
 
             retval += rows
@@ -72,6 +75,7 @@ class TabsComputer:
         
         if not self.tab_aligner or self.tab_aligner.dst != dst:
             self.tab_aligner = puzzler.align.TabAligner(dst)
+            self.tab_aligner.sample_interval = self.sample_interval
 
         mse, src_coords, sfp, dfp = self.tab_aligner.compute_alignment(
             dst_tab_no, src, src_tab_no, refine=self.refine)
@@ -94,7 +98,7 @@ class TabsComputer:
 
 def worker(args, src_q, dst_q):
 
-    tabs_computer = TabsComputer(args.puzzle, args.refine)
+    tabs_computer = TabsComputer(args.puzzle, args.refine, args.sample)
 
     job = src_q.get()
     while job:
@@ -146,7 +150,7 @@ def output_tabs(args):
                 src_q.put(p.label)
                 
             num_jobs = len(pieces)
-            pbar = tqdm(total=num_jobs, ascii=True)
+            pbar = tqdm(total=num_jobs)
             while num_jobs > 0:
                 job = dst_q.get()
                 num_jobs -= 1
@@ -160,15 +164,18 @@ def output_tabs(args):
                 p.join()
 
         else:
-            tabs_computer = TabsComputer(args.puzzle, args.refine)
-            for dst in tqdm(pieces, ascii=True):
+            tabs_computer = TabsComputer(args.puzzle, args.refine, args.sample)
+            for dst in tqdm(pieces): #=True):
                 writer.writerows(tabs_computer.compute_rows_for_dst(dst.label))
 
 def add_parser(commands):
 
     parser_tabs = commands.add_parser("tabs", help="Output a CSV enumerating all possible tab matches")
     parser_tabs.add_argument("-o", "--output", help="output csv path")
-    parser_tabs.add_argument("-r", "--refine",
-                             help="number of refinement passes (default %(default)s)", default=0, type=int)
-    parser_tabs.add_argument("-n", "--num-workers",  help="number of workers (default %(default)s)", default=0, type=int)
+    parser_tabs.add_argument("-s", "--sample", default=50, type=int,
+                             help="sample interval for fit computation (default %(default)i)")
+    parser_tabs.add_argument("-r", "--refine", default=0, type=int,
+                             help="number of refinement passes (default %(default)i)")
+    parser_tabs.add_argument("-n", "--num-workers", default=0, type=int,
+                             help="number of workers (default %(default)i)")
     parser_tabs.set_defaults(func=output_tabs)

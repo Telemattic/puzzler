@@ -27,6 +27,9 @@ class CairoRenderer(puzzler.render.Renderer):
         ctx.fill()
         ctx.restore()
 
+        self._show_paths = False
+        self.fnord = dict()
+
     def transform(self, m):
         xx = m[0][0]
         yx = m[1][0]
@@ -72,6 +75,8 @@ class CairoRenderer(puzzler.render.Renderer):
             ctx.new_sub_path() # avoid drawing lines between the points
             ctx.arc(*p, r, 0., two_pi)
 
+        self.show_path('points')
+
         if fill:
             ctx.set_source_rgba(*self.get_color(fill))
             if outline:
@@ -100,6 +105,8 @@ class CairoRenderer(puzzler.render.Renderer):
             ctx.line_to(*p)
         ctx.close_path()
         
+        self.show_path('polygon')
+
         if fill:
             ctx.set_source_rgba(*self.get_color(fill))
             if outline:
@@ -179,23 +186,28 @@ class CairoRenderer(puzzler.render.Renderer):
         if arrow == 'last':
             arrow2(points[-2], points[-1])
 
+        self.show_path('lines')
+
         ctx.stroke()
 
         ctx.restore()
 
-    def draw_ellipse(self, center, semi_major, semi_minor, phi, fill=None, outline=(0, 0, 0), width=1, tags=None):
+    def draw_ellipse(self, center, semi_major, semi_minor, phi, fill=None, outline=(0, 0, 0), width=1, tags=None, dashes=None):
         
         ctx = self.context
         ctx.save()
         
         if outline and width:
-            w = width * self.device_to_user_scale
+            w = width * self.device_to_user_scale / semi_major
             ctx.set_line_width(w)
         
         ctx.translate(*center)
         ctx.rotate(phi)
         ctx.scale(semi_major, semi_minor)
+        ctx.new_sub_path()
         ctx.arc(0., 0., 1., 0, 2 * math.pi)
+
+        self.show_path('ellipse')
 
         if fill:
             ctx.set_source_rgba(*self.get_color(fill))
@@ -205,6 +217,8 @@ class CairoRenderer(puzzler.render.Renderer):
                 ctx.fill()
                 
         if outline:
+            if dashes:
+                ctx.set_dash([dash * self.device_to_user_scale / semi_major for dash in dashes])
             ctx.set_source_rgba(*self.get_color(outline))
             ctx.stroke()
 
@@ -272,3 +286,24 @@ class CairoRenderer(puzzler.render.Renderer):
         self.canvas.create_image((0, 0), image=displayed_image, anchor=NW)
         return displayed_image
 
+    def show_path(self, prefix):
+        
+        if not self._show_paths or self.fnord.get(prefix):
+            return
+
+        if len(self.fnord) == 0:
+            print("----------------------------------------------------------------")
+
+        self.fnord[prefix] = True
+
+        if True:
+            self.context.set_tolerance(1.)
+            path = self.context.copy_path_flat()
+        else:
+            path = self.context.copy_path()
+        v = str(path).split('\n')
+        if len(v) > 10:
+            v = v[:5] + [f"... {len(v)-10} more paths ..."] +v[-5:]
+        
+        print(prefix.upper(), self.device_to_user_scale)
+        print('  ' + '\n  '.join(v))

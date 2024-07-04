@@ -800,12 +800,12 @@ class PuzzleSolver:
 
         print(self.distance_query_cache.stats | {'cache_size': len(self.distance_query_cache.cache)})
 
-        ts = datetime.now()
+        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
         
-        path = self.next_path(ts.strftime('matches_%Y%m%d-%H%M%S'), 'csv')
+        path = self.next_path('matches_' + ts, 'csv')
         self.save_tab_matches(path)
         
-        path = self.next_path(ts.strftime('solver_%Y%m%d-%H%M%S'), 'json')
+        path = self.next_path('solver_' + ts, 'json')
         save_json(path, self)
 
     def score_corner(self, corner):

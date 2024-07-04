@@ -132,6 +132,8 @@ class PieceSceneGraphFactory:
         'tabs.render':True,
         'tabs.ellipse.fill':'cyan',
         'tabs.ellipse.outline':'',
+        'tabs.ellipse.dashes':(6, 6),
+        'tabs.ellipse.width':2,
         'tabs.label.font':('Courier New', 12),
         'tabs.label.fill':'darkblue',
         'edges.render':True,
@@ -153,7 +155,7 @@ class PieceSceneGraphFactory:
         self.nodes = []
 
     def __call__(self, label, props = dict()):
-        key = str({'label':label} | props)
+        key = tuple(sorted(({'label':label} | props).items()))
         node = self._cache.get(key)
         if node is None:
             save_opt = self.opt
@@ -187,6 +189,8 @@ class PieceSceneGraphFactory:
 
         e_fill = self.opt['tabs.ellipse.fill']
         e_outline = self.opt['tabs.ellipse.outline']
+        e_dashes = self.opt['tabs.ellipse.dashes']
+        e_width = self.opt['tabs.ellipse.width']
 
         l_font = self.opt['tabs.label.font']
         l_fill = self.opt['tabs.label.fill']
@@ -194,7 +198,7 @@ class PieceSceneGraphFactory:
         for i, tab in enumerate(p.tabs):
             e = tab.ellipse
             self.add_node(sg.Ellipse(e.center, e.semi_major, e.semi_minor, e.phi,
-                                     {'fill':e_fill, 'outline':e_outline, 'tags':tags}))
+                                     {'fill':e_fill, 'outline':e_outline, 'dashes':e_dashes, 'width':e_width, 'tags':tags}))
             self.add_node(sg.Text(e.center, str(i), {'font':l_font, 'fill':l_fill}))
 
     def do_edges(self, p):

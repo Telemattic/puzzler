@@ -143,6 +143,10 @@ class TabAligner:
         self.distance_image = DistanceImage.Factory(dst)
         self.compute_normals = NormalsComputer()
         self.sample_interval = 50
+        self.close_cutoff = 12
+        self.medium_cutoff = 48
+        self.return_table = False
+        self.table = None
         
     def compute_alignment(self, dst_tab_no, src, src_tab_no, refine=0):
 
@@ -163,15 +167,22 @@ class TabAligner:
         src_coords = AffineTransform(r, (x,y))
 
         if refine:
-            src_mid = self.get_tab_midpoint(src, src_tab_no)
+            src_indices = self.get_sample_indices(src, src_tab_no)
             for _ in range(refine):
-                mse, src_coords, sfp, dfp = self.refine_alignment(src, src_coords, src_mid)
+                mse, src_coords, sfp, dfp = self.refine_alignment(src, src_coords, src_indices)
         else:
             mse, sfp, dfp = self.measure_fit_fast(src, src_tab_no, src_coords)
 
         return (mse, src_coords, sfp, dfp)
 
-    def refine_alignment(self, src, src_coords, sfp):
+    def get_sample_indices(self, src, src_tab_no):
+        mid = self.get_tab_midpoint(src, src_tab_no)
+        n = len(src.points)
+        s = self.sample_interval # take every s'th point, chosen arbitrarily
+        w = (n // (s * 5)) * s
+        return np.arange(mid - w, mid + w + 1, s) % n
+
+    def refine_alignment(self, src, src_coords, src_indices):
 
         # starting at src.points[sfp] expand in both directions around the
         # perimeter of the src to find the continuous section that is
@@ -181,13 +192,6 @@ class TabAligner:
         #
         # compute a least squares optimization of fit
 
-        close_cutoff = 15
-        medium_cutoff = 50
-    
-        n = len(src.points)
-        s = self.sample_interval # take every s'th point, chosen arbitrarily
-        num_samples_each_side = n // (s * 5)
-        src_indices = np.arange(sfp - num_samples_each_side * s, sfp + num_samples_each_side * s + 1, s) % n
         src_points = src_coords.get_transform().apply_v2(src.points[src_indices])
 
         if not self.kdtree:
@@ -195,10 +199,11 @@ class TabAligner:
         distance, dst_indices = self.kdtree.query(src_points)
 
         dst_normals = self.compute_normals(self.dst.points, dst_indices)
-        src_normals = src_coords.get_transform().apply_n2(self.compute_normals(src.points, src_indices))
+        src_normals = src_coords.get_transform().apply_n2(
+            self.compute_normals(src.points, src_indices))
         dot_product = np.sum(dst_normals * src_normals, axis=1)
 
-        is_close = (distance < close_cutoff) | ((distance < medium_cutoff) & (dot_product < -0.9))
+        is_close = (distance < self.close_cutoff) | ((distance < self.medium_cutoff) & (dot_product < -0.5))
         close_points = np.nonzero(is_close)
         if len(close_points[0]) < 2:
             return (None, src_coords, (None, None), (None, None))
@@ -207,6 +212,9 @@ class TabAligner:
 
         close_src_indices = src_indices[close_points]
         close_dst_indices = dst_indices[close_points]
+
+        # print(f"{close_src_indices=}")
+        # print(f"{close_dst_indices=}")
 
         close_src_points = src.points[close_src_indices]
         close_src_normals = self.compute_normals(src.points, close_src_indices)
@@ -219,15 +227,26 @@ class TabAligner:
         dst_body = icp.make_rigid_body(0., np.array((0., 0.)), fixed=True)
         src_body = icp.make_rigid_body(src_coords.angle, src_coords.dxdy, fixed=False)
 
-        icp.add_body_correspondence(src_body, close_src_points, dst_body, close_dst_points, close_dst_normals)
+        icp.add_body_correspondence(
+            src_body, close_src_points,
+            dst_body, close_dst_points, close_dst_normals)
     
         icp.solve()
     
-        self.src_vertexes = close_src_points
-        self.src_normals = close_src_normals
-        self.dst_vertexes = close_dst_points
-        self.dst_normals = close_dst_normals
+        # self.src_vertexes = close_src_points
+        # self.src_normals = close_src_normals
+        # self.dst_vertexes = close_dst_points
+        # self.dst_normals = close_dst_normals
 
+        if self.return_table:
+            self.table = {'src_vertex': src.points[src_indices],
+                          'src_normal': self.compute_normals(src.points, src_indices),
+                          'dst_vertex': self.dst.points[dst_indices],
+                          'dst_normal': dst_normals,
+                          'distance': distance,
+                          'dot_product': dot_product,
+                          'is_close': is_close}
+        
         src_coords = AffineTransform(src_body.angle, src_body.center)        
 
         d = self.kdtree.query(src_coords.get_transform().apply_v2(close_src_points))[0]
@@ -603,6 +622,8 @@ class BosomBuddies:
         if t := self.make_trace(raft, (src_label, src_tab_no-1), (dst_label, dst_tab_no+1)):
             raft.traces.append(t)
 
+        # print(f"raft: {dst_label}:{dst_tab_no}={src_label}:{src_tab_no}, joints={len(raft.joints)}, traces={len(raft.traces)}")
+
         # print(raft)
 
         return raft
@@ -661,6 +682,8 @@ class RaftAligner:
         self.dst_points = self.get_points_for_trace(dst_raft, dst_trace_no)
         self.compute_normals = NormalsComputer()
         self.raft_distance_computer = RaftDistanceComputer(self.pieces, self.dst_raft)
+        self.close_cutoff = 10
+        self.medium_cutoff = 50
 
     def compute_alignment_for_trace(self, src_raft, src_trace_no):
 
@@ -716,9 +739,6 @@ class RaftAligner:
 
     def measure_fit_for_piece(self, src_piece, src_xform):
 
-        close_cutoff = 10
-        medium_cutoff = 50
-        
         n = len(src_piece.points)
         s = 50 # take every s'th point, chosen arbitrarily
         src_indices = np.arange(0, n, s)
@@ -739,7 +759,7 @@ class RaftAligner:
         # negative distance (more negative is more interior), so this
         # will always include interior points, which is exactly what
         # we want
-        is_close_or_interior = (distance < close_cutoff) | ((distance < medium_cutoff) & (dot_product < -0.9))
+        is_close_or_interior = (distance < self.close_cutoff) | ((distance < self.medium_cutoff) & (dot_product < -0.9))
 
         distance = distance[np.nonzero(is_close_or_interior)]
         sse = np.sum(distance ** 2)

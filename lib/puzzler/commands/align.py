@@ -440,10 +440,9 @@ class PuzzleSGFactory:
         self.adjacency = dict()
         self.renderer = None
         self.font = None
-        self.render_fast = None
         self.normals = dict()
         self.vertexes = dict()
-        self.props = {'tabs.render':False, 'edges.render':False}
+        self.props = {'tabs.render':False, 'edges.render':False, 'tabs.ellipse.fill':''}
 
         if PuzzleSGFactory.piece_factory is None:
             pieces_dict = dict((i.piece.label, i.piece) for i in pieces)
@@ -488,17 +487,28 @@ class PuzzleSGFactory:
 
             sgb.add_rotate(p.coords.angle)
 
-            props = self.props | {'points.outline':color, 'points.fill':color+(0.25,), 'tabs.ellipse.fill':color+(0.25,), 'tags':(tag,)}
+            props = self.props | {'points.outline':color, 'points.fill':color+(0.25,), 'tabs.ellipse.outline':color, 'tags':(tag,)}
             sgb.add_node(PuzzleSGFactory.piece_factory(p.piece.label, props))
 
             normals = self.normals.get(p.piece.label)
             if normals is not None:
                 for n in normals:
-                    sgb.add_lines(np.array((n[0], n[0] + n[1]*10)), fill='black', width=1)
+                    sgb.add_lines(np.array((n[0], n[0] + n[1]*10)), fill=color, width=1)
 
             vertexes = self.vertexes.get(p.piece.label)
             if vertexes is not None:
-                sgb.add_points(vertexes, radius=6, fill='', outline=color, width=1)
+                vmap = collections.defaultdict(list)
+                for i, v in enumerate(vertexes):
+                    vmap[tuple(v)].append(i)
+                # print(f"{tag=} {vmap=}")
+                for i, v in enumerate(vertexes):
+                    indices = vmap[tuple(v)]
+                    if indices[0] != i:
+                        continue
+                    label = ','.join(str(i) for i in indices)
+                    sgb.add_points([v], radius=6, fill='', outline=color, width=1,
+                                   tags=(tag, f'vertex:{label}'))
+                    sgb.add_text(v, label, font=('Courier New', 12))
 
     def draw_rotate_handles(self, piece_id):
 
@@ -784,7 +794,7 @@ class AlignTk:
             with open('scenegraph_foo.json','w') as f:
                 f.write(puzzler.scenegraph.to_json(self.scenegraph))
 
-        if True:
+        if False:
             print("-------------------------------------------------------")
             print(f"sg={t_build-t_start:.3f} ht={t_hittest-t_build:.3f} render={t_render-t_hittest:.3f} viewport={self.camera.viewport} scale={self.camera.zoom}")
             for f in traceback.extract_stack():
@@ -802,6 +812,9 @@ class AlignTk:
         f.frontiers = self.solver.frontiers
         if self.var_render_adjacency.get():
             f.adjacency = self.solver.adjacency
+            # HACK, just show adjacency for this single piece
+            if False and 'B1' in f.adjacency:
+                f.adjacency = {'B1':f.adjacency['B1']}
         if self.render_normals:
             f.normals = self.render_normals
         if self.render_vertexes:
@@ -1009,9 +1022,9 @@ class AlignTk:
 
     def show_tab_alignment(self):
         s = self.var_show_tab_alignment.get().strip()
-        m = re.fullmatch("([a-zA-Z]+\d+):(\d+)-([a-zA-Z]+\d+):(\d+)", s)
+        m = re.fullmatch("([a-zA-Z]+\d+):(\d+)=([a-zA-Z]+\d+):(\d+)", s)
         if not m:
-            print(f"bad input: \"{s}\"")
+            print(f"bad input: \"{s}\", should be <dst_label>:<dst_tab_no>=<src_label>:<src_tab_no>")
             return
         
         dst_label = m[1]
@@ -1027,6 +1040,7 @@ class AlignTk:
         
         tab_aligner = puzzler.align.TabAligner(dst.piece)
         tab_aligner.sample_interval = 10
+        tab_aligner.return_table = True
 
         mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
         print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
@@ -1042,14 +1056,34 @@ class AlignTk:
 
         # mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
         # print(f"refine=2: {mse=} {src_coords=} {sfp=} {dfp=}")
+
+        t = tab_aligner.table
         
         self.render_vertexes = dict()
-        self.render_vertexes[src_label] = tab_aligner.src_vertexes
-        self.render_vertexes[dst_label] = tab_aligner.dst_vertexes
+        self.render_vertexes[src_label] = t['src_vertex']
+        self.render_vertexes[dst_label] = t['dst_vertex']
         
         self.render_normals = dict()
-        self.render_normals[dst_label] = list(zip(tab_aligner.dst_vertexes, tab_aligner.dst_normals))
-        self.render_normals[src_label] = list(zip(tab_aligner.src_vertexes, tab_aligner.src_normals))
+        self.render_normals[dst_label] = list(zip(t['dst_vertex'], t['dst_normal']))
+        self.render_normals[src_label] = list(zip(t['src_vertex'], t['src_normal']))
+
+        def format_value(x):
+            if isinstance(x,str):
+                return x
+            if isinstance(x,int):
+                return str(x)
+            if isinstance(x,float):
+                return f"{x:.3f}"
+            if isinstance(x,np.ndarray):
+                with np.printoptions(precision=3):
+                    return str(x)
+            return str(x)
+
+        keys = list(t.keys())
+        n_rows = len(t[keys[0]])
+        print('vertex_no,',','.join(keys))
+        for i in range(n_rows):
+            print(i,',',','.join(format_value(t[k][i]) for k in keys))
 
         dst.coords = puzzler.align.AffineTransform(0., (0., 2000.))
         src.coords = puzzler.align.AffineTransform(src_coords.angle, src_coords.dxdy + dst.coords.dxdy)
@@ -1120,6 +1154,9 @@ def load_buddies(path):
 
 def test_buddies(pieces, buddies_path):
 
+    # the buddies file is a csv of piece pairs and the rank for the
+    # quality of fit for them on each possible tab pairing, generated
+    # by the "tabs" command
     buddies = load_buddies(buddies_path)
     buddies = [(a, b) for a, b in buddies.items() if buddies.get(b) == a and a > b]
     
@@ -1146,7 +1183,8 @@ def test_buddies(pieces, buddies_path):
                 if src_raft == dst_raft:
                     continue
                 for src_trace_no, src_trace in enumerate(src_raft.traces):
-                    if not are_traces_compatible(dst_raft.traces[0], src_trace):
+                    # shouldn't this be dst_trace, not dst_raft.traces[0]???
+                    if not are_traces_compatible(dst_trace, src_trace):
                         continue
                     src_coords = align_rafts.compute_alignment_for_trace(src_raft, src_trace_no)
                     mse = align_rafts.measure_fit_for_trace(src_raft, src_trace_no, src_coords)
@@ -1158,7 +1196,8 @@ def test_buddies(pieces, buddies_path):
                                  'mse': mse,
                                  'rank': 0})
 
-            for i, row in enumerate(sorted(rows, key=operator.itemgetter('mse')), start=1):
+            rows.sort(key=operator.itemgetter('mse'))                    
+            for i, row in enumerate(rows, start=1):
                 row['rank'] = i
 
             writer.writerows(rows)
