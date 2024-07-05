@@ -350,6 +350,8 @@ class EdgeAligner:
     def __init__(self, dst):
         self.dst = dst
         self.kdtree = scipy.spatial.KDTree(dst.points)
+        self.return_table = False
+        self.table = None
 
     def compute_alignment(self, dst_desc, src, src_desc):
         
@@ -389,9 +391,14 @@ class EdgeAligner:
 
         points = ring_slice(src.points, *src_fit_pts)
 
-        d, _ = self.kdtree.query(src_coords.get_transform().apply_v2(points))
+        distance, dst_indices = self.kdtree.query(src_coords.get_transform().apply_v2(points))
 
-        mse = np.sum(d ** 2) / len(d)
+        if self.return_table:
+            self.table = {'src_vertex': points,
+                          'dst_vertex': self.dst.points[dst_indices],
+                          'distance': distance}
+
+        mse = np.sum(distance ** 2) / len(distance)
 
         # print(f"  MSE={mse:.1f}")
 
