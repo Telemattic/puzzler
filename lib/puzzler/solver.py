@@ -593,9 +593,19 @@ class BoundaryComputer:
             fullpath = [head]
         
             curr = successors[head]
-            while curr != head:
 
-                assert curr not in visited
+            while curr not in visited: # [1]
+
+                # [1] this condition was formerly curr != head, followed by
+                #
+                #   assert curr not in visited
+                #
+                # but this assertion got tripped on simple rafts of
+                # just two pieces, perhaps uniquely because of their
+                # topology.  Changing the while loop as above fixes
+                # the issue, without understanding why the assert was
+                # failing
+                
                 visited.add(curr)
 
                 # if the current node has a neighbor (is not on the

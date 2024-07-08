@@ -18,7 +18,7 @@ class Coord:
         return Coord(angle, (x,y))
     
     def __repr__(self):
-        return f"Coord({self._angle!r}, {self._dxdy!r})"
+        return f"Coord({self._angle!r}, {self._xy!r})"
 
     @property
     def angle(self):
@@ -28,6 +28,10 @@ class Coord:
     def angle(self, v):
         self._angle = v
         self._xform = None
+
+    @property
+    def dxdy(self):
+        return self._xy
 
     @property
     def xy(self):
@@ -45,6 +49,10 @@ class Coord:
                             .translate(self._xy)
                             .rotate(self._angle))
         return self._xform
+
+    @property
+    def matrix(self):
+        return self.xform.matrix
 
     def copy(self):
         return Coord(self.angle, tuple(self.dxdy))

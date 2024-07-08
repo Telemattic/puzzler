@@ -12,6 +12,7 @@ import time
 import traceback
 import puzzler.feature
 import puzzler
+import puzzler.raft
 import puzzler.renderer.canvas
 import puzzler.solver
 
@@ -1164,7 +1165,7 @@ class AlignTk:
         
         s = self.var_show_raft_alignment.get().strip()
         v = s.split(',')
-        if len(v) != 0:
+        if len(v) != 4:
             print(f"bad input: \"{s}\", should be <dst_raft>,<trace_no>,<src_raft>,<trace_no>")
             return
         
@@ -1176,7 +1177,7 @@ class AlignTk:
         print(f"{dst_raft_name=} {dst_trace_no=} {src_raft_name=} {src_trace_no=}")
 
         def frob_raft_name(s):
-            m = re.match("^([A-Z]+\d+):(\d+)=([A-Z]+\d+):(\d+)$", s)
+            m = re.fullmatch("([A-Z]+\d+):(\d+)=([A-Z]+\d+):(\d+)", s)
             if not m:
                 print(f"bad raft name: \"{s}\", should be <dst_piece>:<tab_no>=<src_piece>:<tab_no>")
             return ((m[1], int(m[2])), (m[3], int(m[4])))
@@ -1197,20 +1198,84 @@ class AlignTk:
 
         print(f"{mse=:.1f}")
 
-        dst_coords = puzzler.align.AffineTransform(0., (0., 2000.))
+        def make_raft2(raft_name):
+            pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
+            
+            f = puzzler.raft.RaftFactory(pieces)
+            (dst_piece, dst_tab_no), (src_piece, src_tab_no) = frob_raft_name(raft_name)
+            dst_raft = f.make_raft_for_piece(dst_piece)
+            src_raft = f.make_raft_for_piece(src_piece)
+
+            print(f"{dst_raft=}")
+            print(f"{src_raft=}")
+
+            dst_feature = puzzler.raft.Feature(dst_piece, 'tab', dst_tab_no)
+            src_feature = puzzler.raft.Feature(src_piece, 'tab', src_tab_no)
+
+            a = puzzler.raft.RaftAligner(pieces, dst_raft)
+            src_coord = a.rough_align_single_tab(src_raft, (dst_feature, src_feature))
+            print(f"{src_coord=}")
+
+            alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
+
+            ret = f.merge_rafts(alignment)
+            print(f"{ret=}")
+            return ret
+
+        def trace_to_features(raft, trace_no):
+            trace = raft.traces[trace_no][1]
+            return [puzzler.raft.Feature(p, 'tab', i) for p, i in trace]
+
+        def merge_rafts(dst_raft, src_raft, feature_pairs):
+            
+            pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
+            a = puzzler.raft.RaftAligner(pieces, dst_raft)
+            
+            src_coord = a.rough_align_multiple_tabs(src_raft, feature_pairs)
+            print(f"{src_coord=}")
+            
+            f = puzzler.raft.RaftFactory(pieces)
+            alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
+
+            ret = f.merge_rafts(alignment)
+            print(f"{ret=}")
+            return ret
+
+        print("-------------------")
+        dst_raft2 = make_raft2(dst_raft_name)
+        print("-------------------")
+        src_raft2 = make_raft2(src_raft_name)
+        print("-------------------")
         
+        feature_pairs = list(zip(trace_to_features(dst_raft, dst_trace_no),
+                                 reversed(trace_to_features(src_raft, src_trace_no))))
+        print(f"{feature_pairs=}")
+
+        uber_raft = merge_rafts(dst_raft2, src_raft2, feature_pairs)
+        
+        print("-------------------")
+            
+        dst_coords = puzzler.align.AffineTransform(0., (0., 2000.))
+
         pieces = dict([(i.piece.label, i) for i in self.pieces])
 
-        for label, coords in dst_raft.coords.items():
-            curr_m = dst_coords.get_transform().matrix
-            prev_m = coords.get_transform().matrix
-            pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+        if uber_raft is not None:
+            for label, coords in uber_raft.coords.items():
+                curr_m = dst_coords.get_transform().matrix
+                prev_m = coords.matrix
+                pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+        else:
+
+            for label, coords in dst_raft.coords.items():
+                curr_m = dst_coords.get_transform().matrix
+                prev_m = coords.get_transform().matrix
+                pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
             
-        for label, coords in src_raft.coords.items():
-            curr_m = puzzler.align.AffineTransform(
-                src_coords.angle, src_coords.dxdy + dst_coords.dxdy).get_transform().matrix
-            prev_m = coords.get_transform().matrix
-            pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+            for label, coords in src_raft.coords.items():
+                curr_m = puzzler.align.AffineTransform(
+                    src_coords.angle, src_coords.dxdy + dst_coords.dxdy).get_transform().matrix
+                prev_m = coords.get_transform().matrix
+                pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
 
         self.scenegraph = None
         self.render()

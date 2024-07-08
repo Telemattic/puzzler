@@ -1,15 +1,23 @@
 import puzzler
 import collections
-from typing import Iterable, Mapping, NamedTuple, Sequence
+import numpy as np
+from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Tuple
 from dataclasses import dataclass
 
-Piece = puzzler.puzzle.Puzzle.Piece
+Piece = 'puzzler.puzzle.Puzzle.Piece'
 Pieces = Mapping[str,Piece]
 
 Coord = puzzler.align.Coord
 Coords = Mapping[str,Coord]
 
-Feature = NamedTuple('Feature', ['piece', 'kind', 'index'])
+Boundary = Tuple[str,Tuple[int,int]]
+Boundaries = Sequence[Sequence[Boundary]]
+
+class Feature(NamedTuple):
+    piece: str
+    kind: str
+    index: int
+    
 Frontier = Sequence[Feature]
 Frontiers = Sequence[Frontier]
 
@@ -27,10 +35,10 @@ class RaftAlignment:
 
     dst: Raft
     src: Raft
-    feature_pairs: Sequence[Tuple[int,int]]
+    # feature_pairs: Sequence[Tuple[int,int]]
     src_coord: Coord
-    error: float
-    other_stuff_to_visualize_algorithm: Any
+    # error: float
+    # other_stuff_to_visualize_algorithm: Any
 
 class RaftFactory:
 
@@ -53,21 +61,23 @@ class RaftFactory:
     def compute_frontier_for_boundary(self, boundary) -> Frontier:
 
         frontier = []
-        for segment in boundary:
-            frontier += compute_ordered_features_for_segment(*segment)
+        for label, (a, b) in boundary:
+            frontier += self.compute_ordered_features_for_segment(label, a, b)
         return frontier
 
     def compute_ordered_features_for_segment(self, label, a, b):
 
         p = self.pieces[label]
-        n = len(piece.points)
-        segment = RingRange(a, b, n)
+        n = len(p.points)
+        segment = puzzler.commands.align.RingRange(a, b, n)
         
         def midpoint(indexes):
             i, j = indexes
             if i < j:
-                return (i + j) // 2
-            return ((i + j + n) // 2) % n
+                m = (i + j) // 2
+            else:
+                m = ((i + j + n) // 2) % n
+            return m
 
         def is_edge_included(edge):
             return midpoint(edge.fit_indexes) in segment
@@ -77,10 +87,20 @@ class RaftFactory:
 
         def position_in_ring(f):
             if f.kind == 'tab':
-                return midpoint(p.tabs[f.index].tangent_indexes)
+                m = midpoint(p.tabs[f.index].tangent_indexes)
             else:
-                return midpoint(p.edges[f.index].fit_indexes)
-
+                m = midpoint(p.edges[f.index].fit_indexes)
+            # adjust the midpoint so that points that occur later in
+            # the segment always have a higher reported midpoint, even
+            # if the segment "wraps" from high indices to low indices.
+            # An alternative would be to report these points as
+            # relative offsets within the segment, i.e. perform all of
+            # these calculations and then subtract a, so it should
+            # always be the case that 0 <= m < len(segment)
+            if a > b and m < b:
+                m += n
+            return m
+            
         features = []
         
         for i, edge in enumerate(p.edges):
@@ -95,16 +115,21 @@ class RaftFactory:
 
     def make_raft_for_piece(self, src: str) -> Raft:
         
-        coords = {src: Coord(0.,0.,0.)}
+        coords = {src: Coord(0.,(0.,0.))}
         frontiers = self.compute_frontiers(coords)
         return Raft(coords, frontiers)
+
+    def transform_coords(self, coords: Coords, xform: Coord) -> Coords:
+        def helper(coord):
+            return Coord.from_matrix(xform.matrix @ coord.matrix)
+        return dict((k, helper(v)) for k, v in coords.items())
 
     def merge_rafts(self, alignment: RaftAlignment) -> Raft:
 
         dst_raft = alignment.dst
         src_raft = alignment.src
 
-        coords = dst_raft.coords | self.transform_coords(src_raft, alignment.src_coord)
+        coords = dst_raft.coords | self.transform_coords(src_raft.coords, alignment.src_coord)
         frontiers = self.compute_frontiers(coords)
         return Raft(coords, frontiers)
 
@@ -213,7 +238,7 @@ class RaftAligner:
 
         src_points_rotated = Coord(dst_angle-src_angle).xform.apply_v2(src_points)
 
-        r, x, y = compute_rigid_transform(src_points_rotated, dst_points)
+        r, x, y = puzzler.align.compute_rigid_transform(src_points_rotated, dst_points)
         r += dst_angle - src_angle
 
         return Coord(r, (x,y))
@@ -232,8 +257,10 @@ class RaftAligner:
         dst_helper = self.feature_helper(self.dst_raft)
         src_helper = self.feature_helper(src_raft)
 
-        dst_points = np.array(dst_helper.get_tab_center(i) for i, _ in tab_pairs)
-        src_points = np.array(src_helper.get_tab_center(j) for _, j in tab_pairs)
+        dst_points = np.array([dst_helper.get_tab_center(i) for i, _ in tab_pairs])
+        src_points = np.array([src_helper.get_tab_center(j) for _, j in tab_pairs])
+        print(f"{dst_points=}")
+        print(f"{src_points=}")
         
         dst_vec = dst_points[-1] - dst_points[0]
         dst_angle = np.arctan2(dst_vec[1], dst_vec[0])
@@ -243,7 +270,7 @@ class RaftAligner:
 
         src_points_rotated = Coord(dst_angle-src_angle).xform.apply_v2(src_points)
         
-        r, x, y = compute_rigid_transform(src_points_rotated, dst_points)
+        r, x, y = puzzler.align.compute_rigid_transform(src_points_rotated, dst_points)
         r += dst_angle - src_angle
 
         return Coord(r, (x,y))
