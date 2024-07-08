@@ -53,8 +53,9 @@ class BorderSolver:
             if n == 0:
                 continue
 
-            if len(self.pieces) > 1000 and not re.fullmatch("([A-Z]+(1|38))|((A|AA)\d+)", p.label):
-                print(f"Skipping {p.label}, not actually a border piece!")
+            # HACK: drop incorrectly labeled border pieces
+            if False and len(self.pieces) > 1000 and not re.fullmatch("([A-Z]+(1|38))|((A|AA)\d+)", p.label):
+                print(f"HACK: Skipping {p.label}, not actually a border piece!")
                 continue
 
             (pred, succ) = self.compute_edge_info(p)
@@ -203,7 +204,10 @@ class BorderSolver:
         # print(f"{scores=}")
 
         expected_pairs = dict()
-        
+
+        # define expected pairs for the 1026 piece puzzle
+        # automagically so we can identify problems as they occur when
+        # attemping to solve it programmatically
         if len(self.edges) > 100:
             for i in range(1,38):
                 expected_pairs[f"A{i}"] = f"A{i+1}"
@@ -216,11 +220,12 @@ class BorderSolver:
                     k = chr(i+1+ord('A'))
                 expected_pairs[f"{j}38"] = f"{k}38"
                 expected_pairs[f"{k}1"] = f"{j}1"
-            print(f"{expected_pairs=}")
-            print(f"{len(expected_pairs)=}")
     
             assert set(expected_pairs.keys()) == set(expected_pairs.values())
 
+        # HACK: define pairs for the 1026 piece puzzle automagically
+        if False and len(self.edges) > 100:
+            print(f"HACK: forcing known border solution for puzzle")
             retval = [min(self.corners)]
             curr = expected_pairs[retval[0]]
             while curr != retval[0]:
@@ -232,28 +237,63 @@ class BorderSolver:
         border = set(self.corners + self.edges)
 
         pairs = dict()
+        all_pairs = dict()
         used = set()
+        match_data = list()
         for dst in self.corners + self.edges:
 
             ss = scores[dst]
             best = min(ss.keys(), key=lambda x: ss[x][0])
 
+            all_pairs[dst] = best
+
             # print(f"{dst} <- {best} (mse={ss[best][0]})")
 
-            expected = expected_pairs.get(dst)
-            if expected_pairs and expected != best:
-                if expected not in border:
-                    print(f"--> {expected=} not in border set! skipping {dst=}")
+            if expected_pairs:
+                
+                kind = None
+                details = ''
+                
+                sss = sorted([(v[0], k) for k, v in ss.items()])
+                expected = expected_pairs.get(dst)
+                if expected is None:
+                    kind = 'bad'
+                    details = "dst not a border piece!"
+                elif expected != best:
+                    kind = 'bad'
+                    details = "expected src not scored!"
+                    for i, (v, k) in enumerate(sss):
+                        if k == expected:
+                            details = f"found at position {i}, mse={v:.1f}"
                 else:
-                    print(f"{dst} <- {best} ({expected=})")
-                    sss = sorted([(v[0], k) for k, v in ss.items()])
-                    print(sss)
+                    kind = 'good'
+                
+                match_data.append({'dst': dst,
+                                   'src': best,
+                                   'mse': sss[0][0],
+                                   'kind': kind,
+                                   'expected': expected,
+                                   'details': details})
+
+            expected = expected_pairs.get(dst)
+            sss = sorted([(v[0], k) for k, v in ss.items()])
+            if expected_pairs and expected != best:
+                if expected in border:
+                    details = "not scored!"
+                    for i, (v, k) in enumerate(sss):
+                        if k == expected:
+                            details = f"found at position {i} mse={v:.1f}"
+                else:
+                    details = "not a border piece!"
+                print(f"{dst:4s} <- {best:4s} (mse={sss[0][0]:.1f}, expected {expected} {details})")
                 continue
+            
+            print(f"{dst:4s} <- {best:4s} (mse={sss[0][0]:.1f})")
 
             if best in used:
                 print(f"best match match for {dst} is {best} and it has already been used!")
-                sss = sorted([(v[0], k) for k, v in ss.items()])
-                print(sss)
+                sss = sorted([(f"{v[0]:.1f}", k) for k, v in ss.items()])
+                # print(sss)
                 continue
 
             # greedily assume the best fit will be available, if it
@@ -264,6 +304,12 @@ class BorderSolver:
             pairs[dst] = best
 
         print(f"{pairs=}")
+
+        if match_data:
+            self.output_border_match_data('border_match_data.csv', match_data)
+
+        if expected_pairs:
+            self.output_border_as_python('border_graph_data.py', expected_pairs, all_pairs)
 
         # make sure the border pieces form a single ring
         visited = set()
@@ -282,6 +328,19 @@ class BorderSolver:
 
         return retval[::-1]
 
+    def output_border_match_data(self, path, match_data):
+        keys = 'dst src mse kind expected details'.split()
+        with open(path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, keys)
+            writer.writeheader()
+            writer.writerows(match_data)
+                
+    def output_border_as_python(self, path, expected, actual):
+
+        with open(path, 'w') as f:
+            print(f"{expected=}", file=f)
+            print(f"{actual=}", file=f)
+        
     def score_matches(self):
 
         scores = collections.defaultdict(dict)
@@ -360,19 +419,30 @@ class OverlappingPieces:
                 
 class ClosestPieces:
 
-    def __init__(self, pieces, geometry, distance_query_cache):
+    def __init__(self, pieces, coords, axes_opt, distance_query_cache):
         self.pieces = pieces
-        self.geometry = geometry
-        self.overlaps = OverlappingPieces(pieces, geometry.coords)
+        self.coords = coords
+        self.axes_opt = axes_opt
+        self.overlaps = OverlappingPieces(pieces, coords)
         self.max_dist = 50
         self.distance_query_cache = distance_query_cache
 
-        # print(f"ClosestPieces: width={self.geometry.width:.1f} height={self.geometry.height:.1f}")
+        # axes_opt: optional coordinates of the 4 axes
+        #
+        #    +<--- 2 ---+
+        #    |          ^
+        #    3          |
+        #    |          1
+        #    v          |
+        #    +--- 0 --->+
+        #
+        # e.g. (0, puzzle_width, puzzle_height, 0)
+        assert axes_opt is None or len(axes_opt) == 4
 
     def __call__(self, src_label):
 
         src_piece = self.pieces[src_label]
-        src_coords = self.geometry.coords[src_label]
+        src_coords = self.coords[src_label]
         num_points = len(src_piece.points)
         
         ret_dist = np.full(num_points, self.max_dist)
@@ -381,7 +451,7 @@ class ClosestPieces:
 
         def piece_overlap(dst_label):
             dst_piece = self.pieces[dst_label]
-            dst_coords = self.geometry.coords[dst_label]
+            dst_coords = self.coords[dst_label]
 
             dst_dist = np.abs(
                 self.distance_query_cache.query(dst_piece, dst_coords, src_piece, src_coords))
@@ -426,10 +496,11 @@ class ClosestPieces:
             ret_no[ii] = len(ret_labels)
             ret_labels.append(label)
 
-        axis_overlap(1, 0., 'axis0')
-        axis_overlap(0, self.geometry.width, 'axis1')
-        axis_overlap(1, self.geometry.height, 'axis2')
-        axis_overlap(0, 0., 'axis3')
+        if self.axes_opt:
+            axis_overlap(1, self.axes_opt[0], 'axis0')
+            axis_overlap(0, self.axes_opt[1], 'axis1')
+            axis_overlap(1, self.axes_opt[2], 'axis2')
+            axis_overlap(0, self.axes_opt[3], 'axis3')
 
         retval = collections.defaultdict(list)
 
@@ -450,92 +521,15 @@ class ClosestPieces:
 
         return retval
     
-class ClosestPoints:
+class BoundaryComputer:
 
-    def __init__(self, pieces, coords, kdtrees):
+    def __init__(self, pieces):
         self.pieces = pieces
-        self.coords = coords
-        self.kdtrees = kdtrees
-        self.overlaps = OverlappingPieces(pieces, coords)
-        self.max_dist = 50
 
-    def __call__(self, src_label):
+    def find_boundaries_from_adjacency(self, adjacency):
 
-        # these are a function of the piece geometry and nothing
-        # external perhaps?
-        src_indexes = self.get_point_indexes(src_label)
-        src_points = self.pieces[src_label].points[src_points]
-        num_points = len(src_points)
-
-        dst_labels = self.overlaps(src_coords.dxdy, src_piece.radius + self.max_dist)
-
-        ret_dist = np.full(num_points, self.max_dist)
-        ret_no = np.full(num_points, len(dst_labels))
-        ret_indexes = np.zeros(num_points)
-
-        for dst_no, dst_label in enumerate(dst_labels):
-
-            if dst_label == src_label:
-                continue
-
-            xform = self.src_to_dst_transform(src_label, dst_label)
-            dst_dist, dst_index = dst_kdtree.query(xform.apply_v2(src_points))
-
-            ii = np.nonzero(dst_dist < ret_dist)
-            if 0 == len(ii):
-                continue
-            
-            ret_dist[ii] = dst_dist[ii]
-            ret_no[ii] = dst_no
-            ret_indexes[ii] = dst_index[ii]
-
-        retval = dict()
-        for dst_no, dst_label in enumerate(dst_labels):
-
-            ii = np.nonzero(ret_no == dst_no)
-            if 0 == len(ii):
-                continue
-
-            retval[(src_label, dst_label)] = (src_indexes[ii], ret_indexes[ii])
-
-        return retval
-    
-class AdjacencyComputer:
-
-    def __init__(self, pieces, constraints, geometry, distance_query_cache):
-        self.pieces = pieces
-        self.constraints = constraints
-        self.geometry = geometry
-
-        self.border_constraints = collections.defaultdict(list)
-        self.tab_constraints = collections.defaultdict(list)
-
-        for c in self.constraints:
-            if isinstance(c, BorderConstraint):
-                self.border_constraints[c.edge[0]].append(c)
-            elif isinstance(c, TabConstraint):
-                self.tab_constraints[c.a[0]].append(c)
-                self.tab_constraints[c.b[0]].append(TabConstraint(c.b, c.a))
-
-        self.closest = ClosestPieces(self.pieces, self.geometry, distance_query_cache)
-
-    def compute_adjacency(self, label):
-
-        return self.closest(label)
-        
-        retval = []
-        
-        p = self.pieces[label]
-
-        for c in self.border_constraints[label]:
-            
-            edge = p.edges[c.edge[1]]
-            axis = c.axis
-            span = edge.fit_indexes
-            
-            retval.append((span, axis))
-
-        return (retval, self.closest(label))
+        successors, neighbors, nodes_on_frontier = self.compute_successors_and_neighbors(adjacency)
+        return self.find_boundaries(successors, neighbors, nodes_on_frontier)[0]
 
     def compute_successors_and_neighbors(self, adjacency):
 
@@ -582,7 +576,7 @@ class AdjacencyComputer:
 
         return (successors, neighbors, nodes_on_frontier)
 
-    def find_frontiers(self, successors, neighbors, nodes_on_frontier):
+    def find_boundaries(self, successors, neighbors, nodes_on_frontier):
 
         covered = set()
         retval = []
@@ -630,9 +624,8 @@ class AdjacencyComputer:
 
 class FrontierExplorer:
 
-    def __init__(self, pieces, geometry):
+    def __init__(self, pieces):
         self.pieces = pieces
-        self.geometry = geometry
 
     def find_tabs(self, frontier):
 
@@ -657,13 +650,13 @@ class FrontierExplorer:
 
         return retval
 
-    def find_interesting_corners(self, frontier):
+    def find_interesting_corners(self, frontier, coords):
 
         tabs = self.find_tabs(frontier)
         dirs = []
         for tab in tabs:
             p, v = self.get_tab_center_and_direction(tab)
-            t = self.geometry.coords[tab[0]].get_transform()
+            t = coords[tab[0]].get_transform()
             dirs.append((t.apply_v2(p), t.apply_n2(v)))
             
         scores = []
@@ -720,23 +713,25 @@ class PuzzleSolver:
             return
         
         border = bs.link_pieces(scores)
-        print(f"{border=}")
+        # print(f"{border=}")
         bs.estimate_puzzle_size(border)
 
         self.constraints = bs.init_constraints(border)
         self.geometry = bs.init_placement(border)
 
-        print(f"{self.constraints=}")
-        print(f"{self.geometry=}")
+        print(f"puzzle_size: width={self.geometry.width:.1f} height={self.geometry.height:.1f}")
+
+        # print(f"{self.constraints=}")
+        # print(f"{self.geometry=}")
 
         self.update_adjacency()
 
-        ts = datetime.now()
+        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
 
-        path = self.next_path(ts.strftime('matches_%Y%m%d-%H%M%S'), 'csv')
+        path = self.next_path('matches_' + ts, 'csv')
         self.save_tab_matches(path)
         
-        path = self.next_path(ts.strftime('solver_%Y%m%d-%H%M%S'), 'json')
+        path = self.next_path('solver_' + ts, 'json')
         save_json(path, self)
 
     def next_path(self, fname, ext):
@@ -762,7 +757,10 @@ class PuzzleSolver:
         fits = []
         for corner in self.corners:
             v = self.score_corner(corner)
-            if len(v) > 1:
+            if False and len(v) >= 2 and v[0][1] == 'O28' and v[1][1] == 'X37':
+                # HACK: force X37 to fit in place of O28
+                fits.append((0.1, *v[1]))
+            elif len(v) > 1:
                 r = v[0][0] / v[1][0]
                 fits.append((r, *v[0]))
             elif v:
@@ -770,7 +768,7 @@ class PuzzleSolver:
 
             s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
 
-            # debugging hack to show the scoring on the known correct piece
+            # HACK: show the scoring on the known correct piece
             if corner == (('Y4', 3), ('Z5', 0)):
                 for i in v[3:]:
                     s.append(f"{i[1]}:{i[0]:.1f}")
@@ -882,30 +880,17 @@ class PuzzleSolver:
                 
     def update_adjacency(self):
 
-        ac = AdjacencyComputer(self.pieces, [], self.geometry, self.distance_query_cache)
+        coords = self.geometry.coords
+        axes_opt = (0., self.geometry.width, self.geometry.height, 0.)
+        closest_pieces = ClosestPieces(self.pieces, coords, axes_opt, self.distance_query_cache)
+        adjacency = dict((i, closest_pieces(i)) for i in self.geometry.coords)
         
-        adjacency = dict()
-        for label in self.geometry.coords:
-            adjacency[label] = ac.compute_adjacency(label)
-
-        successors, neighbors, nodes_on_frontier = ac.compute_successors_and_neighbors(adjacency)
-
-        frontiers, fullpaths = ac.find_frontiers(successors, neighbors, nodes_on_frontier)
+        frontiers = BoundaryComputer(self.pieces).find_boundaries_from_adjacency(adjacency)
         
-        def flatten(i):
-            a, b = i
-            return f"{a}:{b[0]}-{b[1]}"
-
-        def flatten_dict(d):
-            return {flatten(k): flatten(v) for k, v in d.items()}
-
-        def flatten_list(l):
-            return [flatten(i) for i in l]
-
-        fe = FrontierExplorer(self.pieces, self.geometry)
+        fe = FrontierExplorer(self.pieces)
         corners = []
         for f in frontiers:
-            corners += fe.find_interesting_corners(f)
+            corners += fe.find_interesting_corners(f, coords)
         good_corners = []
         for (s, t, u), tab0, tab1 in corners:
             is_interesting = abs(s) < .5 and 50 < t < 1000 and 50 < u < 1000
@@ -915,19 +900,6 @@ class PuzzleSolver:
         self.adjacency = adjacency
         self.frontiers = frontiers
         self.corners = good_corners
-
-        return
-
-        with open(r'C:\temp\puzzler\update_adjacency.txt','a') as f:
-            print(f"successors={flatten_dict(successors)}", file=f)
-            print(f"neighbors={flatten_dict(neighbors)}", file=f)
-            print(f"nodes_on_frontier={flatten_list(nodes_on_frontier)}", file=f)
-            for i, j in enumerate(frontiers):
-                print(f"frontiers[{i}]={flatten_list(j)}", file=f)
-            for i, j in enumerate(fullpaths):
-                print(f"fullpaths[{i}]={flatten_list(j)}", file=f)
-            print(f"corners={corners}", file=f)
-            print(f"good_corners={good_corners}", file=f)
 
 def load_json(path, pieces):
 

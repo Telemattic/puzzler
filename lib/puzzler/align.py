@@ -5,6 +5,50 @@ import cv2 as cv
 import scipy
 from dataclasses import dataclass, field
 
+class Coord:
+
+    def __init__(self, angle=0., xy=(0.,0.)):
+        self._angle = angle
+        self._xy = np.array(xy, dtype=np.float64)
+        self._xform = None
+
+    def from_matrix(m):
+        angle = math.atan2(m[1,0], m[0,0])
+        x, y = m[0,2], m[1,2]
+        return Coord(angle, (x,y))
+    
+    def __repr__(self):
+        return f"Coord({self._angle!r}, {self._dxdy!r})"
+
+    @property
+    def angle(self):
+        return self._angle
+
+    @angle.setter
+    def angle(self, v):
+        self._angle = v
+        self._xform = None
+
+    @property
+    def xy(self):
+        return self._xy
+
+    @xy.setter
+    def xy(self, v):
+        self._xy = np.array(v, dtype=np.float64)
+        self._xform = None
+
+    @property
+    def xform(self):
+        if self._xform is None:
+            self._xform = (puzzler.render.Transform()
+                            .translate(self._xy)
+                            .rotate(self._angle))
+        return self._xform
+
+    def copy(self):
+        return Coord(self.angle, tuple(self.dxdy))
+
 class AffineTransform:
 
     def __init__(self, angle=0., xy=(0.,0.)):
@@ -159,7 +203,7 @@ class TabAligner:
         src_vec = src_points[0] - src_points[1] + src_points[2] - src_points[1]
         src_angle = np.arctan2(src_vec[1], src_vec[0])
 
-        src_points_rotated = AffineTransform(dst_angle-src_angle).get_transform().apply_v2(src_points)
+        src_points_rotated = Coord(dst_angle-src_angle).xform.apply_v2(src_points)
 
         r, x, y = compute_rigid_transform(src_points_rotated, dst_points)
         r += dst_angle - src_angle
@@ -449,7 +493,7 @@ class MultiAligner:
         src_vec = src_points[1] - src_points[0]
         src_angle = np.arctan2(src_vec[1], src_vec[0])
 
-        src_points_rotated = AffineTransform(dst_angle-src_angle, (0,0)).get_transform().apply_v2(src_points)
+        src_points_rotated = Coord(dst_angle-src_angle).xform.apply_v2(src_points)
 
         r, x, y = compute_rigid_transform(src_points_rotated, self.dst_points)
 

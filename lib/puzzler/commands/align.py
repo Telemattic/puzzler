@@ -361,7 +361,7 @@ class PuzzleRenderer:
 
         piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
         
-        fe = puzzler.solver.FrontierExplorer(piece_dict, None)
+        fe = puzzler.solver.FrontierExplorer(piece_dict)
 
         tabs = collections.defaultdict(list)
         for label, tab_no in fe.find_tabs(frontier):
@@ -437,6 +437,7 @@ class PuzzleSGFactory:
         self.pieces = pieces
         self.selection = None
         self.frontiers = []
+        self.render_frontier_details = False
         self.adjacency = dict()
         self.renderer = None
         self.font = None
@@ -539,7 +540,7 @@ class PuzzleSGFactory:
 
         piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
         
-        fe = puzzler.solver.FrontierExplorer(piece_dict, None)
+        fe = puzzler.solver.FrontierExplorer(piece_dict)
 
         tabs = collections.defaultdict(list)
         for label, tab_no in fe.find_tabs(frontier):
@@ -559,21 +560,25 @@ class PuzzleSGFactory:
                     p1 = p0 + v * 100
                     sgb.add_lines(np.array((p0, p1)), fill='red', width=1, arrow='last')
 
-        return
+        if not self.render_frontier_details:
+            return
 
-        for l, a, b in frontier:
+        for l, (a, b) in frontier:
             p = piece_dict[l]
-            with puzzler.render.save(r):
-                r.translate(p.coords.dxdy)
-                r.rotate(p.coords.angle)
-                r.draw_points(p.piece.points[a], fill='pink', radius=8)
+            with puzzler.sgbuilder.insert_sequence(sgb):
+                sgb.add_translate(p.coords.dxdy)
+                sgb.add_rotate(p.coords.angle)
+                sgb.add_points([p.piece.points[b]], radius=10, outline='purple')
                 
-        for l, a, b in frontier:
+        for i, (l, (a, b)) in enumerate(frontier):
             p = piece_dict[l]
-            with puzzler.render.save(r):
-                r.translate(p.coords.dxdy)
-                r.rotate(p.coords.angle)
-                r.draw_points(p.piece.points[b], fill='purple', radius=5)
+            with puzzler.sgbuilder.insert_sequence(sgb):
+                sgb.add_translate(p.coords.dxdy)
+                sgb.add_rotate(p.coords.angle)
+                v = p.piece.points[a]
+                sgb.add_points([v], radius=8, fill='pink')
+                label = str(i)
+                sgb.add_text(v, label, font=('Courier New', 12))
 
     def draw_adjacency(self, adjacency):
         
@@ -810,6 +815,8 @@ class AlignTk:
 
         f.selection = self.selection
         f.frontiers = self.solver.frontiers
+        if self.var_render_frontier.get():
+            f.render_frontier_details = True
         if self.var_render_adjacency.get():
             f.adjacency = self.solver.adjacency
             # HACK, just show adjacency for this single piece
@@ -817,7 +824,7 @@ class AlignTk:
                 f.adjacency = {'B1':f.adjacency['B1']}
         if self.render_normals:
             f.normals = self.render_normals
-        if self.render_vertexes:
+        if self.var_render_vertexes.get() and self.render_vertexes:
             f.vertexes = self.render_vertexes
         f.props['tabs.render'] = self.var_render_tabs.get() != 0
 
@@ -829,6 +836,16 @@ class AlignTk:
 
     def do_render_tabs(self):
 
+        self.scenegraph = None
+        self.render()
+
+    def do_render_vertexes(self):
+
+        self.scenegraph = None
+        self.render()
+
+    def do_render_frontier(self):
+        
         self.scenegraph = None
         self.render()
 
@@ -940,19 +957,31 @@ class AlignTk:
                              variable=self.var_render_adjacency)
         b3.grid(column=2, row=0, sticky=W)
 
+        self.var_render_frontier = IntVar(value=0)
+        b4 = ttk.Checkbutton(self.controls, text="Frontier",
+                             command=self.do_render_frontier,
+                             variable=self.var_render_frontier)
+        b4.grid(column=3, row=0, sticky=W)
+
         self.var_render_tabs = IntVar(value=0)
         b3 = ttk.Checkbutton(self.controls, text="Tabs",
                              command=self.do_render_tabs,
                              variable=self.var_render_tabs)
-        b3.grid(column=3, row=0, sticky=W)
+        b3.grid(column=4, row=0, sticky=W)
+
+        self.var_render_vertexes = IntVar(value=0)
+        b4 = ttk.Checkbutton(self.controls, text="Vertexes",
+                             command=self.do_render_vertexes,
+                             variable=self.var_render_vertexes)
+        b4.grid(column=5, row=0, sticky=W)
 
         self.var_solve_continuous = IntVar(value=0)
-        b4 = ttk.Checkbutton(self.controls, text="Continuous", variable=self.var_solve_continuous)
-        b4.grid(column=4, row=0, sticky=W)
+        b5 = ttk.Checkbutton(self.controls, text="Continuous", variable=self.var_solve_continuous)
+        b5.grid(column=6, row=0, sticky=W)
 
         self.var_label = StringVar(value="x,y")
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=80)
-        l1.grid(column=5, row=0, sticky=(E))
+        l1.grid(column=7, row=0, sticky=E)
 
         cf2 = ttk.Frame(self.frame)
         cf2.grid(row=2, sticky=(W,E))
@@ -967,12 +996,19 @@ class AlignTk:
         e1 = ttk.Entry(cf2, width=16, textvariable=self.var_show_tab_alignment)
         e1.grid(column=2, row=0)
 
-        b7 = ttk.Button(cf2, text='Show Raft Alignment', command=self.show_raft_alignment)
+        b7 = ttk.Button(cf2, text='Show Edge Alignment', command=self.show_edge_alignment)
         b7.grid(column=3, row=0)
 
-        self.var_show_raft_alignment = StringVar(value='')
-        e2 = ttk.Entry(cf2, width=32, textvariable=self.var_show_raft_alignment)
+        self.var_show_edge_alignment = StringVar(value='')
+        e2 = ttk.Entry(cf2, width=16, textvariable=self.var_show_edge_alignment)
         e2.grid(column=4, row=0)
+
+        b8 = ttk.Button(cf2, text='Show Raft Alignment', command=self.show_raft_alignment)
+        b8.grid(column=5, row=0)
+
+        self.var_show_raft_alignment = StringVar(value='')
+        e3 = ttk.Entry(cf2, width=32, textvariable=self.var_show_raft_alignment)
+        e3.grid(column=6, row=0)
 
         self.render_full = False
 
@@ -1020,6 +1056,39 @@ class AlignTk:
         self.render_vertexes = None
         self.render()
 
+    def show_edge_alignment(self):
+        s = self.var_show_edge_alignment.get().strip()
+        m = re.fullmatch("([a-zA-Z]+\d+):(\d+),(\d+)=([a-zA-Z]+\d+):(\d+),(\d+)", s)
+        if not m:
+            print(f"bad input: \"{s}\", should be <dst_label>:<edge>,<tab>=<src_label>:<edge>,<tab>")
+            return
+
+        dst_label, dst_desc = m[1], (int(m[2]), int(m[3]))
+        src_label, src_desc = m[4], (int(m[5]), int(m[6]))
+
+        print(f"{dst_label=} {dst_desc=} {src_label=} {src_desc=}")
+
+        pieces = dict([(i.piece.label, i) for i in self.pieces])
+        dst = pieces[dst_label]
+        src = pieces[src_label]
+
+        edge_aligner = puzzler.align.EdgeAligner(dst.piece)
+        edge_aligner.return_table = True
+
+        mse, src_coords, sfp, dfp = edge_aligner.compute_alignment(dst_desc, src.piece, src_desc)
+
+        print(f"edge_aligner: {mse=:.2f} {sfp=} {dfp=}")
+
+        t = edge_aligner.table
+        self.render_vertexes = dict()
+        self.render_vertexes[src_label] = t['src_vertex']
+
+        dst.coords = puzzler.align.AffineTransform(0., (0., 2000.))
+        src.coords = puzzler.align.AffineTransform(src_coords.angle, src_coords.dxdy + dst.coords.dxdy)
+
+        self.scenegraph = None
+        self.render()
+        
     def show_tab_alignment(self):
         s = self.var_show_tab_alignment.get().strip()
         m = re.fullmatch("([a-zA-Z]+\d+):(\d+)=([a-zA-Z]+\d+):(\d+)", s)
@@ -1092,16 +1161,24 @@ class AlignTk:
         self.render()
 
     def show_raft_alignment(self):
+        
         s = self.var_show_raft_alignment.get().strip()
         v = s.split(',')
+        if len(v) != 0:
+            print(f"bad input: \"{s}\", should be <dst_raft>,<trace_no>,<src_raft>,<trace_no>")
+            return
         
         dst_raft_name = v[0]
         dst_trace_no = int(v[1])
         src_raft_name = v[2]
         src_trace_no = int(v[3])
 
+        print(f"{dst_raft_name=} {dst_trace_no=} {src_raft_name=} {src_trace_no=}")
+
         def frob_raft_name(s):
             m = re.match("^([A-Z]+\d+):(\d+)=([A-Z]+\d+):(\d+)$", s)
+            if not m:
+                print(f"bad raft name: \"{s}\", should be <dst_piece>:<tab_no>=<src_piece>:<tab_no>")
             return ((m[1], int(m[2])), (m[3], int(m[4])))
 
         pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
