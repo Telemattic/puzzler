@@ -24,3 +24,4 @@ Todo:
 * revise RaftAligner to do ICP in order to get better alignment before
   measuring fit error, for example 1000.json and fit of
   "F17:3=F16:0,1,G30:0=G29:1,0" (which is admittely a false match...)
+  "F17:3=F16:0,1,E17:0=E16:3,0" (correct match)

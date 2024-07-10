@@ -1,6 +1,7 @@
 import puzzler
 import collections
 import numpy as np
+import scipy
 from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Tuple
 from dataclasses import dataclass
 
@@ -171,6 +172,17 @@ class FeatureHelper:
 
         return coord.xform.apply_v2(np.array((l, r, c)))
 
+class Stitches(NamedTuple):
+    piece: str
+    indices: np.ndarray
+    points: np.ndarray
+    normals: np.ndarray
+
+class Seam(NamedTuple):
+    dst: Stitches
+    src: Stitches
+    error: float
+
 class RaftAligner:
 
     def __init__(self, pieces: Pieces, dst_raft: Raft) -> None:
@@ -259,8 +271,6 @@ class RaftAligner:
 
         dst_points = np.array([dst_helper.get_tab_center(i) for i, _ in tab_pairs])
         src_points = np.array([src_helper.get_tab_center(j) for _, j in tab_pairs])
-        print(f"{dst_points=}")
-        print(f"{src_points=}")
         
         dst_vec = dst_points[-1] - dst_points[0]
         dst_angle = np.arctan2(dst_vec[1], dst_vec[0])
@@ -274,3 +284,192 @@ class RaftAligner:
         r += dst_angle - src_angle
 
         return Coord(r, (x,y))
+
+    def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam]):
+
+        verbose = False
+
+        icp = puzzler.icp.IteratedClosestPoint()
+
+        pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
+
+        fixed_piece = None
+        for piece, coord in raft.coords.items():
+            if coord.angle == 0. and np.all(coord.xy == 0.):
+                fixed_piece = piece
+
+        if fixed_piece is None:
+            fixed_piece = next(iter(pieces_with_seams))
+
+        if verbose:
+            print(f"refine_alignment_within_raft: {fixed_piece=}")
+
+        bodies = dict()
+        for piece in pieces_with_seams:
+            coord = raft.coords[piece]
+            bodies[piece] = icp.make_rigid_body(coord.angle, coord.xy, fixed=(piece == fixed_piece))
+
+        for i in seams:
+            src_body = bodies[i.src.piece]
+            if src_body.fixed:
+                continue
+            src_piece = self.pieces[i.src.piece]
+            src_points = src_piece.points[i.src.indices]
+            
+            dst_body = bodies[i.dst.piece]
+            dst_piece = self.pieces[i.dst.piece]
+            dst_points = dst_piece.points[i.dst.indices]
+            dst_normals = puzzler.align.NormalsComputer()(dst_piece.points, i.dst.indices)
+            
+            icp.add_body_correspondence(src_body, src_points,
+                                        dst_body, dst_points, dst_normals)
+
+        icp.solve()
+
+        if verbose:
+            for piece, body in bodies.items():
+                old_coord = raft.coords[piece]
+                new_coord = Coord(body.angle, body.center)
+                with np.printoptions(precision=3):
+                    print(f"{piece} {old_coord} {new_coord}")
+    
+        coords = dict()
+        for piece, coord in raft.coords.items():
+            body = bodies.get(piece)
+            if body:
+                coord = Coord(body.angle, body.center)
+            coords[piece] = coord
+
+        return Raft(coords, raft.frontiers)
+
+class RaftSeamstress:
+
+    def __init__(self, pieces):
+        self.pieces = pieces
+        self.stride = 10
+        self.close_cutoff = 10
+        self.medium_cutoff = 48
+
+    def seams_within_raft(self, raft):
+
+        overlaps = puzzler.solver.OverlappingPieces(self.pieces, raft.coords)
+
+        seams = []
+        for src_label, src_coord in raft.coords.items():
+            src_piece = self.pieces[src_label]
+            for dst_label in overlaps(src_coord.xy, src_piece.radius):
+                if dst_label == src_label:
+                    continue
+                dst_coord = raft.coords[dst_label]
+                seam = self.seam_between_pieces(dst_label, dst_coord, src_label, src_coord)
+                if seam is None:
+                    continue
+                seams.append(seam)
+
+        return seams
+
+    def trim_seams(self, seams):
+
+        def helper(src_piece, dst_seams):
+
+            if len(dst_seams) < 2:
+                return dst_seams
+
+            min_dist = dict()
+            for seam_no, seam in enumerate(dst_seams):
+                distance = np.linalg.norm(seam.dst.points - seam.src.points, axis=1)
+                for i, src_index in enumerate(seam.src.indices):
+                    if src_index not in min_dist or min_dist[src_index][0] > distance[i]:
+                        min_dist[src_index] = (distance[i], seam_no)
+
+            by_seam = list(set() for _ in range(len(dst_seams)))
+            for src_index, (_, dst_seam_no) in min_dist.items():
+                by_seam[dst_seam_no].add(src_index)
+
+            retval = []
+            for seam, take_indexes in zip(dst_seams, by_seam):
+
+                nonzero = [i for i, j in enumerate(seam.src.indices) if j in take_indexes]
+                if len(nonzero) == 0:
+                    continue
+
+                dst_stitches = Stitches(seam.dst.piece,
+                                        seam.dst.indices[nonzero],
+                                        seam.dst.points[nonzero],
+                                        seam.dst.normals[nonzero])
+
+                src_stitches = Stitches(seam.src.piece,
+                                        seam.src.indices[nonzero],
+                                        seam.src.points[nonzero],
+                                        seam.src.normals[nonzero])
+
+                error = np.sum((dst_stitches.points - src_stitches.points) ** 2)
+
+                retval.append(Seam(dst_stitches, src_stitches, error))
+
+            return retval
+                
+
+        by_src_piece = collections.defaultdict(list)
+        for s in seams:
+            by_src_piece[s.src.piece].append(s)
+
+        retval = []
+        for src_piece, dst_seams in by_src_piece.items():
+            retval += helper(src_piece, dst_seams)
+
+        return retval
+
+    def seam_between_pieces(self, dst_label, dst_coord, src_label, src_coord):
+
+        src_piece = self.pieces[src_label]
+        src_indices = np.arange(0, len(src_piece.points), self.stride)
+
+        src_points = src_coord.xform.apply_v2(src_piece.points[src_indices])
+
+        dst_inverse_xform = (puzzler.render.Transform()
+                             .rotate(-dst_coord.angle)
+                             .translate(-dst_coord.xy))
+
+        src_points_in_dst_frame = dst_inverse_xform.apply_v2(src_points)
+
+        distance, dst_indices = self.get_kdtree(dst_label).query(src_points_in_dst_frame)
+        if np.all(distance > self.medium_cutoff):
+            return None
+
+        dst_piece = self.pieces[dst_label]
+        dst_normals = dst_coord.xform.apply_n2(self.compute_normals(dst_piece.points, dst_indices))
+        src_normals = src_coord.xform.apply_n2(self.compute_normals(src_piece.points, src_indices))
+
+        dot_product = np.sum(dst_normals * src_normals, axis=1)
+
+        is_close = (distance < self.close_cutoff) | ((distance < self.medium_cutoff) & (dot_product < -0.5))
+        close_points = np.nonzero(is_close)
+        if len(close_points[0]) == 0:
+            return None
+
+        close_dst_indices = dst_indices[close_points]
+        close_dst_points = dst_coord.xform.apply_v2(dst_piece.points[close_dst_indices])
+                                
+        dst_stitches = Stitches(dst_label,
+                                close_dst_indices,
+                                close_dst_points,
+                                dst_normals[close_points])
+
+        src_stitches = Stitches(src_label,
+                                src_indices[close_points],
+                                src_points[close_points],
+                                src_normals[close_points])
+
+        close_distance = distance[close_points]
+
+        error = np.sum(close_distance ** 2)
+
+        return Seam(dst_stitches, src_stitches, error)
+
+    def get_kdtree(self, label):
+        piece = self.pieces[label]
+        return scipy.spatial.KDTree(piece.points)
+
+    def compute_normals(self, points, indices):
+        return puzzler.align.NormalsComputer()(points, indices)

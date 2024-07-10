@@ -15,6 +15,7 @@ import puzzler
 import puzzler.raft
 import puzzler.renderer.canvas
 import puzzler.solver
+from tqdm import tqdm
 
 from tkinter import *
 from tkinter import ttk
@@ -439,11 +440,13 @@ class PuzzleSGFactory:
         self.selection = None
         self.frontiers = []
         self.render_frontier_details = False
+        self.render_vertex_details = False
         self.adjacency = dict()
         self.renderer = None
         self.font = None
         self.normals = dict()
         self.vertexes = dict()
+        self.seams = []
         self.props = {'tabs.render':False, 'edges.render':False, 'tabs.ellipse.fill':''}
 
         if PuzzleSGFactory.piece_factory is None:
@@ -492,25 +495,52 @@ class PuzzleSGFactory:
             props = self.props | {'points.outline':color, 'points.fill':color+(0.25,), 'tabs.ellipse.outline':color, 'tags':(tag,)}
             sgb.add_node(PuzzleSGFactory.piece_factory(p.piece.label, props))
 
-            normals = self.normals.get(p.piece.label)
-            if normals is not None:
-                for n in normals:
-                    sgb.add_lines(np.array((n[0], n[0] + n[1]*10)), fill=color, width=1)
+        # global coordinate system!
+        self.draw_normals_and_vertexes_and_seams(p, color, tag)
 
-            vertexes = self.vertexes.get(p.piece.label)
-            if vertexes is not None:
-                vmap = collections.defaultdict(list)
-                for i, v in enumerate(vertexes):
-                    vmap[tuple(v)].append(i)
-                # print(f"{tag=} {vmap=}")
-                for i, v in enumerate(vertexes):
-                    indices = vmap[tuple(v)]
-                    if indices[0] != i:
-                        continue
-                    label = ','.join(str(i) for i in indices)
-                    sgb.add_points([v], radius=6, fill='', outline=color, width=1,
-                                   tags=(tag, f'vertex:{label}'))
-                    sgb.add_text(v, label, font=('Courier New', 12))
+    def draw_normals_and_vertexes_and_seams(self, p, color, tag):
+
+        sgb = self.scenegraphbuilder
+
+        def draw_vertexes(vertexes, color):
+            vmap = collections.defaultdict(list)
+            for i, v in enumerate(vertexes):
+                vmap[tuple(v)].append(i)
+            for i, v in enumerate(vertexes):
+                indices = vmap[tuple(v)]
+                if indices[0] != i:
+                    continue
+                label = ','.join(str(i) for i in indices)
+                sgb.add_points([v], radius=6, fill='', outline=color, width=1,
+                               tags=(tag, f'vertex:{label}'))
+                sgb.add_text(v, label, font=('Courier New', 12))
+
+        def draw_normals(normals, color):
+            for n in normals:
+                sgb.add_lines(np.array((n[0], n[0] + n[1]*10)), fill=color, width=1)
+
+        def draw_stitches(stitches, color, normals_flag):
+            xy = np.array((0., 2000.))
+            if self.render_vertex_details:
+                draw_vertexes(stitches.points + xy, color)
+            if normals_flag:
+                normals = list(zip(stitches.points + xy, stitches.normals))
+                draw_normals(normals, color)
+
+        if self.seams:
+            for seam in self.seams:
+                if seam.src.piece == p.piece.label:
+                    draw_stitches(seam.src, color, False)
+                if seam.dst.piece == p.piece.label:
+                    draw_stitches(seam.dst, color, True)
+        
+        normals = self.normals.get(p.piece.label)
+        if normals is not None:
+            draw_normals(normals, color)
+
+        vertexes = self.vertexes.get(p.piece.label)
+        if vertexes is not None:
+            draw_vertexes(vertexes, color)
 
     def draw_rotate_handles(self, piece_id):
 
@@ -633,6 +663,7 @@ class AlignTk:
         self.selection = None
         self.render_normals = None
         self.render_vertexes = None
+        self.render_seams = None
         self.use_cairo = renderer == 'cairo'
         self.use_scenegraph = mode == 'scenegraph'
         self.scenegraph = None
@@ -825,8 +856,12 @@ class AlignTk:
                 f.adjacency = {'B1':f.adjacency['B1']}
         if self.render_normals:
             f.normals = self.render_normals
-        if self.var_render_vertexes.get() and self.render_vertexes:
-            f.vertexes = self.render_vertexes
+        if self.var_render_vertexes.get():
+            if self.render_vertexes:
+                f.vertexes = self.render_vertexes
+            f.render_vertex_details = True
+        if self.render_seams:
+            f.seams = self.render_seams
         f.props['tabs.render'] = self.var_render_tabs.get() != 0
 
         return f.build()
@@ -1011,6 +1046,10 @@ class AlignTk:
         e3 = ttk.Entry(cf2, width=32, textvariable=self.var_show_raft_alignment)
         e3.grid(column=6, row=0)
 
+        self.var_refine_raft_alignment = IntVar(value=0)
+        b9 = ttk.Checkbutton(cf2, text='Refine Raft Alignment', variable=self.var_refine_raft_alignment)
+        b9.grid(column=7, row=0)
+
         self.render_full = False
 
     def resize(self, e):
@@ -1055,6 +1094,7 @@ class AlignTk:
         self.scenegraph = None
         self.render_normals = None
         self.render_vertexes = None
+        self.render_seams = None
         self.render()
 
     def show_edge_alignment(self):
@@ -1241,6 +1281,43 @@ class AlignTk:
             print(f"{ret=}")
             return ret
 
+        def get_seams(raft):
+
+            pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
+            s = puzzler.raft.RaftSeamstress(pieces)
+            seams = s.seams_within_raft(raft)
+            for seam in seams:
+                n_points = len(seam.src.indices)
+                mse = seam.error / n_points
+                print(f"seam: dst={seam.dst.piece} src={seam.src.piece} {n_points=} {mse=:.1f}")
+                # print(f"  src_indices={seam.src.indices}")
+                # print(f"  dst_indices={seam.dst.indices}")
+
+            print("TRIMMED:")
+            seams = s.trim_seams(seams)
+            for seam in seams:
+                n_points = len(seam.src.indices)
+                mse = seam.error / n_points
+                print(f"seam: dst={seam.dst.piece} src={seam.src.piece} {n_points=} {mse=:.1f}")
+                # print(f"  src_indices={seam.src.indices}")
+                # print(f"  dst_indices={seam.dst.indices}")
+            return seams
+
+        def refine_alignment_within_raft(raft, seams):
+
+            pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
+            a = puzzler.raft.RaftAligner(pieces, dst_raft)
+
+            return a.refine_alignment_within_raft(raft, seams)
+
+        def cumulative_seam_error(seams):
+            n_points = 0
+            error = 0.
+            for s in seams:
+                n_points += len(s.src.indices)
+                error += s.error
+            return error / n_points
+            
         print("-------------------")
         dst_raft2 = make_raft2(dst_raft_name)
         print("-------------------")
@@ -1254,16 +1331,41 @@ class AlignTk:
         uber_raft = merge_rafts(dst_raft2, src_raft2, feature_pairs)
         
         print("-------------------")
-            
+
+        uber_seams = get_seams(uber_raft)
+        print(f"MSE={cumulative_seam_error(uber_seams):.1f}")
+
+        print("-------------------")
+
+        uber_raft2 = refine_alignment_within_raft(uber_raft, uber_seams)
+        
+        uber_seams2 = get_seams(uber_raft2)
+        print(f"MSE={cumulative_seam_error(uber_seams2):.1f}")
+        
+        if self.var_refine_raft_alignment.get():
+            print("Taking *REFINED* alignment!")
+            uber_raft = uber_raft2
+            uber_seams = uber_seams2
+        else:
+            print("Taking *ORIGINAL* alignment!")
+
+        print("-------------------")
+
         dst_coords = puzzler.align.AffineTransform(0., (0., 2000.))
 
         pieces = dict([(i.piece.label, i) for i in self.pieces])
 
         if uber_raft is not None:
-            for label, coords in uber_raft.coords.items():
+            
+            for label, coord in uber_raft.coords.items():
                 curr_m = dst_coords.get_transform().matrix
-                prev_m = coords.matrix
+                prev_m = coord.matrix
                 pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+
+            self.render_vertexes = dict()
+            self.render_normals = dict()
+            self.render_seams = uber_seams
+                
         else:
 
             for label, coords in dst_raft.coords.items():
@@ -1344,6 +1446,131 @@ def test_buddies(pieces, buddies_path):
 
             writer.writerows(rows)
     
+def make_raft2(pieces, dst_piece, dst_tab_no, src_piece, src_tab_no):
+    
+    f = puzzler.raft.RaftFactory(pieces)
+    dst_raft = f.make_raft_for_piece(dst_piece)
+    src_raft = f.make_raft_for_piece(src_piece)
+
+    dst_feature = puzzler.raft.Feature(dst_piece, 'tab', dst_tab_no)
+    src_feature = puzzler.raft.Feature(src_piece, 'tab', src_tab_no)
+
+    a = puzzler.raft.RaftAligner(pieces, dst_raft)
+    src_coord = a.rough_align_single_tab(src_raft, (dst_feature, src_feature))
+
+    alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
+
+    return f.merge_rafts(alignment)
+
+def trace_to_features(raft, trace_no):
+    trace = raft.traces[trace_no][1]
+    return [puzzler.raft.Feature(p, 'tab', i) for p, i in trace]
+
+def merge_rafts(pieces, dst_raft, src_raft, feature_pairs):
+    
+    a = puzzler.raft.RaftAligner(pieces, dst_raft)
+
+    try:
+        src_coord = a.rough_align_multiple_tabs(src_raft, feature_pairs)
+    except KeyError:
+        print(f"merge_rafts: {dst_raft=} {src_raft=} {feature_pairs=}")
+        raise
+    
+    f = puzzler.raft.RaftFactory(pieces)
+    alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
+
+    return f.merge_rafts(alignment)
+
+def get_seams(pieces, raft):
+
+    s = puzzler.raft.RaftSeamstress(pieces)
+    return s.trim_seams(s.seams_within_raft(raft))
+
+def refine_alignment_within_raft(pieces, raft, seams):
+
+    a = puzzler.raft.RaftAligner(pieces, raft)
+
+    return a.refine_alignment_within_raft(raft, seams)
+
+def cumulative_seam_error(seams):
+    n_points = 0
+    error = 0.
+    for s in seams:
+        n_points += len(s.src.indices)
+        error += s.error
+    return error / n_points
+            
+def test_buddies_v2(pieces, buddies_path):
+
+    # the buddies file is a csv of piece pairs and the rank for the
+    # quality of fit for them on each possible tab pairing, generated
+    # by the "tabs" command
+    buddies = load_buddies(buddies_path)
+    buddies = [(a, b) for a, b in buddies.items() if buddies.get(b) == a and a > b]
+    
+    bb = puzzler.align.BosomBuddies(pieces, buddies)
+    
+    def format_raft(raft):
+        return '_'.join(f"{a}:{b}={c}:{d}" for (a, b), (c, d) in raft.joints)
+
+    def are_traces_compatible(a, b):
+        sigA = a[0]
+        sigB = b[0]
+        return sigA[0] == (not sigB[2]) and sigA[2] == (not sigB[0])
+
+    new_rafts = [make_raft2(pieces, *dst, *src) for dst, src in buddies]
+
+    f = open('ranked_quads.csv', 'w', newline='')
+    writer = csv.DictWriter(f, fieldnames='dst_raft dst_trace_no src_raft src_trace_no mse rank'.split())
+    writer.writeheader()
+
+    n_rows = 0
+    for i, dst_raft in enumerate(tqdm(bb.rafts)):
+
+        for dst_trace_no, dst_trace in enumerate(dst_raft.traces):
+
+            rows = []
+            
+            for j, src_raft in enumerate(bb.rafts):
+                
+                if i == j:
+                    continue
+
+                for src_trace_no, src_trace in enumerate(src_raft.traces):
+
+                    if not are_traces_compatible(dst_trace, src_trace):
+                        continue
+
+                    dst_raft2 = new_rafts[i]
+                    src_raft2 = new_rafts[j]
+
+                    feature_pairs = list(zip(trace_to_features(dst_raft, dst_trace_no),
+                                             reversed(trace_to_features(src_raft, src_trace_no))))
+
+                    uber_raft = merge_rafts(pieces, dst_raft2, src_raft2, feature_pairs)
+
+                    uber_seams = get_seams(pieces, uber_raft)
+
+                    uber_raft2 = refine_alignment_within_raft(pieces, uber_raft, uber_seams)
+        
+                    uber_seams2 = get_seams(pieces, uber_raft2)
+
+                    mse = cumulative_seam_error(uber_seams2)
+                    
+                    rows.append({'dst_raft': format_raft(dst_raft),
+                                 'dst_trace_no': dst_trace_no,
+                                 'src_raft': format_raft(src_raft),
+                                 'src_trace_no': src_trace_no,
+                                 'mse': mse,
+                                 'rank': 0})
+
+            rows.sort(key=operator.itemgetter('mse'))
+            for k, row in enumerate(rows, start=1):
+                row['rank'] = k
+
+            writer.writerows(rows)
+            n_rows += len(rows)
+    
 def align_ui(args):
 
     puzzle = puzzler.file.load(args.puzzle)
@@ -1358,7 +1585,7 @@ def align_ui(args):
             p.edges = p.edges[::-1]
 
     if args.buddies:
-        test_buddies(by_label, args.buddies)
+        test_buddies_v2(by_label, args.buddies)
         return
 
     labels = set(args.labels)

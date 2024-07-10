@@ -73,7 +73,9 @@ class Parser:
         return Puzzle.Piece.Source(data['id'], tuple(data['rect']))
 
     def parse_points(self, data):
-        return np.array(puzzler.chain.ChainCode().decode(data))
+        pts = np.array(puzzler.chain.ChainCode().decode(data))
+        pts.setflags(write=0)
+        return pts
 
     def parse_tab(self, data):
         fit_indexes = self.parse_indexes(data['fit_indexes'])

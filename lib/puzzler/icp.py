@@ -18,12 +18,12 @@ class IteratedClosestPoint:
         value: float
         fixed: bool
 
-    def __init__(self):
+    def __init__(self, verbose=False):
         self.n_cols = 0
         self.bodies = []
         self.axes = []
         self.data = []
-        self.verbose = False
+        self.verbose = verbose
 
     def make_rigid_body(self, angle, center=(0.,0.), fixed=False):
 
