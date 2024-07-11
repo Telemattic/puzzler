@@ -1,6 +1,8 @@
 import puzzler
 import collections
+import functools
 import numpy as np
+import re
 import scipy
 from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Tuple
 from dataclasses import dataclass
@@ -45,13 +47,14 @@ class RaftFactory:
 
     def __init__(self, pieces: Pieces) -> None:
         self.pieces = pieces
-        self.distance_query_cache = puzzler.align.DistanceQueryCache()
+        self.distance_query_cache = puzzler.align.DistanceQueryCache(purge_interval=10_000)
         
     def compute_frontiers(self, coords: Coords) -> Frontiers:
         boundaries = self.compute_boundaries(coords)
         return [self.compute_frontier_for_boundary(i) for i in boundaries]
 
     def compute_boundaries(self, coords: Coords) -> Boundaries:
+        
         closest = puzzler.solver.ClosestPieces(
             self.pieces, coords, None, self.distance_query_cache)
         adjacency = dict((i, closest(i)) for i in coords)
@@ -183,6 +186,8 @@ class Seam(NamedTuple):
     src: Stitches
     error: float
 
+Seams = Sequence[Seam]
+
 class RaftAligner:
 
     def __init__(self, pieces: Pieces, dst_raft: Raft) -> None:
@@ -285,7 +290,7 @@ class RaftAligner:
 
         return Coord(r, (x,y))
 
-    def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam]):
+    def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam], fixed_piece: Optional[str] = None) -> Raft:
 
         verbose = False
 
@@ -293,10 +298,10 @@ class RaftAligner:
 
         pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
 
-        fixed_piece = None
-        for piece, coord in raft.coords.items():
-            if coord.angle == 0. and np.all(coord.xy == 0.):
-                fixed_piece = piece
+        if fixed_piece is None:
+            for piece, coord in raft.coords.items():
+                if coord.angle == 0. and np.all(coord.xy == 0.):
+                    fixed_piece = piece
 
         if fixed_piece is None:
             fixed_piece = next(iter(pieces_with_seams))
@@ -350,7 +355,15 @@ class RaftSeamstress:
         self.close_cutoff = 10
         self.medium_cutoff = 48
 
-    def seams_within_raft(self, raft):
+    def cumulative_error_for_seams(self, seams: Seams) -> float:
+        n_points = 0
+        error = 0.
+        for s in seams:
+            n_points += len(s.src.indices)
+            error += s.error
+        return error / n_points
+
+    def seams_within_raft(self, raft: Raft) -> Seams:
 
         overlaps = puzzler.solver.OverlappingPieces(self.pieces, raft.coords)
 
@@ -368,7 +381,7 @@ class RaftSeamstress:
 
         return seams
 
-    def trim_seams(self, seams):
+    def trim_seams(self, seams: Seams) -> Seams :
 
         def helper(src_piece, dst_seams):
 
@@ -420,7 +433,7 @@ class RaftSeamstress:
 
         return retval
 
-    def seam_between_pieces(self, dst_label, dst_coord, src_label, src_coord):
+    def seam_between_pieces(self, dst_label: str, dst_coord: Coord, src_label: str, src_coord: Coord) -> Optional[Seam]:
 
         src_piece = self.pieces[src_label]
         src_indices = np.arange(0, len(src_piece.points), self.stride)
@@ -433,7 +446,7 @@ class RaftSeamstress:
 
         src_points_in_dst_frame = dst_inverse_xform.apply_v2(src_points)
 
-        distance, dst_indices = self.get_kdtree(dst_label).query(src_points_in_dst_frame)
+        distance, dst_indices = self.get_kdtree(dst_label).query(src_points_in_dst_frame, distance_upper_bound=self.medium_cutoff)
         if np.all(distance > self.medium_cutoff):
             return None
 
@@ -467,9 +480,114 @@ class RaftSeamstress:
 
         return Seam(dst_stitches, src_stitches, error)
 
-    def get_kdtree(self, label):
+    @functools.cache
+    def get_kdtree(self, label: str) -> scipy.spatial.KDTree:
         piece = self.pieces[label]
         return scipy.spatial.KDTree(piece.points)
 
-    def compute_normals(self, points, indices):
+    def compute_normals(self, points: np.ndarray, indices: np.ndarray) -> np.ndarray:
         return puzzler.align.NormalsComputer()(points, indices)
+
+class Raftinator:
+
+    def __init__(self, pieces: Pieces):
+        self.pieces = pieces
+        self.factory = RaftFactory(pieces)
+        self.aligner = RaftAligner(pieces, None)
+        self.seamstress = RaftSeamstress(pieces)
+
+    def parse_feature_pair(self, s):
+        m = re.fullmatch("([A-Z]+\d+):(\d+)=([A-Z]+\d+):(\d+)", s)
+        if not m:
+            raise ValueError("bad feature pair")
+
+        dst_piece, dst_tab_no, src_piece, src_tab_no = m[1], int(m[2]), m[3], int(m[4])
+        return (Feature(dst_piece, 'tab', dst_tab_no), Feature(src_piece, 'tab', src_tab_no))
+
+    def get_seams_for_raft(self, raft):
+        s = self.seamstress
+        return s.trim_seams(s.seams_within_raft(raft))
+
+    def get_cumulative_error_for_seams(self, seams):
+        return self.seamstress.cumulative_error_for_seams(seams)
+
+    def align_and_merge_rafts_with_feature_pairs(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Raft:
+        
+        self.aligner.dst_raft = dst_raft
+        src_coord = self.aligner.rough_align_multiple_tabs(src_raft, feature_pairs)
+        return self.factory.merge_rafts(RaftAlignment(dst_raft, src_raft, src_coord))
+
+    def refine_alignment_within_raft(self, raft: Raft, fixed_piece: Optional[str] = None) -> Raft:
+        
+        seams = self.get_seams_for_raft(raft)
+
+        self.aligner.dst_raft = raft
+        return self.aligner.refine_alignment_within_raft(raft, seams, fixed_piece)
+
+    def make_raft_from_string(self, s: str) -> Raft:
+        
+        rafts = dict()
+        next_raft_id = 0
+
+        def next_raft_name():
+            nonlocal next_raft_id
+            next_raft_id += 1
+            return f"raft_{next_raft_id-1}"
+        
+        def get_raft_for_piece(piece, make_raft_if_missing=False):
+            nonlocal rafts
+            for k, v in rafts.items():
+                if piece in v.coords:
+                    return k
+            if not make_raft_if_missing:
+                return None
+
+            k = next_raft_name()
+            v = self.factory.make_raft_for_piece(piece)
+            rafts[k] = v
+
+            print(f"raftinator: {k}=Raft({piece})")
+            
+            return k
+
+        def get_rafts_for_feature_pair(feature_pair, make_rafts_if_missing=False):
+            
+            dst_feature, src_feature = feature_pair
+            dst_raft = get_raft_for_piece(dst_feature.piece, make_rafts_if_missing)
+            src_raft = get_raft_for_piece(src_feature.piece, make_rafts_if_missing)
+
+            return (dst_raft, src_raft)
+
+        feature_pairs = [self.parse_feature_pair(i) for i in s.strip().split(',')]
+
+        print("raftinator:")
+        for i, fp in enumerate(feature_pairs):
+            print(f"  feature_pair[{i}]={fp}")
+
+        i = 0
+        new_raft = None
+        while i < len(feature_pairs):
+
+            dst_raft, src_raft = get_rafts_for_feature_pair(feature_pairs[i], True)
+
+            j = i+1
+            while j < len(feature_pairs) and get_rafts_for_feature_pair(feature_pairs[j]) == (dst_raft, src_raft):
+                j += 1
+
+            print(f"raftinator: {dst_raft=} {src_raft=} {i=} {j=}")
+
+            new_raft = self.align_and_merge_rafts_with_feature_pairs(
+                rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
+
+            rafts.pop(dst_raft)
+            rafts.pop(src_raft)
+
+            new_name = next_raft_name()
+            rafts[new_name] = new_raft
+
+            print(f"raftinator: {new_name}={dst_raft}+{src_raft}, features={feature_pairs[i:j]}")
+            i = j
+
+        assert new_raft is not None and len(rafts) == 1
+
+        return new_raft
