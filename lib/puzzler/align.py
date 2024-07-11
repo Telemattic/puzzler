@@ -535,10 +535,12 @@ class MultiAligner:
     
 class DistanceQueryCache:
 
-    def __init__(self):
+    def __init__(self, purge_interval=None):
         self.serial_no = 1
         self.cache = dict()
         self.stats = {'n_read':0, 'n_write':0, 'read_miss':0, 'read_hit':0, 'n_purge':0, 'n_bytes':0}
+        self.purge_interval = purge_interval
+        self.next_purge = purge_interval
 
     def query(self, dst_piece, dst_coords, src_piece, src_coords):
 
@@ -565,6 +567,13 @@ class DistanceQueryCache:
                 src_piece.label, coords_key(src_coords))
 
     def read(self, key):
+        
+        if self.next_purge is not None:
+            if self.next_purge <= self.stats['n_read']:
+                self.purge()
+            while self.next_purge <= self.stats['n_read']:
+                self.next_purge += self.purge_interval
+            
         self.stats['n_read'] += 1
         entry = self.cache.get(key)
         if not entry:
