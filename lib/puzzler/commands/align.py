@@ -1,6 +1,7 @@
 import collections
 import csv
 import cv2 as cv
+import decimal
 import itertools
 import math
 import numpy as np
@@ -1202,6 +1203,49 @@ class AlignTk:
         self.render()
 
     def show_raft_alignment(self):
+
+        s = self.var_show_raft_alignment.get()
+
+        pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
+
+        def print_coords(raft):
+            for k, v in raft.coords.items():
+                x, y = v.xy
+                print(f"{k}: angle={v.angle:.3f} xy=({x:.3f},{y:.3f})")
+        
+        r = puzzler.raft.Raftinator(pieces)
+        raft = r.make_raft_from_string(s)
+        
+        seams = r.get_seams_for_raft(raft)
+        mse = r.get_cumulative_error_for_seams(seams)
+        print_coords(raft)
+        print(f"MSE={mse:.3f}")
+
+        if self.var_refine_raft_alignment.get():
+            for pass_no in range(5):
+                print(f"Taking *REFINED* alignment! {pass_no=}")
+                raft = r.refine_alignment_within_raft(raft)
+                seams = r.get_seams_for_raft(raft)
+                mse = r.get_cumulative_error_for_seams(seams)
+                print_coords(raft)
+                print(f"MSE={mse:.3f}")
+            
+        pieces = dict([(i.piece.label, i) for i in self.pieces])
+        
+        dst_coord = puzzler.align.AffineTransform(0., (0., 2000.))
+        for label, coord in raft.coords.items():
+            curr_m = dst_coord.get_transform().matrix
+            prev_m = coord.matrix
+            pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+
+        self.render_vertexes = dict()
+        self.render_normals = dict()
+        self.render_seams = seams
+
+        self.scenegraph = None
+        self.render()
+            
+    def show_legacy_raft_alignment(self):
         
         s = self.var_show_raft_alignment.get().strip()
         v = s.split(',')
@@ -1445,60 +1489,59 @@ def test_buddies(pieces, buddies_path):
                 row['rank'] = i
 
             writer.writerows(rows)
+
+class RaftHelper:
+
+    def __init__(self, pieces):
+        self.pieces = pieces
+        self.raft_factory = puzzler.raft.RaftFactory(pieces)
+        self.raft_aligner = puzzler.raft.RaftAligner(pieces, None)
+        self.raft_seamstress = puzzler.raft.RaftSeamstress(pieces)
+
+    def make_raft(self, dst_piece, dst_tab_no, src_piece, src_tab_no):
     
-def make_raft2(pieces, dst_piece, dst_tab_no, src_piece, src_tab_no):
+        dst_raft = self.raft_factory.make_raft_for_piece(dst_piece)
+        src_raft = self.raft_factory.make_raft_for_piece(src_piece)
+
+        dst_feature = puzzler.raft.Feature(dst_piece, 'tab', dst_tab_no)
+        src_feature = puzzler.raft.Feature(src_piece, 'tab', src_tab_no)
+
+        self.raft_aligner.dst_raft = dst_raft
+        src_coord = self.raft_aligner.rough_align_single_tab(src_raft, (dst_feature, src_feature))
+
+        alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
+
+        return self.raft_factory.merge_rafts(alignment)
+
+    def trace_to_features(self, legacy_raft, trace_no):
+        trace = legacy_raft.traces[trace_no][1]
+        return [puzzler.raft.Feature(p, 'tab', i) for p, i in trace]
+
+    def merge_rafts(self, dst_raft, src_raft, feature_pairs):
     
-    f = puzzler.raft.RaftFactory(pieces)
-    dst_raft = f.make_raft_for_piece(dst_piece)
-    src_raft = f.make_raft_for_piece(src_piece)
-
-    dst_feature = puzzler.raft.Feature(dst_piece, 'tab', dst_tab_no)
-    src_feature = puzzler.raft.Feature(src_piece, 'tab', src_tab_no)
-
-    a = puzzler.raft.RaftAligner(pieces, dst_raft)
-    src_coord = a.rough_align_single_tab(src_raft, (dst_feature, src_feature))
-
-    alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
-
-    return f.merge_rafts(alignment)
-
-def trace_to_features(raft, trace_no):
-    trace = raft.traces[trace_no][1]
-    return [puzzler.raft.Feature(p, 'tab', i) for p, i in trace]
-
-def merge_rafts(pieces, dst_raft, src_raft, feature_pairs):
+        self.raft_aligner.dst_raft = dst_raft
+        src_coord = self.raft_aligner.rough_align_multiple_tabs(src_raft, feature_pairs)
     
-    a = puzzler.raft.RaftAligner(pieces, dst_raft)
+        alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
 
-    try:
-        src_coord = a.rough_align_multiple_tabs(src_raft, feature_pairs)
-    except KeyError:
-        print(f"merge_rafts: {dst_raft=} {src_raft=} {feature_pairs=}")
-        raise
-    
-    f = puzzler.raft.RaftFactory(pieces)
-    alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
+        return self.raft_factory.merge_rafts(alignment)
 
-    return f.merge_rafts(alignment)
+    def get_seams(self, raft):
 
-def get_seams(pieces, raft):
+        return self.raft_seamstress.trim_seams(self.raft_seamstress.seams_within_raft(raft))
 
-    s = puzzler.raft.RaftSeamstress(pieces)
-    return s.trim_seams(s.seams_within_raft(raft))
+    def refine_alignment_within_raft(self, raft, seams):
 
-def refine_alignment_within_raft(pieces, raft, seams):
+        self.raft_aligner.dst_raft = raft
+        return self.raft_aligner.refine_alignment_within_raft(raft, seams)
 
-    a = puzzler.raft.RaftAligner(pieces, raft)
-
-    return a.refine_alignment_within_raft(raft, seams)
-
-def cumulative_seam_error(seams):
-    n_points = 0
-    error = 0.
-    for s in seams:
-        n_points += len(s.src.indices)
-        error += s.error
-    return error / n_points
+    def cumulative_seam_error(self, seams):
+        n_points = 0
+        error = 0.
+        for s in seams:
+            n_points += len(s.src.indices)
+            error += s.error
+        return error / n_points
             
 def test_buddies_v2(pieces, buddies_path):
 
@@ -1518,7 +1561,9 @@ def test_buddies_v2(pieces, buddies_path):
         sigB = b[0]
         return sigA[0] == (not sigB[2]) and sigA[2] == (not sigB[0])
 
-    new_rafts = [make_raft2(pieces, *dst, *src) for dst, src in buddies]
+    raft_helper = RaftHelper(pieces)
+
+    new_rafts = [raft_helper.make_raft(*dst, *src) for dst, src in buddies]
 
     f = open('ranked_quads.csv', 'w', newline='')
     writer = csv.DictWriter(f, fieldnames='dst_raft dst_trace_no src_raft src_trace_no mse rank'.split())
@@ -1544,24 +1589,24 @@ def test_buddies_v2(pieces, buddies_path):
                     dst_raft2 = new_rafts[i]
                     src_raft2 = new_rafts[j]
 
-                    feature_pairs = list(zip(trace_to_features(dst_raft, dst_trace_no),
-                                             reversed(trace_to_features(src_raft, src_trace_no))))
+                    feature_pairs = list(zip(raft_helper.trace_to_features(dst_raft, dst_trace_no),
+                                             reversed(raft_helper.trace_to_features(src_raft, src_trace_no))))
 
-                    uber_raft = merge_rafts(pieces, dst_raft2, src_raft2, feature_pairs)
+                    uber_raft = raft_helper.merge_rafts(dst_raft2, src_raft2, feature_pairs)
 
-                    uber_seams = get_seams(pieces, uber_raft)
+                    uber_seams = raft_helper.get_seams(uber_raft)
 
-                    uber_raft2 = refine_alignment_within_raft(pieces, uber_raft, uber_seams)
+                    uber_raft2 = raft_helper.refine_alignment_within_raft(uber_raft, uber_seams)
         
-                    uber_seams2 = get_seams(pieces, uber_raft2)
+                    uber_seams2 = raft_helper.get_seams(uber_raft2)
 
-                    mse = cumulative_seam_error(uber_seams2)
+                    mse = raft_helper.cumulative_seam_error(uber_seams2)
                     
                     rows.append({'dst_raft': format_raft(dst_raft),
                                  'dst_trace_no': dst_trace_no,
                                  'src_raft': format_raft(src_raft),
                                  'src_trace_no': src_trace_no,
-                                 'mse': mse,
+                                 'mse': decimal.Decimal(f"{mse:.6f}"),
                                  'rank': 0})
 
             rows.sort(key=operator.itemgetter('mse'))
