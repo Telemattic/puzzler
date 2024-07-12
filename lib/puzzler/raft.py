@@ -290,7 +290,7 @@ class RaftAligner:
 
         return Coord(r, (x,y))
 
-    def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam], fixed_piece: Optional[str] = None) -> Raft:
+    def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam]) -> Raft:
 
         verbose = False
 
@@ -298,10 +298,9 @@ class RaftAligner:
 
         pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
 
-        if fixed_piece is None:
-            for piece, coord in raft.coords.items():
-                if coord.angle == 0. and np.all(coord.xy == 0.):
-                    fixed_piece = piece
+        for piece, coord in raft.coords.items():
+            if coord.angle == 0. and np.all(coord.xy == 0.):
+                fixed_piece = piece
 
         if fixed_piece is None:
             fixed_piece = next(iter(pieces_with_seams))
@@ -511,18 +510,24 @@ class Raftinator:
     def get_cumulative_error_for_seams(self, seams):
         return self.seamstress.cumulative_error_for_seams(seams)
 
+    def get_overlap_error_for_raft(self, raft: Raft) -> float:
+        return RaftError(self.pieces).overlap_error_for_raft(raft)
+
+    def get_total_error_for_raft_and_seams(self, raft: Raft, seams: Seams) -> float:
+        return RaftError(self.pieces).total_error_for_raft_and_seams(raft, seams).mse
+
     def align_and_merge_rafts_with_feature_pairs(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Raft:
         
         self.aligner.dst_raft = dst_raft
         src_coord = self.aligner.rough_align_multiple_tabs(src_raft, feature_pairs)
         return self.factory.merge_rafts(RaftAlignment(dst_raft, src_raft, src_coord))
 
-    def refine_alignment_within_raft(self, raft: Raft, fixed_piece: Optional[str] = None) -> Raft:
+    def refine_alignment_within_raft(self, raft: Raft) -> Raft:
         
         seams = self.get_seams_for_raft(raft)
 
         self.aligner.dst_raft = raft
-        return self.aligner.refine_alignment_within_raft(raft, seams, fixed_piece)
+        return self.aligner.refine_alignment_within_raft(raft, seams)
 
     def make_raft_from_string(self, s: str) -> Raft:
         
@@ -591,3 +596,79 @@ class Raftinator:
         assert new_raft is not None and len(rafts) == 1
 
         return new_raft
+
+class FitError:
+
+    def __init__(self, sse: float, n: int) -> None:
+        self.sse = sse
+        self.n = n
+
+    @property
+    def mse(self) -> float:
+        return self.sse / self.n if self.n > 0 else 0.
+
+    def __add__(self, that: 'FitError') -> 'FitError':
+        return FitError(self.sse + that.sse, self.n + that.n)
+
+    def __iadd__(self, that: 'FitError') -> None:
+        self.sse += that.sse
+        self.n += that.n
+
+class RaftError:
+
+    def __init__(self, pieces):
+        self.pieces = pieces
+        self.stride = 10
+        self.close_cutoff = 10
+        self.max_dist = 256
+
+    def total_error_for_raft_and_seams(self, raft: Raft, seams: Seams) -> FitError:
+
+        return self.overlap_error_for_raft(raft) + self.seam_error_for_raft(seams)
+
+    def seam_error_for_raft(self, seams: Seams) -> FitError:
+
+        sse = 0.
+        n = 0
+        for s in seams:
+            sse += s.error
+            n += len(s.src.indices)
+        return FitError(sse, n)
+
+    def overlap_error_for_raft(self, raft: Raft) -> FitError:
+        
+        overlaps = puzzler.solver.OverlappingPieces(self.pieces, raft.coords)
+
+        sse = 0.
+        num_points = 0
+        
+        for src_label, src_coord in raft.coords.items():
+            
+            src_piece = self.pieces[src_label]
+            src_center = src_coord.xy
+            src_radius = src_piece.radius
+
+            src_indices = np.arange(0, len(src_piece.points), self.stride)
+            src_points = src_piece.points[src_indices]
+        
+            for dst_label in overlaps(src_center, src_radius + self.max_dist).tolist():
+                
+                if dst_label == src_label:
+                    continue
+
+                dst_piece = self.pieces[dst_label]
+                dst_coord = raft.coords[dst_label]
+            
+                transform = puzzler.render.Transform()
+                transform.rotate(-dst_coord.angle).translate(-dst_coord.dxdy)
+                transform.translate(src_coord.dxdy).rotate(src_coord.angle)
+
+                di = puzzler.align.DistanceImage.Factory(dst_piece)
+                distance = di.query(transform.apply_v2(src_points))
+
+                ii = np.nonzero(distance < -self.close_cutoff)[0]
+                if len(ii):
+                    sse += np.sum(np.square(distance[ii]))
+                    num_points += len(ii)
+
+        return FitError(sse, num_points)

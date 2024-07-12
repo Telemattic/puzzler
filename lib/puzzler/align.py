@@ -489,7 +489,7 @@ class MultiAligner:
 
         self.dst_points = np.array(dst_points)
 
-        self.multi_target_error = MultiTargetError(pieces, geometry, cache)
+        self.multi_target_error = MultiTargetError(pieces, geometry.coords, cache)
 
     def compute_alignment(self, src_piece, source_tabs):
 
@@ -599,10 +599,10 @@ class DistanceQueryCache:
     
 class MultiTargetError:
 
-    def __init__(self, pieces, geometry, cache):
+    def __init__(self, pieces, coords, cache):
         self.pieces = pieces
-        self.geometry = geometry
-        self.overlaps = puzzler.solver.OverlappingPieces(pieces, geometry.coords)
+        self.coords = coords
+        self.overlaps = puzzler.solver.OverlappingPieces(pieces, coords)
         self.max_dist = 256
         self.distance_query_cache = cache
 
@@ -624,7 +624,7 @@ class MultiTargetError:
         for dst_label in dst_labels:
 
             dst_piece = self.pieces[dst_label]
-            dst_coords = self.geometry.coords[dst_label]
+            dst_coords = self.coords[dst_label]
 
             dst_dist = self.distance_query_cache.query(
                 dst_piece, dst_coords, src_piece, src_coords)

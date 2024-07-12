@@ -1218,8 +1218,9 @@ class AlignTk:
         
         seams = r.get_seams_for_raft(raft)
         mse = r.get_cumulative_error_for_seams(seams)
+        mse2 = r.get_total_error_for_raft_and_seams(raft, seams)
         print_coords(raft)
-        print(f"MSE={mse:.3f}")
+        print(f"MSE={mse:.3f} MSE2={mse2:.3f}")
 
         if self.var_refine_raft_alignment.get():
             for pass_no in range(5):
@@ -1227,8 +1228,9 @@ class AlignTk:
                 raft = r.refine_alignment_within_raft(raft)
                 seams = r.get_seams_for_raft(raft)
                 mse = r.get_cumulative_error_for_seams(seams)
+                mse2 = r.get_total_error_for_raft_and_seams(raft, seams)
                 print_coords(raft)
-                print(f"MSE={mse:.3f}")
+                print(f"MSE={mse:.3f} MSE2={mse2:.3f}")
             
         pieces = dict([(i.piece.label, i) for i in self.pieces])
         
@@ -1615,6 +1617,152 @@ def test_buddies_v2(pieces, buddies_path):
 
             writer.writerows(rows)
             n_rows += len(rows)
+
+def quadmaster(pieces, quad):
+
+    raftinator = puzzler.raft.Raftinator(pieces)
+
+    Feature = puzzler.raft.Feature
+
+    def format_feature(f):
+        return f"{f.piece}:{f.index}" if f.kind == 'tab' else f"{f.piece}/{f.index}"
+
+    def format_feature_pair(p):
+        return format_feature(p[0]) + '=' + format_feature(p[1])
+
+    def format_feature_pairs(pairs):
+        return ','.join(format_feature_pair(i) for i in pairs)
+
+    def format_frontier(frontier):
+        return ','.join(format_feature(i) for i in frontier)
+
+    def make_rafts(dst_label, src_label):
+
+        dst = pieces[dst_label]
+        src = pieces[src_label]
+        
+        dst_raft = raftinator.factory.make_raft_for_piece(dst_label)
+        src_raft = raftinator.factory.make_raft_for_piece(src_label)
+
+        retval = []
+        for dst_tab_no, dst_tab in enumerate(dst.tabs):
+            for src_tab_no, src_tab in enumerate(src.tabs):
+                if dst_tab.indent == src_tab.indent:
+                    continue
+
+                feature_pairs = [(Feature(dst_label,'tab',dst_tab_no), Feature(src_label,'tab',src_tab_no))]
+                desc = format_feature_pairs(feature_pairs)
+
+                new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(dst_raft, src_raft, feature_pairs)
+
+                retval.append((desc, new_raft))
+
+        if False:
+            print(f"make_rafts: dst={dst_label} src={src_label} n_rafts={len(retval)}")
+            for i, (desc, raft) in enumerate(retval):
+                print(f"  raft[{i}]: {desc=} frontier[0]={format_frontier(raft.frontiers[0])}")
+
+        return retval
+
+    def fnord(frontier):
+        
+        retval = []
+        for i in range(len(frontier)):
+            l = frontier[i-1]
+            r = frontier[i]
+            if l.piece != r.piece and l.kind == 'tab' and r.kind == 'tab':
+                retval.append((l, r))
+
+        return retval
+
+    def are_compatible_tabs(a, b):
+
+        if a.kind != 'tab' or b.kind != 'tab':
+            return False
+
+        tab_a = pieces[a.piece].tabs[a.index]
+        tab_b = pieces[b.piece].tabs[b.index]
+        return tab_a.indent != tab_b.indent
+
+    def are_good_feature_pairs_for_quad(fps, quad):
+
+        ul, ur, ll, lr = quad
+        
+        return (len(fps) == 2 and
+                fps[0][0].piece == ur and
+                fps[0][1].piece == lr and
+                fps[1][0].piece == ul and
+                fps[1][1].piece == ll and
+                are_compatible_tabs(*fps[0]) and
+                are_compatible_tabs(*fps[1]))
+        
+    def join_rafts(dst_raft, src_raft, quad):
+
+        dst_features = fnord(dst_raft.frontiers[0])
+        src_features = fnord(src_raft.frontiers[0][::-1])
+
+        retval = []
+        for a, b in dst_features:
+            for c, d in src_features:
+
+                feature_pairs = [(a, c), (b, d)]
+                if are_good_feature_pairs_for_quad(feature_pairs, quad):
+                    new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(dst_raft, src_raft, feature_pairs)
+                    new_raft2 = raftinator.refine_alignment_within_raft(new_raft)
+                    seams2 = raftinator.get_seams_for_raft(new_raft2)
+                    mse = raftinator.get_total_error_for_raft_and_seams(new_raft2, seams2)
+                    desc = format_feature_pairs(feature_pairs)
+                    retval.append((desc, mse))
+
+        return retval
+
+    ul, ur, ll, lr = quad
+    
+    upper_rafts = make_rafts(ul, ur)
+    lower_rafts = make_rafts(ll, lr)
+
+    retval = []
+    for upper in upper_rafts:
+        for lower in lower_rafts:
+            # print(f"upper={upper[0]} lower={lower[0]}")
+            for desc, mse in join_rafts(upper[1], lower[1], quad):
+                s = ','.join([upper[0], lower[0], desc])
+                retval.append({'ul_piece':ul, 'ur_piece':ur, 'll_piece':ll, 'lr_piece':lr,
+                               'upper_raft':upper[0], 'lower_raft':lower[0], 'quad_raft':s, 'mse':mse, 'rank':None})
+
+    retval.sort(key=operator.itemgetter('mse'))
+    for i, row in enumerate(retval, start=1):
+        row['rank'] = i
+
+    return retval
+        
+def quadrophenia(pieces):
+
+    assert len(pieces) == 1026
+
+    rows = [chr(ord('A')+i) for i in range(26)] + ['AA']
+    cols = [str(i) for i in range(1,39)]
+    # print(f"{rows=} {cols=} n_pieces={len(rows)*len(cols)}")
+
+    quads = []
+    for row_no in range(len(rows)-1):
+        for col_no in range(len(cols)-1):
+            quads.append((row_no, col_no))
+
+    f = open('quadrophenia.csv', 'w', newline='')
+    writer = csv.DictWriter(f, fieldnames='col_no row_no ul_piece ur_piece ll_piece lr_piece upper_raft lower_raft quad_raft mse rank'.split())
+    writer.writeheader()
+
+    for row_no, col_no in tqdm(quads):
+        
+        row0, row1 = rows[row_no], rows[row_no+1]
+        col0, col1 = cols[col_no], cols[col_no+1]
+        quad = (row0+col0, row0+col1, row1+col0, row1+col1)
+        therows = quadmaster(pieces, quad)
+        for i in therows:
+            i['row_no'] = row_no
+            i['col_no'] = col_no
+        writer.writerows(therows)
     
 def align_ui(args):
 
@@ -1623,6 +1771,10 @@ def align_ui(args):
     by_label = dict()
     for p in puzzle.pieces:
         by_label[p.label] = p
+
+    if args.quadrophenia:
+        quadrophenia(by_label)
+        return
 
     if 'I1' in by_label:
         p = by_label['I1']
@@ -1657,6 +1809,7 @@ def add_parser(commands):
 
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
     parser_align.add_argument("labels", nargs='*')
+    parser_align.add_argument("-q", "--quadrophenia", help="quadrophenia", action='store_true')
     parser_align.add_argument("-i", "--input", help="initialize solver")
     parser_align.add_argument("-b", "--buddies", help="buddy file")
     parser_align.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='cairo',
