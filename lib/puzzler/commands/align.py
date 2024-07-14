@@ -910,10 +910,31 @@ class AlignTk:
         g = self.solver.geometry
         if not g:
             return
-        
+
+        if not self.var_refine_raft_alignment.get():
+            for p in self.pieces:
+                if c := g.coords.get(p.piece.label):
+                    p.coords = c
+            return
+
+        pieces = dict((i.piece.label, i.piece) for i in self.pieces)
+        raftinator = puzzler.raft.Raftinator(pieces)
+
+        coords = dict()
+        for p, c in self.solver.geometry.coords.items():
+            coords[p] = puzzler.raft.Coord(c.angle, c.dxdy)
+
+        raft = puzzler.raft.Raft(coords, raftinator.factory.compute_frontiers(coords))
+        mse = raftinator.get_total_error_for_raft_and_seams(raft)
+            
+        raft2 = raftinator.refine_alignment_within_raft(raft)
+        mse2 = raftinator.get_total_error_for_raft_and_seams(raft2)
+
+        print(f"raft: {mse=:.3f} {mse2=:.3f}")
+
         for p in self.pieces:
-            if c := g.coords.get(p.piece.label):
-                p.coords = c
+            if c := raft2.coords.get(p.piece.label):
+                g.coords[p.piece.label] = p.coords = puzzler.align.AffineTransform(c.angle, c.xy)
 
     def load_solver(self, path):
         self.solver = puzzler.solver.load_json(path, self.solver.pieces)
@@ -1298,8 +1319,8 @@ class AlignTk:
             dst_feature = puzzler.raft.Feature(dst_piece, 'tab', dst_tab_no)
             src_feature = puzzler.raft.Feature(src_piece, 'tab', src_tab_no)
 
-            a = puzzler.raft.RaftAligner(pieces, dst_raft)
-            src_coord = a.rough_align_single_tab(src_raft, (dst_feature, src_feature))
+            a = puzzler.raft.RaftAligner(pieces)
+            src_coord = a.rough_align_single_tab(dst_raft, src_raft, (dst_feature, src_feature))
             print(f"{src_coord=}")
 
             alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
@@ -1315,9 +1336,9 @@ class AlignTk:
         def merge_rafts(dst_raft, src_raft, feature_pairs):
             
             pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
-            a = puzzler.raft.RaftAligner(pieces, dst_raft)
+            a = puzzler.raft.RaftAligner(pieces)
             
-            src_coord = a.rough_align_multiple_tabs(src_raft, feature_pairs)
+            src_coord = a.rough_align_multiple_tabs(dst_raft, src_raft, feature_pairs)
             print(f"{src_coord=}")
             
             f = puzzler.raft.RaftFactory(pieces)
@@ -1497,7 +1518,7 @@ class RaftHelper:
     def __init__(self, pieces):
         self.pieces = pieces
         self.raft_factory = puzzler.raft.RaftFactory(pieces)
-        self.raft_aligner = puzzler.raft.RaftAligner(pieces, None)
+        self.raft_aligner = puzzler.raft.RaftAligner(pieces)
         self.raft_seamstress = puzzler.raft.RaftSeamstress(pieces)
 
     def make_raft(self, dst_piece, dst_tab_no, src_piece, src_tab_no):
@@ -1508,8 +1529,7 @@ class RaftHelper:
         dst_feature = puzzler.raft.Feature(dst_piece, 'tab', dst_tab_no)
         src_feature = puzzler.raft.Feature(src_piece, 'tab', src_tab_no)
 
-        self.raft_aligner.dst_raft = dst_raft
-        src_coord = self.raft_aligner.rough_align_single_tab(src_raft, (dst_feature, src_feature))
+        src_coord = self.raft_aligner.rough_align_single_tab(dst_raft, src_raft, (dst_feature, src_feature))
 
         alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
 
@@ -1521,8 +1541,7 @@ class RaftHelper:
 
     def merge_rafts(self, dst_raft, src_raft, feature_pairs):
     
-        self.raft_aligner.dst_raft = dst_raft
-        src_coord = self.raft_aligner.rough_align_multiple_tabs(src_raft, feature_pairs)
+        src_coord = self.raft_aligner.rough_align_multiple_tabs(dst_raft, src_raft, feature_pairs)
     
         alignment = puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord)
 
@@ -1534,7 +1553,6 @@ class RaftHelper:
 
     def refine_alignment_within_raft(self, raft, seams):
 
-        self.raft_aligner.dst_raft = raft
         return self.raft_aligner.refine_alignment_within_raft(raft, seams)
 
     def cumulative_seam_error(self, seams):
@@ -1618,6 +1636,131 @@ def test_buddies_v2(pieces, buddies_path):
             writer.writerows(rows)
             n_rows += len(rows)
 
+def axis_for_angle(phi):
+
+    # [0, 2*pi) -> [0,4)
+    phi = (phi % (2. * math.pi)) * 2. / math.pi
+    if phi > 3.5:
+        d = 0
+    elif phi > 2.5:
+        d = 3
+    elif phi > 1.5:
+        d = 2
+    elif phi > 0.5:
+        d = 1
+    else:
+        d = 0
+
+    return d
+
+def tab_pairs_for_piece(piece, verbose=False):
+    
+    ref_angle = None
+    dirs = [None, None, None, None]
+
+    if verbose:
+        for tab_no, tab in enumerate(piece.tabs):
+
+            x, y = tab.ellipse.center
+            angle = math.atan2(y, x)
+
+            print(f"tab[{tab_no}]: x,y={x:.1f},{y:.1f} {angle=:.3f} semi_major={tab.ellipse.semi_major:.3f} (degrees={math.degrees(angle):.0f})")
+        
+    for tab_no, tab in enumerate(piece.tabs):
+
+        # HACK: skip known bad runt tab
+        if piece.label == 'K33' and len(piece.tabs) == 5 and tab_no == 1:
+            continue
+
+        x, y = tab.ellipse.center
+        angle = math.atan2(y, x)
+            
+        if ref_angle is None:
+            ref_angle = angle
+            d = 0
+        else:
+            d = axis_for_angle(angle - ref_angle)
+
+        assert dirs[d] is None
+        dirs[d] = (piece.label, tab_no, tab.indent)
+
+    retval = []
+    for i in range(4):
+        a = dirs[i-1]
+        b = dirs[i]
+        if a is not None or b is not None:
+            retval.append((a, b))
+
+    return retval
+
+def quadmaster2(pieces, quad):
+
+    Feature = puzzler.raft.Feature
+
+    def make_feature_pair(a, b):
+        if a is None or b is None:
+            return None
+        if a[2] == b[2]:
+            raise ValueError("tab conflict")
+        return (Feature(a[0],'tab',a[1]), Feature(b[0],'tab',b[1]))
+
+    def make_feature_pairs(tab_pairs):
+        
+        retval = []
+
+        try:
+            for i in range(4):
+                fp = make_feature_pair(tab_pairs[i-1][1], tab_pairs[i][0])
+                if fp is not None:
+                    retval.append(fp)
+        except ValueError:
+            retval = []
+
+        return retval
+
+    def format_feature(f):
+        return f"{f.piece}:{f.index}" if f.kind == 'tab' else f"{f.piece}/{f.index}"
+
+    def format_feature_pair(p):
+        return format_feature(p[0]) + '=' + format_feature(p[1])
+
+    def format_feature_pairs(pairs):
+        return ','.join(format_feature_pair(i) for i in pairs)
+
+    raftinator = puzzler.raft.Raftinator(pieces)
+
+    ul, ur, ll, lr = quad
+
+    ul_tabs = tab_pairs_for_piece(pieces[ul])
+    ur_tabs = tab_pairs_for_piece(pieces[ur])
+    ll_tabs = tab_pairs_for_piece(pieces[ll])
+    lr_tabs = tab_pairs_for_piece(pieces[lr])
+
+    retval = []
+    # note tab_pairs are in CW order here
+    for i in itertools.product(ul_tabs, ur_tabs, lr_tabs, ll_tabs):
+
+        feature_pairs = make_feature_pairs(i)
+        if len(feature_pairs) < 3:
+            continue
+
+        raft = raftinator.make_raft_from_feature_pairs(feature_pairs)
+
+        # repeated refinement
+        for _ in range(3):
+            raft = raftinator.refine_alignment_within_raft(raft)
+            
+        mse = raftinator.get_total_error_for_raft_and_seams(raft)
+        desc = format_feature_pairs(feature_pairs)
+        
+        retval.append({'raft':desc, 'mse':mse, 'rank':None})
+
+    retval.sort(key=operator.itemgetter('mse'))
+    for i, row in enumerate(retval, start=1):
+        row['rank'] = i
+
+    return retval
+        
 def quadmaster(pieces, quad):
 
     raftinator = puzzler.raft.Raftinator(pieces)
@@ -1749,8 +1892,14 @@ def quadrophenia(pieces):
         for col_no in range(len(cols)-1):
             quads.append((row_no, col_no))
 
+    for label, piece in pieces.items():
+        try:
+            tab_pairs_for_piece(piece)
+        except AssertionError:
+            print(f"{label} has problem with tab_pair_for_piece!")
+
     f = open('quadrophenia.csv', 'w', newline='')
-    writer = csv.DictWriter(f, fieldnames='col_no row_no ul_piece ur_piece ll_piece lr_piece upper_raft lower_raft quad_raft mse rank'.split())
+    writer = csv.DictWriter(f, fieldnames='col_no row_no ul_piece ur_piece ll_piece lr_piece raft mse rank'.split())
     writer.writeheader()
 
     for row_no, col_no in tqdm(quads):
@@ -1758,11 +1907,11 @@ def quadrophenia(pieces):
         row0, row1 = rows[row_no], rows[row_no+1]
         col0, col1 = cols[col_no], cols[col_no+1]
         quad = (row0+col0, row0+col1, row1+col0, row1+col1)
-        therows = quadmaster(pieces, quad)
-        for i in therows:
-            i['row_no'] = row_no
-            i['col_no'] = col_no
-        writer.writerows(therows)
+
+        props = {'row_no':row_no, 'col_no':col_no, 'ul_piece':quad[0], 'ur_piece':quad[1], 'll_piece':quad[2], 'lr_piece':quad[3]}
+        
+        for i in quadmaster2(pieces, quad):
+            writer.writerow(props | i)
     
 def align_ui(args):
 
