@@ -190,22 +190,21 @@ Seams = Sequence[Seam]
 
 class RaftAligner:
 
-    def __init__(self, pieces: Pieces, dst_raft: Raft) -> None:
+    def __init__(self, pieces: Pieces) -> None:
         self.pieces = pieces
-        self.dst_raft = dst_raft
 
-    def rough_align(self, src_raft: Raft, feature_pairs: FeaturePairs) -> Optional[Coord]:
+    def rough_align(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Coord:
 
         if len(feature_pairs) == 0:
             raise ValueError("no features to align")
 
         if all(self.is_tab_pair(i) for i in feature_pairs):
-            return self.rough_align_multiple_tabs(src_raft, feature_pairs)
+            return self.rough_align_multiple_tabs(dst_raft, src_raft, feature_pairs)
 
         if len(feature_pairs) == 2:
             a, b = feature_pairs
             if self.is_edge_pair(a) and self.is_tab_pair(b):
-                return self.rough_align_edge_and_tab(src_raft, a, b)
+                return self.rough_align_edge_and_tab(dst_raft, src_raft, a, b)
 
         raise ValueError("don't know how to align features")
 
@@ -220,16 +219,17 @@ class RaftAligner:
 
     def rough_align_edge_and_tab(
             self,
+            dst_raft: Raft,
             src_raft: Raft,
             edge_pair: FeaturePair,
             tab_pair: FeaturePair
     ) -> Coord:
 
-        dst_helper = self.feature_helper(self.dst_raft)
+        dst_helper = self.feature_helper(dst_raft)
         src_helper = self.feature_helper(src_raft)
 
-        dst_line = self.feature_helper(self.dst_raft).get_edge_points(edge_pair[0])
-        src_line = self.feature_helper(src_raft).get_edge_points(edge_pair[1])
+        dst_line = dst_helper.get_edge_points(edge_pair[0])
+        src_line = src_helper.get_edge_points(edge_pair[1])
 
         dst_edge_vec = dst_line[1] - dst_line[0]
         src_edge_vec = src_line[1] - src_line[0]
@@ -255,11 +255,12 @@ class RaftAligner:
     
     def rough_align_single_tab(
             self,
+            dst_raft: Raft,
             src_raft: Raft,
             tab_pair: FeaturePair
     ) -> Coord:
 
-        dst_points = self.feature_helper(self.dst_raft).get_tab_points(tab_pair[0])
+        dst_points = self.feature_helper(dst_raft).get_tab_points(tab_pair[0])
         src_points = self.feature_helper(src_raft).get_tab_points(tab_pair[1])
 
         dst_vec = dst_points[0] - dst_points[1] + dst_points[2] - dst_points[1]
@@ -277,6 +278,7 @@ class RaftAligner:
         
     def rough_align_multiple_tabs(
             self,
+            dst_raft: Raft,
             src_raft: Raft,
             tab_pairs: FeaturePairs
     ) -> Coord:
@@ -284,9 +286,9 @@ class RaftAligner:
         assert 0 < len(tab_pairs)
         
         if len(tab_pairs) == 1:
-            return self.rough_align_single_tab(src_raft, tab_pairs[0])
+            return self.rough_align_single_tab(dst_raft, src_raft, tab_pairs[0])
 
-        dst_helper = self.feature_helper(self.dst_raft)
+        dst_helper = self.feature_helper(dst_raft)
         src_helper = self.feature_helper(src_raft)
 
         dst_points = np.array([dst_helper.get_tab_center(i) for i, _ in tab_pairs])
@@ -515,8 +517,9 @@ class Raftinator:
     def __init__(self, pieces: Pieces):
         self.pieces = pieces
         self.factory = RaftFactory(pieces)
-        self.aligner = RaftAligner(pieces, None)
+        self.aligner = RaftAligner(pieces)
         self.seamstress = RaftSeamstress(pieces)
+        self.raft_error = RaftError(pieces)
         self.verbose = False
 
     def parse_feature(self, s):
@@ -542,24 +545,22 @@ class Raftinator:
         return self.seamstress.cumulative_error_for_seams(seams)
 
     def get_overlap_error_for_raft(self, raft: Raft) -> float:
-        return RaftError(self.pieces).overlap_error_for_raft(raft)
+        return self.raft_error.overlap_error_for_raft(raft)
 
     def get_total_error_for_raft_and_seams(self, raft: Raft, seams: Optional[Seams] = None) -> float:
         if seams is None:
             seams = self.get_seams_for_raft(raft)
-        return RaftError(self.pieces).total_error_for_raft_and_seams(raft, seams).mse
+        return self.raft_error.total_error_for_raft_and_seams(raft, seams).mse
 
     def align_and_merge_rafts_with_feature_pairs(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Raft:
         
-        self.aligner.dst_raft = dst_raft
-        src_coord = self.aligner.rough_align(src_raft, feature_pairs)
+        src_coord = self.aligner.rough_align(dst_raft, src_raft, feature_pairs)
         return self.factory.merge_rafts(RaftAlignment(dst_raft, src_raft, src_coord))
 
     def refine_alignment_within_raft(self, raft: Raft) -> Raft:
         
         seams = self.get_seams_for_raft(raft)
 
-        self.aligner.dst_raft = raft
         return self.aligner.refine_alignment_within_raft(raft, seams)
 
     def make_raft_from_string(self, s: str) -> Raft:
