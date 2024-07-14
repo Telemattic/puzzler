@@ -999,7 +999,7 @@ def from_json(pieces, s):
     def parse_affine_transform(o):
         angle = o['angle']
         xy = tuple(o['xy'])
-        return puzzler.align.Coord(angle, xy)
+        return Coord(angle, xy)
 
     def parse_constraints(o):
         if o is None:

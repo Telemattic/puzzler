@@ -204,6 +204,8 @@ def ring_slice(data, a, b):
 def ring_range(a, b, n):
     return itertools.chain(range(a, n), range(0, b)) if a >= b else range(a, b)
 
+Coord = puzzler.align.Coord
+
 class Piece:
 
     def __init__(self, piece, epsilon=None):
@@ -212,7 +214,7 @@ class Piece:
         if epsilon is not None:
             self.perimeter = Perimeter(self.piece.points)
             self.approx = ApproxPoly(self.perimeter, epsilon)
-        self.coords = puzzler.align.Coord()
+        self.coords = Coord()
 
 class PuzzleRenderer:
 
@@ -934,7 +936,7 @@ class AlignTk:
 
         for p in self.pieces:
             if c := raft2.coords.get(p.piece.label):
-                g.coords[p.piece.label] = p.coords = puzzler.align.Coord(c.angle, c.xy)
+                g.coords[p.piece.label] = p.coords = Coord(c.angle, c.xy)
 
     def load_solver(self, path):
         self.solver = puzzler.solver.load_json(path, self.solver.pieces)
@@ -1146,8 +1148,8 @@ class AlignTk:
         self.render_vertexes = dict()
         self.render_vertexes[src_label] = t['src_vertex']
 
-        dst.coords = puzzler.align.Coord(0., (0., 2000.))
-        src.coords = puzzler.align.Coord(src_coords.angle, src_coords.xy + dst.coords.xy)
+        dst.coords = Coord(0., (0., 2000.))
+        src.coords = Coord(src_coords.angle, src_coords.xy + dst.coords.xy)
 
         self.scenegraph = None
         self.render()
@@ -1217,8 +1219,8 @@ class AlignTk:
         for i in range(n_rows):
             print(i,',',','.join(format_value(t[k][i]) for k in keys))
 
-        dst.coords = puzzler.align.Coord(0., (0., 2000.))
-        src.coords = puzzler.align.Coord(src_coords.angle, src_coords.xy + dst.coords.xy)
+        dst.coords = Coord(0., (0., 2000.))
+        src.coords = Coord(src_coords.angle, src_coords.xy + dst.coords.xy)
 
         self.scenegraph = None
         self.render()
@@ -1255,11 +1257,11 @@ class AlignTk:
             
         pieces = dict([(i.piece.label, i) for i in self.pieces])
         
-        dst_coord = puzzler.align.Coord(0., (0., 2000.))
+        dst_coord = Coord(0., (0., 2000.))
         for label, coord in raft.coords.items():
             curr_m = dst_coord.xform.matrix
             prev_m = coord.matrix
-            pieces[label].coords = puzzler.align.Coord.from_matrix(curr_m @ prev_m)
+            pieces[label].coords = Coord.from_matrix(curr_m @ prev_m)
 
         self.render_vertexes = dict()
         self.render_normals = dict()
@@ -1418,7 +1420,7 @@ class AlignTk:
 
         print("-------------------")
 
-        dst_coords = puzzler.align.Coord(0., (0., 2000.))
+        dst_coords = Coord(0., (0., 2000.))
 
         pieces = dict([(i.piece.label, i) for i in self.pieces])
 
@@ -1427,7 +1429,7 @@ class AlignTk:
             for label, coord in uber_raft.coords.items():
                 curr_m = dst_coords.xform.matrix
                 prev_m = coord.matrix
-                pieces[label].coords = puzzler.align.Coord.from_matrix(curr_m @ prev_m)
+                pieces[label].coords = Coord.from_matrix(curr_m @ prev_m)
 
             self.render_vertexes = dict()
             self.render_normals = dict()
@@ -1438,13 +1440,13 @@ class AlignTk:
             for label, coords in dst_raft.coords.items():
                 curr_m = dst_coords.xform.matrix
                 prev_m = coords.xform.matrix
-                pieces[label].coords = puzzler.align.Coord.from_matrix(curr_m @ prev_m)
+                pieces[label].coords = Coord.from_matrix(curr_m @ prev_m)
             
             for label, coords in src_raft.coords.items():
-                curr_m = puzzler.align.Coord(
+                curr_m = Coord(
                     src_coords.angle, src_coords.xy + dst_coords.xy).xform.matrix
                 prev_m = coords.xform.matrix
-                pieces[label].coords = puzzler.align.Coord.from_matrix(curr_m @ prev_m)
+                pieces[label].coords = Coord.from_matrix(curr_m @ prev_m)
 
         self.scenegraph = None
         self.render()
