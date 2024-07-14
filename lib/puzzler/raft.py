@@ -152,6 +152,12 @@ class FeatureHelper:
 
         return coord.xform.apply_v2(edge.line.pts)
 
+    def get_edge_angle(self, f: Feature) -> float:
+        
+        pts = self.get_edge_points(f)
+        vec = points[1] - points[0]
+        return np.arctan2(vec[1], vec[0])
+
     def get_tab_center(self, f: Feature) -> np.ndarray:
         
         assert f.kind == 'tab'
@@ -237,21 +243,21 @@ class RaftAligner:
         dst_edge_angle = np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
         src_edge_angle = np.arctan2(src_edge_vec[1], src_edge_vec[0])
 
-        src_coord = puzzler.align.AffineTransform(dst_edge_angle - src_edge_angle)
-        src_point = src_coord.get_transform().apply_v2(src_line[0])
-        src_coord.dxdy = puzzler.math.vector_to_line(src_point, dst_line)
+        src_coord = Coord(dst_edge_angle - src_edge_angle)
+        src_point = src_coord.xform.apply_v2(src_line[0])
+        src_coord.xy = puzzler.math.vector_to_line(src_point, dst_line)
 
         dst_tab_center = dst_helper.get_tab_center(tab_pair[0])
         
         src_tab_center = src_helper.get_tab_center(tab_pair[1])
-        src_tab_center = src_coord.get_transform().apply_v2(src_tab_center)
+        src_tab_center = src_coord.xform.apply_v2(src_tab_center)
 
         dst_edge_vec = puzzler.math.unit_vector(dst_line[1]-dst_line[0])
         d = np.dot(dst_edge_vec, (dst_tab_center - src_tab_center))
 
-        src_coord.dxdy = src_coord.dxdy + dst_edge_vec * d
+        src_coord.xy = src_coord.xy + dst_edge_vec * d
 
-        return Coord(src_coord.angle, src_coord.dxdy)
+        return src_coord
     
     def rough_align_single_tab(
             self,
@@ -704,8 +710,8 @@ class RaftError:
                 dst_coord = raft.coords[dst_label]
             
                 transform = puzzler.render.Transform()
-                transform.rotate(-dst_coord.angle).translate(-dst_coord.dxdy)
-                transform.translate(src_coord.dxdy).rotate(src_coord.angle)
+                transform.rotate(-dst_coord.angle).translate(-dst_coord.xy)
+                transform.translate(src_coord.xy).rotate(src_coord.angle)
 
                 di = puzzler.align.DistanceImage.Factory(dst_piece)
                 distance = di.query(transform.apply_v2(src_points))

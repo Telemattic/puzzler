@@ -400,7 +400,7 @@ class MatchTk:
                 x = 1000. * len(pieces)
                 y = 0.
                 pieces[p.label] = p
-                coords[p.label] = puzzler.align.AffineTransform(0., (x,y))
+                coords[p.label] = puzzler.align.Coord(0., (x,y))
         
         self.puzzle = puzzle
         self.labels = labels
@@ -490,12 +490,12 @@ class MatchTk:
         src_vec = src_points[1] - src_points[0]
         src_angle = np.arctan2(src_vec[1], src_vec[0])
 
-        src_points_rotated = puzzler.align.AffineTransform(dst_angle-src_angle).get_transform().apply_v2(src_points)
+        src_points_rotated = puzzler.align.Coord(dst_angle-src_angle).xform.apply_v2(src_points)
         r, x, y = puzzler.align.compute_rigid_transform(src_points_rotated, dst_points)
         r += dst_angle - src_angle
         print(f"rigid_transform: {r=:.3f} {x=:.1f} {y=:.1f}")
 
-        self.coords[self.labels[1]] = puzzler.align.AffineTransform(r, (x,y))
+        self.coords[self.labels[1]] = puzzler.align.Coord(r, (x,y))
         self.render()
 
     def on_puzzle_press(self, event):
@@ -563,7 +563,7 @@ class MatchTk:
             
             with puzzler.render.save(r):
             
-                r.translate(coord.dxdy)
+                r.translate(coord.xy)
                 r.rotate(coord.angle)
 
                 outline = colors[i % len(colors)]
@@ -586,7 +586,7 @@ class MatchTk:
             r = puzzler.renderer.canvas.CanvasRenderer(canvas)
             r.transform(self.camera.matrix)
             coord = self.coords[l]
-            r.translate(coord.dxdy)
+            r.translate(coord.xy)
             r.rotate(coord.angle)
             r.draw_circle(c, radius=6, fill='', outline='red', tag='cursor')
     

@@ -30,10 +30,6 @@ class Coord:
         self._xform = None
 
     @property
-    def dxdy(self):
-        return self._xy
-
-    @property
     def xy(self):
         return self._xy
 
@@ -55,34 +51,7 @@ class Coord:
         return self.xform.matrix
 
     def copy(self):
-        return Coord(self.angle, tuple(self.dxdy))
-
-class AffineTransform:
-
-    def __init__(self, angle=0., xy=(0.,0.)):
-        self.angle = angle
-        self.dxdy  = np.array(xy, dtype=np.float64)
-
-    def __repr__(self):
-        return f"AffineTransform({self.angle!r}, {self.dxdy!r})"
-
-    def invert_matrix(m):
-        angle = math.atan2(m[1,0], m[0,0])
-        x, y = m[0,2], m[1,2]
-        return AffineTransform(angle, (x,y))
-
-    def get_transform(self):
-        return (puzzler.render.Transform()
-                .translate(self.dxdy)
-                .rotate(self.angle))
-
-    def rot_matrix(self):
-        c, s = np.cos(self.angle), np.sin(self.angle)
-        return np.array(((c, -s),
-                         (s,  c)))
-
-    def copy(self):
-        return AffineTransform(self.angle, tuple(self.dxdy))
+        return Coord(self._angle, tuple(self._xy))
 
 def ring_slice(data, a, b):
     return np.concatenate((data[a:], data[:b])) if a >= b else data[a:b]
@@ -216,7 +185,7 @@ class TabAligner:
         r, x, y = compute_rigid_transform(src_points_rotated, dst_points)
         r += dst_angle - src_angle
 
-        src_coords = AffineTransform(r, (x,y))
+        src_coords = Coord(r, (x,y))
 
         if refine:
             src_indices = self.get_sample_indices(src, src_tab_no)
@@ -244,14 +213,14 @@ class TabAligner:
         #
         # compute a least squares optimization of fit
 
-        src_points = src_coords.get_transform().apply_v2(src.points[src_indices])
+        src_points = src_coords.xform.apply_v2(src.points[src_indices])
 
         if not self.kdtree:
             self.kdtree = scipy.spatial.KDTree(self.dst.points)
         distance, dst_indices = self.kdtree.query(src_points)
 
         dst_normals = self.compute_normals(self.dst.points, dst_indices)
-        src_normals = src_coords.get_transform().apply_n2(
+        src_normals = src_coords.xform.apply_n2(
             self.compute_normals(src.points, src_indices))
         dot_product = np.sum(dst_normals * src_normals, axis=1)
 
@@ -277,7 +246,7 @@ class TabAligner:
         icp = puzzler.icp.IteratedClosestPoint()
         
         dst_body = icp.make_rigid_body(0., np.array((0., 0.)), fixed=True)
-        src_body = icp.make_rigid_body(src_coords.angle, src_coords.dxdy, fixed=False)
+        src_body = icp.make_rigid_body(src_coords.angle, src_coords.xy, fixed=False)
 
         icp.add_body_correspondence(
             src_body, close_src_points,
@@ -299,13 +268,13 @@ class TabAligner:
                           'dot_product': dot_product,
                           'is_close': is_close}
         
-        src_coords = AffineTransform(src_body.angle, src_body.center)        
+        src_coords = Coord(src_body.angle, src_body.center)        
 
-        d = self.kdtree.query(src_coords.get_transform().apply_v2(close_src_points))[0]
+        d = self.kdtree.query(src_coords.xform.apply_v2(close_src_points))[0]
         mse = np.sum(d ** 2) / len(d)
 
-        d0 = self.kdtree.query(src_coords.get_transform().apply_v2(src.points[src_indices]))[0]
-        d1 = self.distance_image.query(src_coords.get_transform().apply_v2(src.points[src_indices]))
+        d0 = self.kdtree.query(src_coords.xform.apply_v2(src.points[src_indices]))[0]
+        d1 = self.distance_image.query(src_coords.xform.apply_v2(src.points[src_indices]))
         # distances less than zero correspond to points inside the
         # piece, and should always be considered part of the error
         d2 = d1[np.nonzero(is_close | (d1 < 0))]
@@ -340,7 +309,7 @@ class TabAligner:
         
         sl, sr = src.tabs[src_tab_no].tangent_indexes
 
-        src_points = src_coords.get_transform().apply_v2(ring_slice(src.points, sl, sr))
+        src_points = src_coords.xform.apply_v2(ring_slice(src.points, sl, sr))
 
         src_fit_points = (sl, sr)
         
@@ -362,7 +331,7 @@ class TabAligner:
         
         thresh = 5
 
-        src_points = src_coords.get_transform().apply_v2(src.points)
+        src_points = src_coords.xform.apply_v2(src.points)
         d, i = self.kdtree.query(src_points, distance_upper_bound=thresh+1)
 
         l, r = src.tabs[src_tab_no].tangent_indexes
@@ -419,31 +388,31 @@ class EdgeAligner:
         src_edge_vec = src_edge.line.pts[1] - src_edge.line.pts[0]
         src_edge_angle = np.arctan2(src_edge_vec[1], src_edge_vec[0])
 
-        src_coords = AffineTransform()
+        src_coords = Coord()
         src_coords.angle = dst_edge_angle - src_edge_angle
 
         dst_line = dst_edge.line.pts
-        src_point = src_coords.get_transform().apply_v2(src_edge.line.pts[0])
+        src_point = src_coords.xform.apply_v2(src_edge.line.pts[0])
         
-        src_coords.dxdy = puzzler.math.vector_to_line(src_point, dst_line)
+        src_coords.xy = puzzler.math.vector_to_line(src_point, dst_line)
 
         dst_center = dst_tab.ellipse.center
-        src_center = src_coords.get_transform().apply_v2(src_tab.ellipse.center)
+        src_center = src_coords.xform.apply_v2(src_tab.ellipse.center)
 
         dst_edge_vec = puzzler.math.unit_vector(dst_edge_vec)
         d = np.dot(dst_edge_vec, (dst_center - src_center))
-        src_coords.dxdy = src_coords.dxdy + dst_edge_vec * d
+        src_coords.xy = src_coords.xy + dst_edge_vec * d
 
         src_fit_pts = (src_tab.tangent_indexes[0], src_edge.fit_indexes[0])
         dst_fit_pts = (dst_edge.fit_indexes[1], dst_tab.tangent_indexes[1])
 
         # with np.printoptions(precision=3):
-        #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.dxdy}")
-        #     print(f"  matrix={src_coords.get_transform().matrix}")
+        #     print(f"src_coords: angle={src_coords.angle:.3f} xy={src_coords.xy}")
+        #     print(f"  matrix={src_coords.xform.matrix}")
 
         points = ring_slice(src.points, *src_fit_pts)
 
-        distance, dst_indices = self.kdtree.query(src_coords.get_transform().apply_v2(points))
+        distance, dst_indices = self.kdtree.query(src_coords.xform.apply_v2(points))
 
         if self.return_table:
             self.table = {'src_vertex': points,
@@ -471,7 +440,7 @@ class EdgeAligner:
 
         src_points = src.points[src_indexes]
 
-        _, dst_indexes = self.kdtree.query(src_coords.get_transform().apply_v2(src_points))
+        _, dst_indexes = self.kdtree.query(src_coords.xform.apply_v2(src_points))
 
         return (src_indexes, dst_indexes)
 
@@ -485,7 +454,7 @@ class MultiAligner:
             dst_piece = pieces[dst_label]
             dst_coords = geometry.coords[dst_label]
             pt = dst_piece.tabs[dst_tab_no].ellipse.center
-            dst_points.append(dst_coords.get_transform().apply_v2(pt))
+            dst_points.append(dst_coords.xform.apply_v2(pt))
 
         self.dst_points = np.array(dst_points)
 
@@ -513,7 +482,7 @@ class MultiAligner:
 
         r += dst_angle - src_angle
 
-        return AffineTransform(r, (x,y))
+        return Coord(r, (x,y))
 
     def measure_fit(self, src_piece, source_tabs, src_coords):
 
@@ -549,8 +518,8 @@ class DistanceQueryCache:
             return retval
 
         transform = puzzler.render.Transform()
-        transform.rotate(-dst_coords.angle).translate(-dst_coords.dxdy)
-        transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+        transform.rotate(-dst_coords.angle).translate(-dst_coords.xy)
+        transform.translate(src_coords.xy).rotate(src_coords.angle)
 
         di = DistanceImage.Factory(dst_piece)
         retval = di.query(transform.apply_v2(src_piece.points))
@@ -562,7 +531,7 @@ class DistanceQueryCache:
         
     def make_key(self, dst_piece, dst_coords, src_piece, src_coords):
         def coords_key(c):
-            return (c.angle, c.dxdy[0], c.dxdy[1])
+            return (c.angle, c.xy[0], c.xy[1])
         return (dst_piece.label, coords_key(dst_coords),
                 src_piece.label, coords_key(src_coords))
 
@@ -608,7 +577,7 @@ class MultiTargetError:
 
     def __call__(self, src_piece, src_coords, l, r, verbose=False):
 
-        src_center = src_coords.dxdy
+        src_center = src_coords.xy
         src_radius = src_piece.radius
         
         dst_labels = self.overlaps(src_center, src_radius + self.max_dist).tolist()
@@ -662,7 +631,7 @@ class BosomBuddies:
 
     @dataclass
     class Raft:
-        coords: dict[str,AffineTransform]
+        coords: dict[str,Coord]
         joints: list[tuple]
         traces: list[tuple]
 
@@ -674,7 +643,7 @@ class BosomBuddies:
 
         dst_label, dst_tab_no = dst
         dst_piece = self.pieces[dst_label]
-        dst_coords = AffineTransform()
+        dst_coords = Coord()
 
         src_label, src_tab_no = src
         src_piece = self.pieces[src_label]
@@ -707,8 +676,8 @@ class BosomBuddies:
         dst_tab_no %= len(dst_piece.tabs)
         src_tab_no %= len(src_piece.tabs)
 
-        dst_xform = raft.coords[dst_label].get_transform()
-        src_xform = raft.coords[src_label].get_transform()
+        dst_xform = raft.coords[dst_label].xform
+        src_xform = raft.coords[src_label].xform
 
         dst_tab_normal = dst_xform.apply_n2(self.get_tab_normal(dst_piece, dst_tab_no))
         src_tab_normal = src_xform.apply_n2(self.get_tab_normal(src_piece, src_tab_no))
@@ -766,7 +735,7 @@ class RaftAligner:
         src_vec = src_points[-1] - src_points[0]
         src_angle = np.arctan2(src_vec[1], src_vec[0])
 
-        src_points_rotated = AffineTransform(dst_angle-src_angle, (0,0)).get_transform().apply_v2(src_points)
+        src_points_rotated = Coord(dst_angle-src_angle, (0,0)).xform.apply_v2(src_points)
 
         r, x, y = compute_rigid_transform(src_points_rotated, self.dst_points)
 
@@ -778,7 +747,7 @@ class RaftAligner:
 
         r += dst_angle - src_angle
 
-        return AffineTransform(r, (x,y))
+        return Coord(r, (x,y))
 
     def get_points_for_trace(self, raft, trace_no):
         points = []
@@ -786,7 +755,7 @@ class RaftAligner:
             piece = self.pieces[label]
             coords = raft.coords[label]
             pt = piece.tabs[tab_no].ellipse.center
-            points.append(coords.get_transform().apply_v2(pt))
+            points.append(coords.xform.apply_v2(pt))
 
         return np.array(points)
 
@@ -798,7 +767,7 @@ class RaftAligner:
         src_labels = set(label for label, _ in src_raft.traces[src_trace_no][1])
         for src_label in src_labels:
             src_piece = self.pieces[src_label]
-            src_xform = src_coords.get_transform().multiply(src_raft.coords[src_label].get_transform().matrix)
+            src_xform = src_coords.xform.multiply(src_raft.coords[src_label].xform.matrix)
             fit_sse, fit_npoints = self.measure_fit_for_piece(src_piece, src_xform)
             sse += fit_sse
             npoints += fit_npoints
@@ -909,7 +878,7 @@ class RaftDistanceComputer:
         assert len(self.raft.coords) <= 2, "reminder to make this not so dumb"
         for dst_label, dst_coords in self.raft.coords.items():
             dst_piece = self.pieces[dst_label]
-            dst_center = dst_coords.dxdy
+            dst_center = dst_coords.xy
             distance = np.linalg.norm(src_center - dst_center)
             if distance < src_radius + dst_piece.radius:
                 retval.append(dst_label)
@@ -921,7 +890,7 @@ class RaftDistanceComputer:
         coords = self.raft.coords[dst_label]
         
         xform = puzzler.render.Transform()
-        xform.rotate(-coords.angle).translate(-coords.dxdy)
+        xform.rotate(-coords.angle).translate(-coords.xy)
 
         return xform
 

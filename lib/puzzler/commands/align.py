@@ -112,14 +112,14 @@ class MovePiece(TransformDraggable):
 
     def __init__(self, piece, camera_matrix):
         self.piece = piece
-        self.init_piece_dxdy = piece.coords.dxdy.copy()
+        self.init_piece_xy = piece.coords.xy.copy()
         super().__init__(camera_matrix)
 
     def start(self, xy):
         self.origin = self.transform(xy)
 
     def drag(self, xy):
-        self.piece.coords.dxdy = self.init_piece_dxdy + (self.transform(xy) - self.origin)
+        self.piece.coords.xy = self.init_piece_xy + (self.transform(xy) - self.origin)
 
 class RotatePiece(TransformDraggable):
     
@@ -137,7 +137,7 @@ class RotatePiece(TransformDraggable):
                                    - self.to_angle(self.origin))
 
     def to_angle(self, xy):
-        dx, dy = xy - self.piece.coords.dxdy
+        dx, dy = xy - self.piece.coords.xy
         return math.atan2(dy, dx) if dx or dy else 0.
             
 class MoveCamera(Draggable):
@@ -212,7 +212,7 @@ class Piece:
         if epsilon is not None:
             self.perimeter = Perimeter(self.piece.points)
             self.approx = ApproxPoly(self.perimeter, epsilon)
-        self.coords = puzzler.align.AffineTransform()
+        self.coords = puzzler.align.Coord()
 
 class PuzzleRenderer:
 
@@ -290,7 +290,7 @@ class PuzzleRenderer:
             
         with puzzler.render.save(r):
                 
-            r.translate(p.coords.dxdy)
+            r.translate(p.coords.xy)
             r.rotate(p.coords.angle)
 
             if not self.test_bbox(p.piece.bbox):
@@ -333,7 +333,7 @@ class PuzzleRenderer:
                 r.draw_points(vertexes, fill='', outline=color, radius=6)
 
         # we don't want the text rotated
-        r.draw_text(p.coords.dxdy, p.piece.label, font=self.font, tags=tag)
+        r.draw_text(p.coords.xy, p.piece.label, font=self.font, tags=tag)
 
     def draw_rotate_handles(self, piece_id):
 
@@ -342,7 +342,7 @@ class PuzzleRenderer:
         r = self.renderer
         with puzzler.render.save(r):
 
-            r.translate(p.coords.dxdy)
+            r.translate(p.coords.xy)
             r.rotate(p.coords.angle)
 
             r1  = 250
@@ -377,7 +377,7 @@ class PuzzleRenderer:
         for l, tab_nos in tabs.items():
             p = piece_dict[l]
             with puzzler.render.save(r):
-                r.translate(p.coords.dxdy)
+                r.translate(p.coords.xy)
                 r.rotate(p.coords.angle)
                 for tab_no in tab_nos:
                     p0, v = fe.get_tab_center_and_direction((l, tab_no))
@@ -389,14 +389,14 @@ class PuzzleRenderer:
         for l, a, b in frontier:
             p = piece_dict[l]
             with puzzler.render.save(r):
-                r.translate(p.coords.dxdy)
+                r.translate(p.coords.xy)
                 r.rotate(p.coords.angle)
                 r.draw_points(p.piece.points[a], fill='pink', radius=8)
                 
         for l, a, b in frontier:
             p = piece_dict[l]
             with puzzler.render.save(r):
-                r.translate(p.coords.dxdy)
+                r.translate(p.coords.xy)
                 r.rotate(p.coords.angle)
                 r.draw_points(p.piece.points[b], fill='purple', radius=5)
 
@@ -421,7 +421,7 @@ class PuzzleRenderer:
 
         r = self.renderer
         with puzzler.render.save(r):
-            r.translate(p.coords.dxdy)
+            r.translate(p.coords.xy)
             r.rotate(p.coords.angle)
             for a, b in v:
                 points = ring_slice(p.piece.points, a, b+1)
@@ -489,7 +489,7 @@ class PuzzleSGFactory:
             
         with puzzler.sgbuilder.insert_sequence(sgb):
                 
-            sgb.add_translate(p.coords.dxdy)
+            sgb.add_translate(p.coords.xy)
 
             sgb.add_rotate(p.coords.angle)
 
@@ -550,7 +550,7 @@ class PuzzleSGFactory:
 
         with puzzler.sgbuilder.insert_sequence(sgb):
 
-            sgb.add_translate(p.coords.dxdy)
+            sgb.add_translate(p.coords.xy)
             sgb.add_rotate(p.coords.angle)
 
             r1  = 250
@@ -585,7 +585,7 @@ class PuzzleSGFactory:
         for l, tab_nos in tabs.items():
             p = piece_dict[l]
             with puzzler.sgbuilder.insert_sequence(sgb):
-                sgb.add_translate(p.coords.dxdy)
+                sgb.add_translate(p.coords.xy)
                 sgb.add_rotate(p.coords.angle)
                 for tab_no in tab_nos:
                     p0, v = fe.get_tab_center_and_direction((l, tab_no))
@@ -598,14 +598,14 @@ class PuzzleSGFactory:
         for l, (a, b) in frontier:
             p = piece_dict[l]
             with puzzler.sgbuilder.insert_sequence(sgb):
-                sgb.add_translate(p.coords.dxdy)
+                sgb.add_translate(p.coords.xy)
                 sgb.add_rotate(p.coords.angle)
                 sgb.add_points([p.piece.points[b]], radius=10, outline='purple')
                 
         for i, (l, (a, b)) in enumerate(frontier):
             p = piece_dict[l]
             with puzzler.sgbuilder.insert_sequence(sgb):
-                sgb.add_translate(p.coords.dxdy)
+                sgb.add_translate(p.coords.xy)
                 sgb.add_rotate(p.coords.angle)
                 v = p.piece.points[a]
                 sgb.add_points([v], radius=8, fill='pink')
@@ -634,7 +634,7 @@ class PuzzleSGFactory:
         sgb = self.scenegraphbuilder
 
         with puzzler.sgbuilder.insert_sequence(sgb):
-            sgb.add_translate(p.coords.dxdy)
+            sgb.add_translate(p.coords.xy)
             sgb.add_rotate(p.coords.angle)
             for a, b in v:
                 points = ring_slice(p.piece.points, a, b+1)
@@ -922,7 +922,7 @@ class AlignTk:
 
         coords = dict()
         for p, c in self.solver.geometry.coords.items():
-            coords[p] = puzzler.raft.Coord(c.angle, c.dxdy)
+            coords[p] = puzzler.raft.Coord(c.angle, c.xy)
 
         raft = puzzler.raft.Raft(coords, raftinator.factory.compute_frontiers(coords))
         mse = raftinator.get_total_error_for_raft_and_seams(raft)
@@ -934,7 +934,7 @@ class AlignTk:
 
         for p in self.pieces:
             if c := raft2.coords.get(p.piece.label):
-                g.coords[p.piece.label] = p.coords = puzzler.align.AffineTransform(c.angle, c.xy)
+                g.coords[p.piece.label] = p.coords = puzzler.align.Coord(c.angle, c.xy)
 
     def load_solver(self, path):
         self.solver = puzzler.solver.load_json(path, self.solver.pieces)
@@ -1111,7 +1111,7 @@ class AlignTk:
             x = cols[c] * 1000.
             y = rows[r] * -1000.
             p.coords.angle = 0.
-            p.coords.dxdy = np.array((x, y))
+            p.coords.xy = np.array((x, y))
 
         self.scenegraph = None
         self.render_normals = None
@@ -1146,8 +1146,8 @@ class AlignTk:
         self.render_vertexes = dict()
         self.render_vertexes[src_label] = t['src_vertex']
 
-        dst.coords = puzzler.align.AffineTransform(0., (0., 2000.))
-        src.coords = puzzler.align.AffineTransform(src_coords.angle, src_coords.dxdy + dst.coords.dxdy)
+        dst.coords = puzzler.align.Coord(0., (0., 2000.))
+        src.coords = puzzler.align.Coord(src_coords.angle, src_coords.xy + dst.coords.xy)
 
         self.scenegraph = None
         self.render()
@@ -1217,8 +1217,8 @@ class AlignTk:
         for i in range(n_rows):
             print(i,',',','.join(format_value(t[k][i]) for k in keys))
 
-        dst.coords = puzzler.align.AffineTransform(0., (0., 2000.))
-        src.coords = puzzler.align.AffineTransform(src_coords.angle, src_coords.dxdy + dst.coords.dxdy)
+        dst.coords = puzzler.align.Coord(0., (0., 2000.))
+        src.coords = puzzler.align.Coord(src_coords.angle, src_coords.xy + dst.coords.xy)
 
         self.scenegraph = None
         self.render()
@@ -1255,11 +1255,11 @@ class AlignTk:
             
         pieces = dict([(i.piece.label, i) for i in self.pieces])
         
-        dst_coord = puzzler.align.AffineTransform(0., (0., 2000.))
+        dst_coord = puzzler.align.Coord(0., (0., 2000.))
         for label, coord in raft.coords.items():
-            curr_m = dst_coord.get_transform().matrix
+            curr_m = dst_coord.xform.matrix
             prev_m = coord.matrix
-            pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+            pieces[label].coords = puzzler.align.Coord.from_matrix(curr_m @ prev_m)
 
         self.render_vertexes = dict()
         self.render_normals = dict()
@@ -1418,16 +1418,16 @@ class AlignTk:
 
         print("-------------------")
 
-        dst_coords = puzzler.align.AffineTransform(0., (0., 2000.))
+        dst_coords = puzzler.align.Coord(0., (0., 2000.))
 
         pieces = dict([(i.piece.label, i) for i in self.pieces])
 
         if uber_raft is not None:
             
             for label, coord in uber_raft.coords.items():
-                curr_m = dst_coords.get_transform().matrix
+                curr_m = dst_coords.xform.matrix
                 prev_m = coord.matrix
-                pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+                pieces[label].coords = puzzler.align.Coord.from_matrix(curr_m @ prev_m)
 
             self.render_vertexes = dict()
             self.render_normals = dict()
@@ -1436,15 +1436,15 @@ class AlignTk:
         else:
 
             for label, coords in dst_raft.coords.items():
-                curr_m = dst_coords.get_transform().matrix
-                prev_m = coords.get_transform().matrix
-                pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+                curr_m = dst_coords.xform.matrix
+                prev_m = coords.xform.matrix
+                pieces[label].coords = puzzler.align.Coord.from_matrix(curr_m @ prev_m)
             
             for label, coords in src_raft.coords.items():
-                curr_m = puzzler.align.AffineTransform(
-                    src_coords.angle, src_coords.dxdy + dst_coords.dxdy).get_transform().matrix
-                prev_m = coords.get_transform().matrix
-                pieces[label].coords = puzzler.align.AffineTransform.invert_matrix(curr_m @ prev_m)
+                curr_m = puzzler.align.Coord(
+                    src_coords.angle, src_coords.xy + dst_coords.xy).xform.matrix
+                prev_m = coords.xform.matrix
+                pieces[label].coords = puzzler.align.Coord.from_matrix(curr_m @ prev_m)
 
         self.scenegraph = None
         self.render()

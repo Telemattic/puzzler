@@ -31,13 +31,13 @@ class TabConstraint:
     a: "tuple[str,int]"
     b: "tuple[str,int]"
 
-AffineTransform = puzzler.align.AffineTransform
+Coord = puzzler.align.Coord
 
 @dataclass
 class Geometry:
     width: float
     height: float
-    coords: "dict[str,AffineTransform]"
+    coords: "dict[str,Coord]"
 
 class BorderSolver:
 
@@ -48,6 +48,7 @@ class BorderSolver:
         self.corners = []
         self.edges = []
         self.use_raftinator = True
+        self.raftinator = puzzler.raft.Raftinator(self.pieces)
 
         for p in self.pieces.values():
             n = len(p.edges)
@@ -106,15 +107,15 @@ class BorderSolver:
         v = e.line.pts[0] - e.line.pts[1]
         angle = -np.arctan2(v[1], v[0])
 
-        coords[start] = AffineTransform(angle)
+        coords[start] = Coord(angle)
 
         for prev, curr in zip(border, border[1:]):
             assert prev in coords and curr not in coords
 
-            prev_m = coords[prev].get_transform().matrix
-            curr_m = scores[curr][prev][1].get_transform().matrix
+            prev_m = coords[prev].xform.matrix
+            curr_m = scores[curr][prev][1].xform.matrix
 
-            coords[curr] = AffineTransform.invert_matrix(curr_m @ prev_m)
+            coords[curr] = Coord.from_matrix(curr_m @ prev_m)
 
         return Geometry(0., 0., coords)
 
@@ -165,7 +166,7 @@ class BorderSolver:
 
         icp.solve()
 
-        coords = {k: AffineTransform(v.angle, v.center) for k, v in bodies.items()}
+        coords = {k: Coord(v.angle, v.center) for k, v in bodies.items()}
         width = axes[1].value
         height = axes[2].value
 
@@ -344,26 +345,22 @@ class BorderSolver:
         
     def score_matches(self):
 
-        raftinator = None
-        
         def raftinator_compute_alignment(dst_label, dst_desc, src_label, src_desc):
+
+            r = self.raftinator
             
-            nonlocal raftinator
-            if raftinator is None:
-                raftinator = puzzler.raft.Raftinator(self.pieces)
-                        
             Feature = puzzler.raft.Feature
             edge_pair = (Feature(dst_label, 'edge', dst_desc[0]), Feature(src_label, 'edge', src_desc[0]))
             tab_pair = (Feature(dst_label, 'tab', dst_desc[1]), Feature(src_label, 'tab', src_desc[1]))
 
-            dst_raft = raftinator.factory.make_raft_for_piece(dst_label)
-            src_raft = raftinator.factory.make_raft_for_piece(src_label)
+            dst_raft = r.factory.make_raft_for_piece(dst_label)
+            src_raft = r.factory.make_raft_for_piece(src_label)
 
-            src_coord = raftinator.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
-            raft = raftinator.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
-            raft = raftinator.refine_alignment_within_raft(raft)
+            src_coord = r.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
+            raft = r.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
+            raft = r.refine_alignment_within_raft(raft)
                     
-            mse = raftinator.get_total_error_for_raft_and_seams(raft)
+            mse = r.get_total_error_for_raft_and_seams(raft)
             src_coord = raft.coords[src]
             src_fit_pts = (None, None)
             dst_fit_pts = (None, None)
@@ -439,7 +436,7 @@ class OverlappingPieces:
             if k not in coords:
                 continue
             labels.append(k)
-            centers.append(coords[k].dxdy)
+            centers.append(coords[k].xy)
             radii.append(v.radius)
 
         self.labels = labels
@@ -498,7 +495,7 @@ class ClosestPieces:
             ret_no[ii] = len(ret_labels)
             ret_labels.append(dst_label)
 
-        candidates = self.overlaps(src_coords.dxdy, src_piece.radius + self.max_dist).tolist()
+        candidates = self.overlaps(src_coords.xy, src_piece.radius + self.max_dist).tolist()
 
         for dst_label in candidates:
 
@@ -509,7 +506,7 @@ class ClosestPieces:
 
         def axis_overlap(xy, loc, label):
 
-            center = src_coords.dxdy[xy]
+            center = src_coords.xy[xy]
             radius = src_piece.radius + self.max_dist
             overlaps = center - radius <= loc <= center + radius
             if not overlaps:
@@ -518,7 +515,7 @@ class ClosestPieces:
             nonlocal src_points
             if src_points is None:
                 transform = puzzler.render.Transform()
-                transform.translate(src_coords.dxdy).rotate(src_coords.angle)
+                transform.translate(src_coords.xy).rotate(src_coords.angle)
                 src_points = transform.apply_v2(src_piece.points)
             
             dst_dist = np.abs(src_points[:,xy] - loc)
@@ -700,7 +697,7 @@ class FrontierExplorer:
         dirs = []
         for tab in tabs:
             p, v = self.get_tab_center_and_direction(tab)
-            t = coords[tab[0]].get_transform()
+            t = coords[tab[0]].xform
             dirs.append((t.apply_v2(p), t.apply_n2(v)))
             
         scores = []
@@ -770,7 +767,7 @@ class PuzzleSolver:
 
         if False:
             coords = dict()
-            coords['A22'] = AffineTransform()
+            coords['A22'] = Coord()
             coords['A23'] = scores['A22']['A23'][1]
             print(f"{coords=} {scores['A22']['A23']}")
             self.geometry = Geometry(0., 0., coords)
@@ -931,7 +928,7 @@ class PuzzleSolver:
             centers = np.array([t.ellipse.center for t in p.tabs])
             radii  += [t.ellipse.semi_major for t in p.tabs]
             labels += [(p.label, i) for i in range(len(p.tabs))]
-            tab_xy += [xy for xy in v.get_transform().apply_v2(centers)]
+            tab_xy += [xy for xy in v.xform.apply_v2(centers)]
 
         rows = []
 
@@ -1001,8 +998,8 @@ def from_json(pieces, s):
 
     def parse_affine_transform(o):
         angle = o['angle']
-        dxdy = tuple(o['dxdy'])
-        return puzzler.align.AffineTransform(angle, dxdy)
+        xy = tuple(o['xy'])
+        return puzzler.align.Coord(angle, xy)
 
     def parse_constraints(o):
         if o is None:
@@ -1091,15 +1088,15 @@ def to_json(solver):
         if geometry is None:
             return None
 
-        coords = dict((k, format_affine_transform(v))
+        coords = dict((k, format_coord(v))
                       for k, v in geometry.coords.items())
 
         return {'width':geometry.width,
                 'height':geometry.height,
                 'coords':coords}
 
-    def format_affine_transform(t):
-        return {'angle':t.angle, 'dxdy':t.dxdy.tolist()}
+    def format_coord(t):
+        return {'angle':t.angle, 'xy':t.xy.tolist()}
 
     def format_constraints(constraints):
         if constraints is None:
