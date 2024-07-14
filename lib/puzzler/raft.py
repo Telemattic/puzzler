@@ -196,15 +196,24 @@ class RaftAligner:
 
     def rough_align(self, src_raft: Raft, feature_pairs: FeaturePairs) -> Optional[Coord]:
 
-        a, b = self.choose_feature_pairs_for_alignment(feature_pairs)
+        if len(feature_pairs) == 0:
+            raise ValueError("no features to align")
 
-        if is_edge_pair(a) and is_tab_pair(b):
-            return self.rough_align_edge_tab(src_raft, a, b)
+        if all(self.is_tab_pair(i) for i in feature_pairs):
+            return self.rough_align_multiple_tabs(src_raft, feature_pairs)
 
-        if is_tab_pair(a) and is_tab_pair(b):
-            return self.rough_align_tab_tab(src_raft, a, b)
+        if len(feature_pairs) == 2:
+            a, b = feature_pairs
+            if self.is_edge_pair(a) and self.is_tab_pair(b):
+                return self.rough_align_edge_and_tab(src_raft, a, b)
 
-        return None
+        raise ValueError("don't know how to align features")
+
+    def is_edge_pair(self, p):
+        return p[0].kind == 'edge' and p[1].kind == 'edge'
+
+    def is_tab_pair(self, p):
+        return p[0].kind == 'tab' and p[1].kind == 'tab'
 
     def feature_helper(self, raft: Raft) -> FeatureHelper:
         return FeatureHelper(self.pieces, raft.coords)
@@ -216,27 +225,33 @@ class RaftAligner:
             tab_pair: FeaturePair
     ) -> Coord:
 
+        dst_helper = self.feature_helper(self.dst_raft)
+        src_helper = self.feature_helper(src_raft)
+
         dst_line = self.feature_helper(self.dst_raft).get_edge_points(edge_pair[0])
         src_line = self.feature_helper(src_raft).get_edge_points(edge_pair[1])
 
-        dst_edge_angle = np.arctan2(dst_line[1] - dst_line[0])
-        src_edge_angle = np.arctan2(src_line[1] - src_line[0])
+        dst_edge_vec = dst_line[1] - dst_line[0]
+        src_edge_vec = src_line[1] - src_line[0]
 
-        src_coord = AffineTransform(dst_edge_angle - src_edge_angle)
-        src_point = src_coords.get_transform().apply_v2(src_line[0])
+        dst_edge_angle = np.arctan2(dst_edge_vec[1], dst_edge_vec[0])
+        src_edge_angle = np.arctan2(src_edge_vec[1], src_edge_vec[0])
+
+        src_coord = puzzler.align.AffineTransform(dst_edge_angle - src_edge_angle)
+        src_point = src_coord.get_transform().apply_v2(src_line[0])
         src_coord.dxdy = puzzler.math.vector_to_line(src_point, dst_line)
 
-        dst_center = dst.get_tab_center(tab_pair[0])
+        dst_tab_center = dst_helper.get_tab_center(tab_pair[0])
         
-        src_center = src.get_tab_center(tab_pair[1])
-        src_center = src_coords.get_transform().apply_v2(src_center)
+        src_tab_center = src_helper.get_tab_center(tab_pair[1])
+        src_tab_center = src_coord.get_transform().apply_v2(src_tab_center)
 
         dst_edge_vec = puzzler.math.unit_vector(dst_line[1]-dst_line[0])
-        d = np.dot(dst_edge_vec, (dst_center - src_center))
+        d = np.dot(dst_edge_vec, (dst_tab_center - src_tab_center))
 
         src_coord.dxdy = src_coord.dxdy + dst_edge_vec * d
 
-        return src_coord
+        return Coord(src_coord.angle, src_coord.dxdy)
     
     def rough_align_single_tab(
             self,
@@ -290,6 +305,19 @@ class RaftAligner:
 
         return Coord(r, (x,y))
 
+    def find_piece_closest_to_origin(self, raft: Raft) -> str:
+
+        label = []
+        xy = []
+        for piece, coord in raft.coords.items():
+            label.append(piece)
+            xy.append(coord.xy)
+
+        xy = np.array(xy)                
+        dist = np.linalg.norm(xy, axis=1)
+        i = np.argmin(dist)
+        return label[i]
+
     def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam]) -> Raft:
 
         verbose = False
@@ -298,13 +326,8 @@ class RaftAligner:
 
         pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
 
-        for piece, coord in raft.coords.items():
-            if coord.angle == 0. and np.all(coord.xy == 0.):
-                fixed_piece = piece
-
-        if fixed_piece is None:
-            fixed_piece = next(iter(pieces_with_seams))
-
+        fixed_piece = self.find_piece_closest_to_origin(raft)
+        
         if verbose:
             print(f"refine_alignment_within_raft: {fixed_piece=}")
 
@@ -360,7 +383,7 @@ class RaftSeamstress:
         for s in seams:
             n_points += len(s.src.indices)
             error += s.error
-        return error / n_points
+        return error / n_points if n_points else 0.
 
     def seams_within_raft(self, raft: Raft) -> Seams:
 
@@ -494,14 +517,22 @@ class Raftinator:
         self.factory = RaftFactory(pieces)
         self.aligner = RaftAligner(pieces, None)
         self.seamstress = RaftSeamstress(pieces)
+        self.verbose = False
+
+    def parse_feature(self, s):
+        m = re.fullmatch("([A-Z]+\d+)([:/])(\d+)", s)
+        if not m:
+            raise ValueError("bad feature")
+        piece, kind, index = m[1], m[2], int(m[3])
+        kind = 'tab' if kind == ':' else 'edge'
+        return Feature(piece, kind, index)
 
     def parse_feature_pair(self, s):
-        m = re.fullmatch("([A-Z]+\d+):(\d+)=([A-Z]+\d+):(\d+)", s)
-        if not m:
+        v = s.split('=')
+        if len(v) != 2:
             raise ValueError("bad feature pair")
 
-        dst_piece, dst_tab_no, src_piece, src_tab_no = m[1], int(m[2]), m[3], int(m[4])
-        return (Feature(dst_piece, 'tab', dst_tab_no), Feature(src_piece, 'tab', src_tab_no))
+        return (self.parse_feature(v[0]), self.parse_feature(v[1]))
 
     def get_seams_for_raft(self, raft):
         s = self.seamstress
@@ -513,13 +544,15 @@ class Raftinator:
     def get_overlap_error_for_raft(self, raft: Raft) -> float:
         return RaftError(self.pieces).overlap_error_for_raft(raft)
 
-    def get_total_error_for_raft_and_seams(self, raft: Raft, seams: Seams) -> float:
+    def get_total_error_for_raft_and_seams(self, raft: Raft, seams: Optional[Seams] = None) -> float:
+        if seams is None:
+            seams = self.get_seams_for_raft(raft)
         return RaftError(self.pieces).total_error_for_raft_and_seams(raft, seams).mse
 
     def align_and_merge_rafts_with_feature_pairs(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Raft:
         
         self.aligner.dst_raft = dst_raft
-        src_coord = self.aligner.rough_align_multiple_tabs(src_raft, feature_pairs)
+        src_coord = self.aligner.rough_align(src_raft, feature_pairs)
         return self.factory.merge_rafts(RaftAlignment(dst_raft, src_raft, src_coord))
 
     def refine_alignment_within_raft(self, raft: Raft) -> Raft:
@@ -530,6 +563,11 @@ class Raftinator:
         return self.aligner.refine_alignment_within_raft(raft, seams)
 
     def make_raft_from_string(self, s: str) -> Raft:
+
+        feature_pairs = [self.parse_feature_pair(i) for i in s.strip().split(',')]
+        return self.make_raft_from_feature_pairs(feature_pairs)
+
+    def make_raft_from_feature_pairs(self, feature_pairs: FeaturePairs) -> Raft:
         
         rafts = dict()
         next_raft_id = 0
@@ -551,7 +589,8 @@ class Raftinator:
             v = self.factory.make_raft_for_piece(piece)
             rafts[k] = v
 
-            print(f"raftinator: {k}=Raft({piece})")
+            if self.verbose:
+                print(f"raftinator: {k}=Raft({piece})")
             
             return k
 
@@ -563,23 +602,26 @@ class Raftinator:
 
             return (dst_raft, src_raft)
 
-        feature_pairs = [self.parse_feature_pair(i) for i in s.strip().split(',')]
-
-        print("raftinator:")
-        for i, fp in enumerate(feature_pairs):
-            print(f"  feature_pair[{i}]={fp}")
+        if self.verbose:
+            print("raftinator:")
+            for i, fp in enumerate(feature_pairs):
+                print(f"  feature_pair[{i}]={fp}")
 
         i = 0
         new_raft = None
         while i < len(feature_pairs):
 
             dst_raft, src_raft = get_rafts_for_feature_pair(feature_pairs[i], True)
+            if dst_raft == src_raft:
+                i = i+1
+                continue
 
             j = i+1
             while j < len(feature_pairs) and get_rafts_for_feature_pair(feature_pairs[j]) == (dst_raft, src_raft):
                 j += 1
 
-            print(f"raftinator: {dst_raft=} {src_raft=} {i=} {j=}")
+            if self.verbose:
+                print(f"raftinator: {dst_raft=} {src_raft=} {i=} {j=}")
 
             new_raft = self.align_and_merge_rafts_with_feature_pairs(
                 rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
@@ -590,7 +632,8 @@ class Raftinator:
             new_name = next_raft_name()
             rafts[new_name] = new_raft
 
-            print(f"raftinator: {new_name}={dst_raft}+{src_raft}, features={feature_pairs[i:j]}")
+            if self.verbose:
+                print(f"raftinator: {new_name}={dst_raft}+{src_raft}, features={feature_pairs[i:j]}")
             i = j
 
         assert new_raft is not None and len(rafts) == 1
