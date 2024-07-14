@@ -47,6 +47,7 @@ class BorderSolver:
         self.succ = dict()
         self.corners = []
         self.edges = []
+        self.use_raftinator = True
 
         for p in self.pieces.values():
             n = len(p.edges)
@@ -54,7 +55,7 @@ class BorderSolver:
                 continue
 
             # HACK: drop incorrectly labeled border pieces
-            if False and len(self.pieces) > 1000 and not re.fullmatch("([A-Z]+(1|38))|((A|AA)\d+)", p.label):
+            if True and len(self.pieces) == 1026 and not re.fullmatch("([A-Z]+(1|38))|((A|AA)\d+)", p.label):
                 print(f"HACK: Skipping {p.label}, not actually a border piece!")
                 continue
 
@@ -208,7 +209,7 @@ class BorderSolver:
         # define expected pairs for the 1026 piece puzzle
         # automagically so we can identify problems as they occur when
         # attemping to solve it programmatically
-        if len(self.edges) > 100:
+        if True and len(self.pieces) == 1026:
             for i in range(1,38):
                 expected_pairs[f"A{i}"] = f"A{i+1}"
                 expected_pairs[f"AA{i+1}"] = f"AA{i}"
@@ -224,7 +225,7 @@ class BorderSolver:
             assert set(expected_pairs.keys()) == set(expected_pairs.values())
 
         # HACK: define pairs for the 1026 piece puzzle automagically
-        if False and len(self.edges) > 100:
+        if True and len(self.pieces) == 1026:
             print(f"HACK: forcing known border solution for puzzle")
             retval = [min(self.corners)]
             curr = expected_pairs[retval[0]]
@@ -343,6 +344,32 @@ class BorderSolver:
         
     def score_matches(self):
 
+        raftinator = None
+        
+        def raftinator_compute_alignment(dst_label, dst_desc, src_label, src_desc):
+            
+            nonlocal raftinator
+            if raftinator is None:
+                raftinator = puzzler.raft.Raftinator(self.pieces)
+                        
+            Feature = puzzler.raft.Feature
+            edge_pair = (Feature(dst_label, 'edge', dst_desc[0]), Feature(src_label, 'edge', src_desc[0]))
+            tab_pair = (Feature(dst_label, 'tab', dst_desc[1]), Feature(src_label, 'tab', src_desc[1]))
+
+            dst_raft = raftinator.factory.make_raft_for_piece(dst_label)
+            src_raft = raftinator.factory.make_raft_for_piece(src_label)
+
+            src_coord = raftinator.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
+            raft = raftinator.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
+            raft = raftinator.refine_alignment_within_raft(raft)
+                    
+            mse = raftinator.get_total_error_for_raft_and_seams(raft)
+            src_coord = raft.coords[src]
+            src_fit_pts = (None, None)
+            dst_fit_pts = (None, None)
+
+            return (mse, src_coord, src_fit_pts, dst_fit_pts)
+
         scores = collections.defaultdict(dict)
         
         borders = self.corners + self.edges
@@ -350,7 +377,10 @@ class BorderSolver:
         for dst in borders:
 
             dst_piece = self.pieces[dst]
-            edge_aligner = puzzler.align.EdgeAligner(dst_piece)
+
+            edge_aligner = None
+            if not self.use_raftinator:
+                edge_aligner = puzzler.align.EdgeAligner(dst_piece)
 
             for src in borders:
 
@@ -369,8 +399,12 @@ class BorderSolver:
                 if dst_piece.tabs[dst_desc[1]].indent == src_piece.tabs[src_desc[1]].indent:
                     continue
 
-                scores[dst][src] = edge_aligner.compute_alignment(
-                    dst_desc, src_piece, src_desc)
+                if self.use_raftinator:
+                    scores[dst][src] = raftinator_compute_alignment(
+                        dst, dst_desc, src, src_desc)
+                else:
+                    scores[dst][src] = edge_aligner.compute_alignment(
+                        dst_desc, src_piece, src_desc)
 
         return scores
 
@@ -714,6 +748,26 @@ class PuzzleSolver:
 
         scores = bs.score_matches()
 
+        if True:
+            f = open('border_match_scores.csv', 'w', newline='')
+            writer = csv.DictWriter(f, dialect='excel-tab', fieldnames='dst src align rank mse raft'.split())
+            writer.writeheader()
+            
+            for dst, sources in scores.items():
+                dst_desc = bs.succ[dst]
+                rows = []
+                for src, score in sources.items():
+                    src_desc = bs.pred[src]
+                    s = f"{dst}:{dst_desc[0]},{dst_desc[1]}={src}:{src_desc[0]},{src_desc[1]}"
+                    t = f"{dst}/{dst_desc[0]}={src}/{src_desc[0]},{dst}:{dst_desc[1]}={src}:{src_desc[1]}"
+                    rows.append({'dst':dst, 'src':src, 'align':s, 'raft':t, 'mse':score[0], 'rank':None})
+                rows.sort(key=operator.itemgetter('mse'))
+                for i, row in enumerate(rows, start=1):
+                    row['rank'] = i
+                writer.writerows(rows)
+            writer = None
+            f = None
+
         if False:
             coords = dict()
             coords['A22'] = AffineTransform()
@@ -838,6 +892,19 @@ class PuzzleSolver:
                     src_tabs = ((i+n-1)%n, i)
                     allways.append((src_piece.label, src_tabs))
 
+        # HACK: only consider pieces that could definitely go in this corner
+        if False and len(self.pieces) == 1026:
+            p0, p1 = corner[0][0], corner[1][0]
+            m0 = re.fullmatch("([A-Z]+)(\d+)", p0)
+            assert m0
+            m1 = re.fullmatch("([A-Z]+)(\d+)", p1)
+            assert m1
+            rows = (m0[1], m1[1])
+            cols = (m0[2], m1[2])
+            valid = set(row + col for row in rows for col in cols)
+            # print(f"HACK: {corner=} {valid=}")
+            allways = [(src_label, src_tabs) for src_label, src_tabs in allways if src_label in valid]
+            
         aligner = puzzler.align.MultiAligner(
             corner, self.pieces, self.geometry, self.distance_query_cache)
 
