@@ -226,7 +226,7 @@ class BorderSolver:
             assert set(expected_pairs.keys()) == set(expected_pairs.values())
 
         # HACK: define pairs for the 1026 piece puzzle automagically
-        if True and len(self.pieces) == 1026:
+        if False and len(self.pieces) == 1026:
             print(f"HACK: forcing known border solution for puzzle")
             retval = [min(self.corners)]
             curr = expected_pairs[retval[0]]
@@ -308,10 +308,7 @@ class BorderSolver:
         print(f"{pairs=}")
 
         if match_data:
-            self.output_border_match_data('border_match_data.csv', match_data)
-
-        if expected_pairs:
-            self.output_border_as_python('border_graph_data.py', expected_pairs, all_pairs)
+            self.output_border_match_data(match_data, expected_pairs, all_pairs)
 
         # make sure the border pieces form a single ring
         visited = set()
@@ -330,19 +327,18 @@ class BorderSolver:
 
         return retval[::-1]
 
-    def output_border_match_data(self, path, match_data):
-        keys = 'dst src mse kind expected details'.split()
-        with open(path, 'w', newline='') as f:
-            writer = csv.DictWriter(f, keys)
-            writer.writeheader()
-            writer.writerows(match_data)
-                
-    def output_border_as_python(self, path, expected, actual):
-
-        with open(path, 'w') as f:
-            print(f"{expected=}", file=f)
-            print(f"{actual=}", file=f)
+    def output_border_match_data(self, match_data, expected_pairs, actual_pairs):
         
+        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+        path = PuzzleSolver.next_path('border_match_data_' + ts, 'json')
+        
+        o = {'match_data': match_data,
+             'expected_pairs': expected_pairs,
+             'actual_pairs': actual_pairs}
+        
+        with open(path, 'w', newline='') as f:
+            f.write(json.dumps(o, indent=4))
+                
     def score_matches(self):
 
         def raftinator_compute_alignment(dst_label, dst_desc, src_label, src_desc):
@@ -749,7 +745,10 @@ class PuzzleSolver:
         scores = bs.score_matches()
 
         if False:
-            f = open('border_match_scores.csv', 'w', newline='')
+            ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+            path = self.next_path('border_match_scores_' + ts, 'tab')
+
+            f = open(path, 'w', newline='')
             writer = csv.DictWriter(f, dialect='excel-tab', fieldnames='dst src align rank mse raft'.split())
             writer.writeheader()
             
@@ -798,7 +797,8 @@ class PuzzleSolver:
         path = self.next_path('solver_' + ts, 'json')
         save_json(path, self)
 
-    def next_path(self, fname, ext):
+    @staticmethod
+    def next_path(fname, ext):
 
         dname = r'C:\temp\puzzler\align'
         i = 0

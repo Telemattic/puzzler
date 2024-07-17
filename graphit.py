@@ -1,5 +1,9 @@
-# import border_graph_data as bgd
+import argparse
 import collections
+import json
+import os
+import subprocess
+import tempfile
 
 def number_nodes(expected_pairs, everybody_else=None):
     
@@ -64,64 +68,7 @@ def merge_good_runs(good_nodes, node_ids):
 
     return node_ids
 
-def circular_layout(path, expected, actual):
-
-    node_ids = number_nodes(expected)
-    ordered_nodes = sorted(node_ids.keys(), key=lambda x: node_ids[x])
-
-    good_nodes = get_good_nodes(expected, actual)
-    bad_nodes = set(expected.keys()) - good_nodes
-
-    # gg = sorted(list(good_nodes), key=lambda x: node_ids[x])
-
-    # print(f"good_nodes={gg}")
-    # print(f"bad_nodes={bad_nodes}")
-
-    packed_node_ids = merge_good_runs(good_nodes, node_ids)
-
-    labels = collections.defaultdict(list)
-    for k in ordered_nodes:
-        labels[packed_node_ids[k]].append(k)
-
-    for k, v in labels.items():
-        if len(v) > 1:
-            labels[k] = v[-1] + '..' + v[0]
-        else:
-            labels[k] = v[0]
-
-    with open(path, 'w') as f:
-
-        print('digraph G {', file=f)
-        print('  layout="twopi";', file=f)
-        print('  ranksep=8;', file=f)
-        print('  root=CENTER;', file=f)
-        print('  edge [style=invis];', file=f)
-        print('  CENTER [style=invis];', file=f)
-        print('  CENTER -> {', file=f)
-        
-        for i in sorted(set(packed_node_ids.values())):
-            print(f'    {i}', file=f)
-            
-        print('  }', file=f)
-        print('  edge [style=solid];', file=f)
-
-        for k, v in labels.items():
-            print(f'   {k} [label="{v}"];', file=f)
-
-        pni = packed_node_ids
-
-        for k, v in actual.items():
-            if v != expected[k]:
-                print(f'  {pni[v]} -> {pni[k]} [color=red, arrowhead=rvee];', file=f)
-
-        for k, v in expected.items():
-            if k in bad_nodes or v in bad_nodes:
-                style = 'dashed' if actual[k] != v else 'solid'
-                print(f'  {pni[v]} -> {pni[k]} [style={style}, arrowhead=lvee];', file=f)
-
-        print('}', file=f)
-
-def circular_layout2(path, expected, actual, layout='twopi'):
+def make_graph(ofile, expected, actual, layout='linear'):
 
     # three kinds of edge: good, bad, missing
 
@@ -200,7 +147,7 @@ def circular_layout2(path, expected, actual, layout='twopi'):
     for i in range(len(ordered_expected_nodes)):
         a = ordered_expected_nodes[i-1]
         b = ordered_expected_nodes[i]
-        print(f"merge_nodes: test {a},{b}")
+        # print(f"merge_nodes: test {a},{b}")
         if has_single_good_edge(a, b):
             merge_nodes(a, b)
 
@@ -217,48 +164,88 @@ def circular_layout2(path, expected, actual, layout='twopi'):
         else:
             labels[k] = v[0]
 
-    with open(path, 'w') as f:
+    f = ofile
 
-        print('digraph G {', file=f)
+    print('digraph G {', file=f)
 
-        if layout == 'twopi':
-            print('  layout="twopi";', file=f)
-            print('  ranksep=4;', file=f)
-            print('  root=CENTER;', file=f)
-            print('  edge [style=invis];', file=f)
-            print('  CENTER [style=invis];', file=f)
-            print('  CENTER -> {', file=f)
+    if layout == 'circular':
+        print('  layout="twopi";', file=f)
+        print('  ranksep=4;', file=f)
+        print('  root=CENTER;', file=f)
+        print('  edge [style=invis];', file=f)
+        print('  CENTER [style=invis];', file=f)
+        print('  CENTER -> {', file=f)
         
-            for i in sorted(id_to_nodes.keys()):
-                print(f'    {i}', file=f)
+        for i in sorted(id_to_nodes.keys()):
+            print(f'    {i}', file=f)
             
-            print('  }', file=f)
+        print('  }', file=f)
         
-        print('  edge [style=solid];', file=f)
-        print('  node [shape=rectangle];', file=f)
+    print('  edge [style=solid];', file=f)
+    print('  node [shape=rectangle];', file=f)
 
-        for k, v in labels.items():
-            print(f'   {k} [label="{v}"];', file=f)
+    for k, v in labels.items():
+        print(f'   {k} [label="{v}"];', file=f)
 
-        for src, dsts in out_edges.items():
-            src_id = node_to_id[src]
-            for dst, kind in dsts:
-                dst_id = node_to_id[dst]
-                if src_id == dst_id and kind == 'good':
-                    continue
+    for src, dsts in out_edges.items():
+        src_id = node_to_id[src]
+        for dst, kind in dsts:
+            dst_id = node_to_id[dst]
+            if src_id == dst_id and kind == 'good':
+                continue
                     
-                # print(f"{kind} edge from {src} to {dst}, but these nodes have been merged?")
-
-                if kind == 'good':
-                    print(f'  {src_id} -> {dst_id} [arrowhead=lvee];', file=f)
-                elif kind == 'bad':
-                    print(f'  {src_id} -> {dst_id} [color=red, arrowhead=rvee];', file=f)
-                else:
-                    print(f'  {src_id} -> {dst_id} [style=dashed, arrowhead=lvee];', file=f)
+            # print(f"{kind} edge from {src} to {dst}, but these nodes have been merged?")
+            
+            if kind == 'good':
+                print(f'  {src_id} -> {dst_id} [arrowhead=lvee];', file=f)
+            elif kind == 'bad':
+                print(f'  {src_id} -> {dst_id} [color=red, arrowhead=rvee];', file=f)
+            else:
+                print(f'  {src_id} -> {dst_id} [style=dashed, arrowhead=lvee];', file=f)
                 
-        print('}', file=f)
-        
+    print('}', file=f)
 
-# "C:\Program Files\Graphviz\bin\dot.exe" -Tpdf -Gsize=8,10.5 -Gpage=8.5,11 -o <pdf_path> <dot_path>
-circular_layout2('circular.dot', bgd.expected, bgd.actual, 'twopi')
-circular_layout2('linear.dot', bgd.expected, bgd.actual, None)
+def make_pdf(dotpath, pdfpath):
+    # "C:\Program Files\Graphviz\bin\dot.exe" -Tpdf -Gsize=8,10.5 -Gpage=8.5,11 -o <pdf_path> <dot_path>
+    exe = r'C:\Program Files\Graphviz\bin\dot.exe'
+    args = [exe, '-Tpdf', '-Gsize=8,10.5', '-Gpage=8.5,11', '-o', pdfpath, dotpath]
+    print(' '.join(args))
+    subprocess.run(args)
+
+def show_pdf(pdfpath):
+    subprocess.run(['cmd', '/c', 'start', pdfpath])
+
+def main():
+
+    parser = argparse.ArgumentParser(
+        prog='GraphIt',
+        description='Graph piece connectivity data')
+    parser.add_argument('filename', help='input json file containing connectivity data')
+    parser.add_argument('-c', '--circular', help='circular layout', dest='layout',
+                        action='store_const', const='circular')
+    parser.add_argument('-l', '--linear', help='linear layout (default)', dest='layout',
+                        action='store_const', const='linear')
+    parser.add_argument('-o', '--output', help='output filename (default: None)')
+
+    args = parser.parse_args()
+
+    with open(args.filename, 'r') as f:
+        s = f.read()
+        o = json.loads(s)
+
+    if args.output.endswith('.pdf'):
+
+        # delete_on_close depends on python 3.12
+        with tempfile.NamedTemporaryFile(dir=r'C:\Temp', prefix='graphit_', suffix='.dot',
+                                         mode='w', newline='\n', delete=False) as dotfile:
+            make_graph(dotfile, o['expected_pairs'], o['actual_pairs'], args.layout)
+            dotfile.close()
+            make_pdf(dotfile.name, args.output)
+            os.unlink(dotfile.name)
+
+    elif args.output.endswith('.dot'):
+            
+        make_graph(args.output, o['expected_pairs'], o['actual_pairs'], args.layout)
+
+if __name__ == '__main__':
+    main()
