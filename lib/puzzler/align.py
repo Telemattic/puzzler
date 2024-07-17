@@ -623,7 +623,7 @@ class MultiTargetError:
                 num_points += len(ii)
 
         if verbose:
-            print(f"  <MTE2> {inner_sse=:.1f} {sse=:.1f} {num_points=}")
+            print(f"  <MTE2> {inner_sse=:.1f} {sse=:.1f} {num_points=} mse={sse/num_points:.3f}")
 
         return sse / num_points
 

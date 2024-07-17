@@ -523,7 +523,8 @@ class PuzzleSGFactory:
                 sgb.add_lines(np.array((n[0], n[0] + n[1]*10)), fill=color, width=1)
 
         def draw_stitches(stitches, color, normals_flag):
-            xy = np.array((0., 2000.))
+            # xy = np.array((0., 2000.))
+            xy = np.array((0., 0.0))
             if self.render_vertex_details:
                 draw_vertexes(stitches.points + xy, color)
             if normals_flag:
@@ -896,6 +897,8 @@ class AlignTk:
     def do_tab_alignment(self):
 
         self.solver.solve_field()
+        if self.solver.seams:
+            self.render_seams = self.solver.seams
         self.update_coords()
 
         self.scenegraph = None

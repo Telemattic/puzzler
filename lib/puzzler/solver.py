@@ -41,13 +41,13 @@ class Geometry:
 
 class BorderSolver:
 
-    def __init__(self, pieces):
+    def __init__(self, pieces, use_raftinator=False):
         self.pieces = pieces
         self.pred = dict()
         self.succ = dict()
         self.corners = []
         self.edges = []
-        self.use_raftinator = True
+        self.use_raftinator = use_raftinator
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
 
         for p in self.pieces.values():
@@ -732,6 +732,9 @@ class PuzzleSolver:
         self.frontiers = None
         self.corners = []
         self.distance_query_cache = puzzler.align.DistanceQueryCache()
+        self.use_raftinator = False
+        self.raftinator = puzzler.raft.Raftinator(pieces)
+        self.seams = []
 
     def solve(self):
         if self.geometry:
@@ -741,11 +744,11 @@ class PuzzleSolver:
 
     def solve_border(self):
         
-        bs = BorderSolver(self.pieces)
+        bs = BorderSolver(self.pieces, use_raftinator=self.use_raftinator)
 
         scores = bs.score_matches()
 
-        if True:
+        if False:
             f = open('border_match_scores.csv', 'w', newline='')
             writer = csv.DictWriter(f, dialect='excel-tab', fieldnames='dst src align rank mse raft'.split())
             writer.writeheader()
@@ -849,6 +852,16 @@ class PuzzleSolver:
             print(f"{i}: {src_label:3s} angle={angle:+6.1f} {r=:.3f} {mse=:5.1f} {src_tabs=} {corner=}")
 
         _, _, src_label, coords, src_tabs, corner = fits[0]
+
+        dst_raft = puzzler.raft.Raft(self.geometry.coords, [])
+        src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
+        seams = self.raftinator.seamstress.trim_seams(
+            self.raftinator.seamstress.seams_between_rafts(dst_raft, src_raft, coords))
+        self.seams = seams
+        print(f"{src_label=} MSE={self.raftinator.seamstress.cumulative_error_for_seams(seams):.3f}")
+        if src_label == 'Z4':
+            for i, seam in enumerate(seams):
+                print(f" seam[{i}]: {seam.dst.piece=} {seam.src.piece=} {seam.error=:.3f} seam.n_points={len(seam.src.indices)}")
             
         for src_tab_no, dst in zip(src_tabs, corner):
             self.constraints.append(TabConstraint((src_label, src_tab_no), dst))
@@ -869,6 +882,38 @@ class PuzzleSolver:
 
     def score_corner(self, corner):
 
+        # print(f"score_corner: {corner=}")
+
+        class RaftHelper:
+
+            def __init__(self, pieces, coords, raftinator):
+                self.pieces = pieces
+                self.coords = coords
+                self.overlaps = OverlappingPieces(pieces, coords)
+                self.max_dist = 256
+                self.raftinator = raftinator
+
+            def measure_fit(self, src_label, src_coord):
+
+                src_center = src_coord.xy
+                src_radius = self.pieces[src_label].radius
+                
+                coords = dict()
+                for label in self.overlaps(src_center, src_radius + self.max_dist).tolist():
+                    coords[label] = self.coords[label]
+                coords[src_label] = src_coord
+
+                # print(f"  measure_fit: {src_label=} {src_coord=} pieces={','.join(coords.keys())}")
+
+                frontiers = self.raftinator.factory.compute_frontiers(coords)
+                
+                raft = puzzler.raft.Raft(coords, frontiers)
+
+                for _ in range(1):
+                    raft = self.raftinator.refine_alignment_within_raft(raft)
+
+                return self.raftinator.get_total_error_for_raft_and_seams(raft)
+                
         assert 2 == len(corner)
 
         corner = (corner[1], corner[0])
@@ -901,9 +946,13 @@ class PuzzleSolver:
             valid = set(row + col for row in rows for col in cols)
             # print(f"HACK: {corner=} {valid=}")
             allways = [(src_label, src_tabs) for src_label, src_tabs in allways if src_label in valid]
-            
+
         aligner = puzzler.align.MultiAligner(
             corner, self.pieces, self.geometry, self.distance_query_cache)
+
+        raft_helper = None
+        if self.use_raftinator:
+            raft_helper = RaftHelper(self.pieces, self.geometry.coords, self.raftinator)
 
         fits = []
 
@@ -911,7 +960,12 @@ class PuzzleSolver:
 
             src_piece = self.pieces[src_label]
             src_coords = aligner.compute_alignment(src_piece, src_tabs)
-            mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
+
+            if raft_helper is not None:
+                mse = raft_helper.measure_fit(src_label, src_coords)
+            else:
+                mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
+            
             fits.append((mse, src_label, src_coords, src_tabs, corner))
 
         fits.sort(key=operator.itemgetter(0))

@@ -326,6 +326,15 @@ class RaftAligner:
         i = np.argmin(dist)
         return label[i]
 
+    def refine_alignment_between_rafts(self, alignment: RaftAlignment) -> RaftAlignment:
+
+        dst_raft = alignment.dst
+        src_raft = alignment.src
+        src_raft_coord = alignment.src_coord
+
+        seams = self.seamstress.trim_seams(
+            self.seamstress.seams_between_rafts(dst_raft, src_raft, src_raft_coord))
+
     def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam]) -> Raft:
 
         verbose = False
@@ -392,6 +401,30 @@ class RaftSeamstress:
             n_points += len(s.src.indices)
             error += s.error
         return error / n_points if n_points else 0.
+
+    def seams_between_rafts(self, dst_raft: Raft, src_raft: Raft, src_raft_coord: Coord) -> Seams:
+
+        overlaps = puzzler.solver.OverlappingPieces(self.pieces, dst_raft.coords)
+
+        seams = []
+        for src_label, src_coord in src_raft.coords.items():
+
+            assert src_coord.angle == 0. and np.all(src_coord.xy == 0.)
+            # center of the src piece in the space of the aligned rafts
+            src_xy = src_raft_coord.xform.apply_v2(src_coord.xy)
+            src_piece = self.pieces[src_label]
+            
+            for dst_label in overlaps(src_xy, src_piece.radius):
+                dst_coord = dst_raft.coords[dst_label]
+                # HACK: this should be the composed coordinate, but
+                # we've already validated that the src_raft is just an
+                # identity transform
+                seam = self.seam_between_pieces(dst_label, dst_coord, src_label, src_raft_coord)
+                if seam is None:
+                    continue
+                seams.append(seam)
+
+        return seams
 
     def seams_within_raft(self, raft: Raft) -> Seams:
 
