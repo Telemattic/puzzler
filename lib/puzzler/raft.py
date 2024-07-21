@@ -20,6 +20,16 @@ class Feature(NamedTuple):
     piece: str
     kind: str
     index: int
+
+    def __str__(self):
+        x = self.kind
+        if x == 'edge':
+            x = '/'
+        elif x == 'tab':
+            x = ':'
+        else:
+            x = '{' + x + '}'
+        return self.piece + x + str(self.index)
     
 Frontier = Sequence[Feature]
 Frontiers = Sequence[Frontier]
@@ -495,6 +505,17 @@ class RaftSeamstress:
             retval += helper(src_piece, dst_seams)
 
         return retval
+
+    def get_index_range_for_stitches(self, stitches: Stitches) -> Tuple[int, int]:
+
+        piece = self.pieces[stitches.piece]
+        n = len(piece.points)
+        # sorted indices
+        si = np.sort(stitches.indices)
+        i = np.argmax(np.diff(si, append=si[0]+n))
+        a = si[(i+1) % len(si)]
+        b = si[i]
+        return (a, b)
 
     def seam_between_pieces(self, dst_label: str, dst_coord: Coord, src_label: str, src_coord: Coord) -> Optional[Seam]:
 

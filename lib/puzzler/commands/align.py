@@ -523,13 +523,29 @@ class PuzzleSGFactory:
                 sgb.add_lines(np.array((n[0], n[0] + n[1]*10)), fill=color, width=1)
 
         def draw_stitches(stitches, color, normals_flag):
-            # xy = np.array((0., 2000.))
-            xy = np.array((0., 0.0))
             if self.render_vertex_details:
-                draw_vertexes(stitches.points + xy, color)
+                draw_vertexes(stitches.points, color)
             if normals_flag:
-                normals = list(zip(stitches.points + xy, stitches.normals))
+                normals = list(zip(stitches.points, stitches.normals))
                 draw_normals(normals, color)
+
+        def draw_index_range(stitches, color):
+
+            seamstress = puzzler.raft.RaftSeamstress({p.piece.label: p.piece})
+            a, b = seamstress.get_index_range_for_stitches(stitches)
+
+            with puzzler.sgbuilder.insert_sequence(sgb):
+                sgb.add_translate(p.coords.xy)
+                sgb.add_rotate(p.coords.angle)
+            
+                va = p.piece.points[a]
+                vb = p.piece.points[b]
+                
+                sgb.add_points([va], radius=6, fill='', outline=color, width=1)
+                sgb.add_text(va, "a", font=('Courier New', 12))
+                
+                sgb.add_points([vb], radius=6, fill='', outline=color, width=1)
+                sgb.add_text(vb, "b", font=('Courier New', 12))
 
         if self.seams:
             for seam in self.seams:
@@ -537,6 +553,7 @@ class PuzzleSGFactory:
                     draw_stitches(seam.src, color, False)
                 if seam.dst.piece == p.piece.label:
                     draw_stitches(seam.dst, color, True)
+                    draw_index_range(seam.dst, color)
         
         normals = self.normals.get(p.piece.label)
         if normals is not None:
@@ -659,9 +676,12 @@ class CanvasHitTester:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces, renderer, mode):
+    def __init__(self, parent, pieces, renderer, mode, expected=None):
+        
         self.pieces = pieces
-        self.solver = puzzler.solver.PuzzleSolver({i.piece.label: i.piece for i in self.pieces}, None)
+
+        pieces_dict = {i.piece.label: i.piece for i in pieces}
+        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, expected=expected)
 
         self.draggable = None
         self.selection = None
@@ -1114,7 +1134,8 @@ class AlignTk:
         for p in self.pieces:
             r, c = to_row_col(p.piece.label)
             x = cols[c] * 1000.
-            y = rows[r] * -1000.
+            # make space around the origin
+            y = (rows[r] + 2) * -1000.
             p.coords.angle = 0.
             p.coords.xy = np.array((x, y))
 
@@ -1151,8 +1172,8 @@ class AlignTk:
         self.render_vertexes = dict()
         self.render_vertexes[src_label] = t['src_vertex']
 
-        dst.coords = Coord(0., (0., 2000.))
-        src.coords = Coord(src_coords.angle, src_coords.xy + dst.coords.xy)
+        dst.coords = Coord(0., (0., 0.))
+        src.coords = Coord(src_coords.angle, src_coords.xy)
 
         self.scenegraph = None
         self.render()
@@ -1182,6 +1203,17 @@ class AlignTk:
         mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
         print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
 
+        dst_corner_normals = tab_aligner.get_outside_normals(dst.piece, dfp[0], dfp[1])
+        src_corner_normals = src_coords.xform.apply_n2(tab_aligner.get_outside_normals(src.piece, sfp[0], sfp[1]))
+
+        corner_dp_0 = np.dot(dst_corner_normals[1], src_corner_normals[0])
+        corner_dp_1 = np.dot(dst_corner_normals[0], src_corner_normals[1])
+
+        with np.printoptions(precision=3):
+            print(f"  {dst_corner_normals=}")
+            print(f"  {src_corner_normals=}")
+            print(f"  {corner_dp_0=} {corner_dp_1=}")
+        
         if False:
             src_mid = tab_aligner.get_tab_midpoint(src.piece, src_tab_no)
 
@@ -1222,8 +1254,8 @@ class AlignTk:
         for i in range(n_rows):
             print(i,',',','.join(format_value(t[k][i]) for k in keys))
 
-        dst.coords = Coord(0., (0., 2000.))
-        src.coords = Coord(src_coords.angle, src_coords.xy + dst.coords.xy)
+        dst.coords = Coord(0., (0., 0.))
+        src.coords = Coord(src_coords.angle, src_coords.xy)
 
         self.scenegraph = None
         self.render()
@@ -1259,8 +1291,9 @@ class AlignTk:
                 print(f"MSE={mse:.3f} MSE2={mse2:.3f}")
             
         pieces = dict([(i.piece.label, i) for i in self.pieces])
-        
-        dst_coord = Coord(0., (0., 2000.))
+
+        # HACK: 2000.
+        dst_coord = Coord(0., (0., 0.))
         for label, coord in raft.coords.items():
             curr_m = dst_coord.xform.matrix
             prev_m = coord.matrix
@@ -1423,7 +1456,8 @@ class AlignTk:
 
         print("-------------------")
 
-        dst_coords = Coord(0., (0., 2000.))
+        # HACK, 2000.
+        dst_coords = Coord(0., (0., 0.))
 
         pieces = dict([(i.piece.label, i) for i in self.pieces])
 
@@ -1698,7 +1732,7 @@ def tab_pairs_for_piece(piece, verbose=False):
 
     return retval
 
-def quadmaster2(pieces, quad):
+def quadmaster(pieces, quad):
 
     Feature = puzzler.raft.Feature
 
@@ -1766,125 +1800,7 @@ def quadmaster2(pieces, quad):
 
     return retval
         
-def quadmaster(pieces, quad):
-
-    raftinator = puzzler.raft.Raftinator(pieces)
-
-    Feature = puzzler.raft.Feature
-
-    def format_feature(f):
-        return f"{f.piece}:{f.index}" if f.kind == 'tab' else f"{f.piece}/{f.index}"
-
-    def format_feature_pair(p):
-        return format_feature(p[0]) + '=' + format_feature(p[1])
-
-    def format_feature_pairs(pairs):
-        return ','.join(format_feature_pair(i) for i in pairs)
-
-    def format_frontier(frontier):
-        return ','.join(format_feature(i) for i in frontier)
-
-    def make_rafts(dst_label, src_label):
-
-        dst = pieces[dst_label]
-        src = pieces[src_label]
-        
-        dst_raft = raftinator.factory.make_raft_for_piece(dst_label)
-        src_raft = raftinator.factory.make_raft_for_piece(src_label)
-
-        retval = []
-        for dst_tab_no, dst_tab in enumerate(dst.tabs):
-            for src_tab_no, src_tab in enumerate(src.tabs):
-                if dst_tab.indent == src_tab.indent:
-                    continue
-
-                feature_pairs = [(Feature(dst_label,'tab',dst_tab_no), Feature(src_label,'tab',src_tab_no))]
-                desc = format_feature_pairs(feature_pairs)
-
-                new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(dst_raft, src_raft, feature_pairs)
-
-                retval.append((desc, new_raft))
-
-        if False:
-            print(f"make_rafts: dst={dst_label} src={src_label} n_rafts={len(retval)}")
-            for i, (desc, raft) in enumerate(retval):
-                print(f"  raft[{i}]: {desc=} frontier[0]={format_frontier(raft.frontiers[0])}")
-
-        return retval
-
-    def fnord(frontier):
-        
-        retval = []
-        for i in range(len(frontier)):
-            l = frontier[i-1]
-            r = frontier[i]
-            if l.piece != r.piece and l.kind == 'tab' and r.kind == 'tab':
-                retval.append((l, r))
-
-        return retval
-
-    def are_compatible_tabs(a, b):
-
-        if a.kind != 'tab' or b.kind != 'tab':
-            return False
-
-        tab_a = pieces[a.piece].tabs[a.index]
-        tab_b = pieces[b.piece].tabs[b.index]
-        return tab_a.indent != tab_b.indent
-
-    def are_good_feature_pairs_for_quad(fps, quad):
-
-        ul, ur, ll, lr = quad
-        
-        return (len(fps) == 2 and
-                fps[0][0].piece == ur and
-                fps[0][1].piece == lr and
-                fps[1][0].piece == ul and
-                fps[1][1].piece == ll and
-                are_compatible_tabs(*fps[0]) and
-                are_compatible_tabs(*fps[1]))
-        
-    def join_rafts(dst_raft, src_raft, quad):
-
-        dst_features = fnord(dst_raft.frontiers[0])
-        src_features = fnord(src_raft.frontiers[0][::-1])
-
-        retval = []
-        for a, b in dst_features:
-            for c, d in src_features:
-
-                feature_pairs = [(a, c), (b, d)]
-                if are_good_feature_pairs_for_quad(feature_pairs, quad):
-                    new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(dst_raft, src_raft, feature_pairs)
-                    new_raft2 = raftinator.refine_alignment_within_raft(new_raft)
-                    seams2 = raftinator.get_seams_for_raft(new_raft2)
-                    mse = raftinator.get_total_error_for_raft_and_seams(new_raft2, seams2)
-                    desc = format_feature_pairs(feature_pairs)
-                    retval.append((desc, mse))
-
-        return retval
-
-    ul, ur, ll, lr = quad
-    
-    upper_rafts = make_rafts(ul, ur)
-    lower_rafts = make_rafts(ll, lr)
-
-    retval = []
-    for upper in upper_rafts:
-        for lower in lower_rafts:
-            # print(f"upper={upper[0]} lower={lower[0]}")
-            for desc, mse in join_rafts(upper[1], lower[1], quad):
-                s = ','.join([upper[0], lower[0], desc])
-                retval.append({'ul_piece':ul, 'ur_piece':ur, 'll_piece':ll, 'lr_piece':lr,
-                               'upper_raft':upper[0], 'lower_raft':lower[0], 'quad_raft':s, 'mse':mse, 'rank':None})
-
-    retval.sort(key=operator.itemgetter('mse'))
-    for i, row in enumerate(retval, start=1):
-        row['rank'] = i
-
-    return retval
-        
-def quadrophenia(pieces):
+def quadrophenia(pieces, output_csv_path):
 
     assert len(pieces) == 1026
 
@@ -1903,7 +1819,7 @@ def quadrophenia(pieces):
         except AssertionError:
             print(f"{label} has problem with tab_pair_for_piece!")
 
-    f = open('quadrophenia.csv', 'w', newline='')
+    f = open(output_csv_path, 'w', newline='')
     writer = csv.DictWriter(f, fieldnames='col_no row_no ul_piece ur_piece ll_piece lr_piece raft mse rank'.split())
     writer.writeheader()
 
@@ -1915,8 +1831,23 @@ def quadrophenia(pieces):
 
         props = {'row_no':row_no, 'col_no':col_no, 'ul_piece':quad[0], 'ur_piece':quad[1], 'll_piece':quad[2], 'lr_piece':quad[3]}
         
-        for i in quadmaster2(pieces, quad):
+        for i in quadmaster(pieces, quad):
             writer.writerow(props | i)
+
+def read_expected_tab_matches(path):
+
+    Feature = puzzler.raft.Feature
+
+    expected = dict()
+    
+    with open(path, 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            dst = Feature(row['dst_piece'], 'tab', int(row['dst_tab_no']))
+            src = Feature(row['src_piece'], 'tab', int(row['src_tab_no']))
+            expected[dst] = src
+
+    return expected
     
 def align_ui(args):
 
@@ -1927,7 +1858,7 @@ def align_ui(args):
         by_label[p.label] = p
 
     if args.quadrophenia:
-        quadrophenia(by_label)
+        quadrophenia(by_label, args.quadrophenia)
         return
 
     if 'I1' in by_label:
@@ -1944,12 +1875,16 @@ def align_ui(args):
     if not labels:
         labels |= set(by_label.keys())
 
+    expected = None
+    if args.expected:
+        expected = read_expected_tab_matches(args.expected)
+
     # approx (simplified polygon) only needed for immediate mode rendering
     epsilon = 10 if args.mode == 'immediate' else None
     pieces = [Piece(by_label[l], epsilon) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, renderer=args.renderer, mode=args.mode)
+    ui = AlignTk(root, pieces, renderer=args.renderer, mode=args.mode, expected=expected)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 
@@ -1963,11 +1898,12 @@ def add_parser(commands):
 
     parser_align = commands.add_parser("align", help="UI to experiment with aligning pieces")
     parser_align.add_argument("labels", nargs='*')
-    parser_align.add_argument("-q", "--quadrophenia", help="quadrophenia", action='store_true')
+    parser_align.add_argument("-q", "--quadrophenia", help="quadrophenia, specify output CSV path for computed quads")
     parser_align.add_argument("-i", "--input", help="initialize solver")
     parser_align.add_argument("-b", "--buddies", help="buddy file")
     parser_align.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='cairo',
                                help="renderer (default: %(default)s)")
     parser_align.add_argument("-m", "--mode", choices=['scenegraph', 'immediate'], default='scenegraph',
                                help="mode (default: %(default)s)")
+    parser_align.add_argument("-e", "--expected", help="expected tab matches csv file")
     parser_align.set_defaults(func=align_ui)
