@@ -294,6 +294,18 @@ class TabAligner:
         return (mse2, src_coords, src_fit_points, dst_fit_points)
 
     @staticmethod
+    def get_outside_normals(piece, a, b):
+
+        points = piece.points
+        n = len(points)
+        o = 20
+
+        indices = np.array((a-o, b+o))
+                
+        c = NormalsComputer()
+        return c(points, indices)
+
+    @staticmethod
     def get_tab_midpoint(piece, tab_no):
         tab = piece.tabs[tab_no]
         a, b = tab.fit_indexes
