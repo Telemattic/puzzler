@@ -536,7 +536,7 @@ class MatchTk:
             if True:
                 self.curves[label] = Curvature.by_hack(piece.points, stepsize, rev, ds)
             else:
-                path = puzzler.potrace.piece_to_path(piece)
+                path = puzzler.potrace.piece_to_path(piece)[0]
                 self.curves[label] = Curvature.by_potrace(path, stepsize, reverse=rev, ds=ds)
             
         self.render()

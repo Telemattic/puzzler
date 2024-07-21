@@ -7,10 +7,18 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 
+def format_point(p):
+    return f"({p[0]:.1f},{p[1]:.1f})"
+
 @dataclass
 class Line:
     v0: "tuple[float,float]"
     v1: "tuple[float,float]"
+
+    def __repr__(self):
+        v0 = format_point(self.v0)
+        v1 = format_point(self.v1)
+        return f"Line({v0},{v1})"
 
 @dataclass
 class Spline:
@@ -18,6 +26,13 @@ class Spline:
     p1: "tuple[float,float]"
     p2: "tuple[float,float]"
     p3: "tuple[float,float]"
+
+    def __repr__(self):
+        p0 = format_point(self.p0)
+        p1 = format_point(self.p1)
+        p2 = format_point(self.p2)
+        p3 = format_point(self.p3)
+        return f"Spline({p0},{p1},{p2},{p3})"
 
 class Tokens:
 
@@ -49,11 +64,8 @@ def parse_path(path, ll):
 
     command = None
     cx, cy = 0, 0
-    closed = False
+    subpath = []
     while not tokens.is_end():
-
-        # we expect a single outline, so the final command should be a closepath
-        assert not closed
 
         if command is None or tokens.is_command():
             command = tokens.get_command()
@@ -67,7 +79,7 @@ def parse_path(path, ll):
         elif command == 'l':
             x = cx + tokens.get_int()
             y = cy + tokens.get_int()
-            retval.append(Line(P(cx, cy), P(x,y)))
+            subpath.append(Line(P(cx, cy), P(x,y)))
             cx, cy = x, y
         elif command == 'c':
             x1 = cx + tokens.get_int()
@@ -76,18 +88,18 @@ def parse_path(path, ll):
             y2 = cy + tokens.get_int()
             x = cx + tokens.get_int()
             y = cy + tokens.get_int()
-            retval.append(Spline(P(cx, cy), P(x1,y1), P(x2,y2), P(x,y)))
+            subpath.append(Spline(P(cx, cy), P(x1,y1), P(x2,y2), P(x,y)))
             cx, cy = x, y
         elif command == 'z':
-            closed = True
+            retval.append(subpath)
+            subpath = []
         else:
-            # unknown command
-            assert False
-            
-    # we expect a single outline, the final command should be
-    # a closepath
-    assert closed
+            raise ValueError("unknown svg path command")
 
+    if len(subpath):
+        retval.append(subpath)
+        subpath = []
+            
     return retval
 
 def piece_to_input_image(piece, fpath, pad=2):
@@ -116,24 +128,42 @@ def piece_to_path(piece, tempdir=None):
         tempdir = tempfile.TemporaryDirectory(dir='C:\\Temp', prefix='potrace')
         
     ipath = os.path.join(tempdir.name, 'potrace_input.pgm')
-    opath = os.path.join(tempdir.name, 'potrace_output.svg')
-
+    
     ll = piece_to_input_image(piece, ipath)
 
-    exe = r'C:\Users\matth\Downloads\potrace-1.16.win64\potrace-1.16.win64\potrace.exe'
-    args = [exe, '-b' 'svg', '-o', opath, '--', ipath]
-    subprocess.run(args)
+    opath = os.path.join(tempdir.name, 'potrace_output.svg')
+
+    return image_to_path(ipath, opath, ll)
+
+def image_to_path(ipath, opath, ll=(0,0), args=None):
+
+    exe = r'C:\temp\potrace-1.16.win64\potrace.exe'
+    
+    allargs = [exe]
+    
+    if args is not None:
+        allargs += args
+        
+    allargs += ['-b' 'svg', '-o', opath, '--', ipath]
+    
+    subprocess.run(allargs)
 
     tree = ET.parse(opath)
     root = tree.getroot()
 
     ns = {'svg':'http://www.w3.org/2000/svg'}
 
-    path = root.find('svg:g', ns).find('svg:path', ns)
+    svgpath = []
+    for i in root.find('svg:g', ns).findall('svg:path', ns):
+        svgpath += parse_path(i.attrib['d'], ll)
     
-    return parse_path(path.attrib['d'], ll)
+    return svgpath
 
 class InterpolatePath:
+
+    # Great resource for bezier curves:
+    #
+    # https://pomax.github.io/bezierinfo/#derivatives
 
     def __init__(self, stepsize):
         # how big are the steps
