@@ -53,7 +53,9 @@ class PerimeterComputer:
         
         self.images.add('thresh.png', thresh, 'Thresh')
 
-        morph = cv.morphologyEx(thresh, cv.MORPH_OPEN, kernel=np.ones((9,9), np.uint8))
+        kernel = np.ones((9,9), np.uint8)
+        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (9,9))
+        morph = cv.morphologyEx(thresh, cv.MORPH_OPEN, kernel=kernel)
 
         self.images.add('morph.png', morph, 'Morph')
 
@@ -181,7 +183,7 @@ class PerimeterComputer:
         dist   = np.hypot(points[:,0]-center[0], points[:,1]-center[1])
         maxdist = np.max(dist)
         plot_points = [(i,v) for i, v in enumerate(dist * (100 / maxdist))]
-        trace.draw_lines(plot_points, color='purple')
+        trace.draw_lines(plot_points, color='purple', width=2)
 
     def draw_trace3(self):
 
@@ -190,7 +192,7 @@ class PerimeterComputer:
         points = self.perimeter_points
         slopes = np.diff(points, axis=0)
         kernel = np.ones(20)
-        kernel = scipy.signal.firwin(47, .003, pass_zero='lowpass')
+        kernel = scipy.signal.firwin(19, .05, pass_zero='lowpass')
         print(f"{slopes=} {kernel=}")
         x_avg  = np.convolve(slopes[:,0], kernel, mode='same')
         y_avg  = np.convolve(slopes[:,1], kernel, mode='same')
@@ -208,7 +210,7 @@ class PerimeterComputer:
         max_slope = np.max(slopes)
             
         plot_points = [(i, v) for i, v in enumerate((slopes - min_slope)*90/(max_slope-min_slope) + 5)]
-        trace.draw_lines(plot_points, color='red')
+        trace.draw_lines(plot_points, color='red', width=2)
         
     def render(self):
 
@@ -249,7 +251,7 @@ class PerimeterComputer:
         if False:
             self.hover_text = graph.draw_text(text, (x,y), font=('Courier', 12, 'bold'), color='purple', text_location=sg.TEXT_LOCATION_BOTTOM_LEFT)
         else:
-            self.hover_text = graph.draw_circle((x,y), 10, line_color='purple')
+            self.hover_text = graph.draw_circle((x,y), 10, line_color='purple', line_width=3)
 
     def clear_trace_marker(self):
 
@@ -267,7 +269,7 @@ class PerimeterComputer:
     def graph_motion_callback(self, e):
 
         d, i = self.tree0.query([e.x, e.y])
-        if d > 5:
+        if d > 25:
             self.clear_hover_text()
             self.clear_trace_marker()
             return
@@ -358,7 +360,7 @@ class PerimeterComputer:
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--image")
+    parser.add_argument("-i", "--image", required=True)
 
     args = parser.parse_args()
 
