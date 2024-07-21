@@ -8,24 +8,31 @@ from tkinter import *
 
 class CairoRenderer(puzzler.render.Renderer):
 
-    def __init__(self, canvas):
+    def __init__(self, canvas, png_path=None):
         self.canvas  = canvas
-        w, h = canvas.winfo_width(), canvas.winfo_height()
-        # print(f"CairoRenderer: {w=} {h=}")
-        self.surface = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
+        if png_path is not None:
+            s = self.surface = cairo.ImageSurface.create_from_png(png_path)
+            w, h = self.surface.get_width(), self.surface.get_height()
+        else:
+            w, h = canvas.winfo_width(), canvas.winfo_height()
+            self.surface = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
         self.context = cairo.Context(self.surface)
         self._colors = dict()
         self.device_to_user_scale = 1.
         self.angle = 0.
         self._stack = []
 
-        ctx = self.context
+        if png_path is None or True:
 
-        ctx.save()
-        ctx.rectangle(0, 0, w, h)
-        ctx.set_source_rgba(1, 1, 1, 1)
-        ctx.fill()
-        ctx.restore()
+            alpha = 1. if png_path is None else .7
+            
+            ctx = self.context
+
+            ctx.save()
+            ctx.rectangle(0, 0, w, h)
+            ctx.set_source_rgba(1, 1, 1, alpha)
+            ctx.fill()
+            ctx.restore()
 
         self._show_paths = False
         self.fnord = dict()
@@ -133,6 +140,25 @@ class CairoRenderer(puzzler.render.Renderer):
 
         return color
 
+    def draw_spline(self, points, fill=(0, 0, 0), width=1):
+
+        ctx = self.context
+        ctx.save()
+
+        if fill and width:
+            w = width * self.device_to_user_scale
+            ctx.set_line_width(w)
+            
+        if fill:
+            ctx.set_source_rgba(*self.get_color(fill))
+
+        ctx.move_to(*points[0])
+        ctx.curve_to(*points[1], *points[2], *points[3])
+
+        ctx.stroke()
+        
+        ctx.restore()
+        
     def draw_lines(self, points, fill=(0, 0, 0), width=1, arrow=None, tags=None):
 
         ctx = self.context
@@ -145,10 +171,6 @@ class CairoRenderer(puzzler.render.Renderer):
         if fill:
             ctx.set_source_rgba(*self.get_color(fill))
         
-        def pairwise(x):
-            i = iter(x)
-            return zip(i, i)
-
         def arrow1(p1, p2):
             ctx.move_to(*p1)
             ctx.line_to(*p2)
