@@ -226,7 +226,7 @@ class BorderSolver:
             assert set(expected_pairs.keys()) == set(expected_pairs.values())
 
         # HACK: define pairs for the 1026 piece puzzle automagically
-        if False and len(self.pieces) == 1026:
+        if True and len(self.pieces) == 1026:
             print(f"HACK: forcing known border solution for puzzle")
             retval = [min(self.corners)]
             curr = expected_pairs[retval[0]]
@@ -720,9 +720,9 @@ class FrontierExplorer:
 
 class PuzzleSolver:
 
-    def __init__(self, pieces, geometry=None):
+    def __init__(self, pieces, *, expected=None):
         self.pieces = pieces
-        self.geometry = geometry
+        self.geometry = None
         self.constraints = None
         self.adjacency = None
         self.frontiers = None
@@ -731,6 +731,7 @@ class PuzzleSolver:
         self.use_raftinator = False
         self.raftinator = puzzler.raft.Raftinator(pieces)
         self.seams = []
+        self.expected_tab_matches = expected
 
     def solve(self):
         if self.geometry:
@@ -809,6 +810,20 @@ class PuzzleSolver:
             i += 1
 
     def solve_field(self):
+
+        Feature = puzzler.raft.Feature
+
+        def get_expected_piece_and_tabs_for_corner(corner):
+            # corner gets processed backward by score_corner, repeat that here
+            corner_features = [Feature(i, 'tab', j) for i, j in corner[::-1]]
+            expected_piece_features = [self.expected_tab_matches[i] for i in corner_features]
+
+            expected_piece = expected_piece_features[0].piece
+            expected_tabs = tuple(i.index for i in expected_piece_features)
+
+            if all(i.piece == expected_piece for i in expected_piece_features):
+                return expected_piece, expected_tabs
+            return None, tuple()
         
         if self.geometry is None:
             return
@@ -841,6 +856,17 @@ class PuzzleSolver:
                         
             print(f"{corner}: " + ", ".join(s))
 
+            expected_piece, expected_tabs = get_expected_piece_and_tabs_for_corner(corner)
+            if expected_piece:
+                for i, fit in enumerate(v):
+                    if fit[1] == expected_piece: # and fit[3] == expected_tabs:
+                        break
+                if i == len(v):
+                    print(f">>> expected match ({expected_piece}, {expected_tabs}) not scored!")
+                elif i > 0:
+                    print(f">>> expected match ({expected_piece}, {expected_tabs}) found at position {i}")
+                    print(v[i][1], v[i][3])
+
         if not fits:
             return
         
@@ -852,6 +878,18 @@ class PuzzleSolver:
             print(f"{i}: {src_label:3s} angle={angle:+6.1f} {r=:.3f} {mse=:5.1f} {src_tabs=} {corner=}")
 
         _, _, src_label, coords, src_tabs, corner = fits[0]
+
+        if self.expected_tab_matches is not None:
+            corner_features = [Feature(i, 'tab', j) for i, j in corner]
+            piece_features = [Feature(src_label, 'tab', i) for i in src_tabs]
+
+            expected_piece_features = [self.expected_tab_matches[i] for i in corner_features]
+
+            if piece_features != expected_piece_features:
+                print(f"\n>>> {src_label=} {src_tabs=} {corner=}")
+                a = ','.join(str(f) for f in piece_features)
+                e = ','.join(str(f) for f in expected_piece_features)
+                print(f"    expected={e} actual={a}\n")
 
         dst_raft = puzzler.raft.Raft(self.geometry.coords, [])
         src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
