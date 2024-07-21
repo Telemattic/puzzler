@@ -1,4 +1,5 @@
 import csv
+import decimal
 import numpy as np
 import re
 import puzzler
@@ -79,20 +80,30 @@ class TabsComputer:
 
         mse, src_coords, sfp, dfp = self.tab_aligner.compute_alignment(
             dst_tab_no, src, src_tab_no, refine=self.refine)
+
+        dst_corner_normals = self.tab_aligner.get_outside_normals(dst, dfp[0], dfp[1])
+        src_corner_normals = src_coords.xform.apply_n2(self.tab_aligner.get_outside_normals(src, sfp[0], sfp[1]))
+
+        corner_dp_0 = np.dot(dst_corner_normals[1], src_corner_normals[0])
+        corner_dp_1 = np.dot(dst_corner_normals[0], src_corner_normals[1])
         
         return {'dst_label': dst_label,
                 'dst_tab_no': dst_tab_no,
                 'dst_col_no': dst_col_no,
                 'dst_row_no': dst_row_no,
+                'dst_index_0': dfp[0],
+                'dst_index_1': dfp[1],
                 'src_label': src_label,
                 'src_tab_no': src_tab_no,
                 'src_col_no': src_col_no,
                 'src_row_no': src_row_no,
-                'src_coord_x': src_coords.xy[0],
-                'src_coord_y': src_coords.xy[1],
-                'src_coord_angle': src_coords.angle,
+                'src_coord_x': decimal.Decimal(f"{src_coords.xy[0]:.3f}"),
+                'src_coord_y': decimal.Decimal(f"{src_coords.xy[1]:.3f}"),
+                'src_coord_angle': decimal.Decimal(f"{src_coords.angle:.3f}"),
                 'src_index_0': sfp[0],
                 'src_index_1': sfp[1],
+                'corner_dp_0': decimal.Decimal(f"{corner_dp_0:.3f}"),
+                'corner_dp_1': decimal.Decimal(f"{corner_dp_1:.3f}"),
                 'mse': mse,
                 'neighbor': neighbor}
 
@@ -134,7 +145,7 @@ def output_tabs(args):
     print(f"{len(pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
     with open(args.output, 'w', newline='') as f:
-        field_names = 'dst_label dst_tab_no dst_col_no dst_row_no src_label src_tab_no src_col_no src_row_no src_coord_x src_coord_y src_coord_angle src_index_0 src_index_1 mse neighbor rank'.split()
+        field_names = 'dst_label dst_tab_no dst_col_no dst_row_no dst_index_0 dst_index_1 src_label src_tab_no src_col_no src_row_no src_coord_x src_coord_y src_coord_angle src_index_0 src_index_1 mse neighbor corner_dp_0 corner_dp_1 rank'.split()
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
@@ -171,10 +182,10 @@ def output_tabs(args):
 def add_parser(commands):
 
     parser_tabs = commands.add_parser("tabs", help="Output a CSV enumerating all possible tab matches")
-    parser_tabs.add_argument("-o", "--output", help="output csv path")
-    parser_tabs.add_argument("-s", "--sample", default=50, type=int,
+    parser_tabs.add_argument("-o", "--output", help="output csv path", required=True)
+    parser_tabs.add_argument("-s", "--sample", default=10, type=int,
                              help="sample interval for fit computation (default %(default)i)")
-    parser_tabs.add_argument("-r", "--refine", default=0, type=int,
+    parser_tabs.add_argument("-r", "--refine", default=2, type=int,
                              help="number of refinement passes (default %(default)i)")
     parser_tabs.add_argument("-n", "--num-workers", default=0, type=int,
                              help="number of workers (default %(default)i)")
