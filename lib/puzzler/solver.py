@@ -814,6 +814,9 @@ class PuzzleSolver:
         Feature = puzzler.raft.Feature
 
         def get_expected_piece_and_tabs_for_corner(corner):
+            if self.expected_tab_matches is None:
+                return None, tuple()
+            
             # corner gets processed backward by score_corner, repeat that here
             corner_features = [Feature(i, 'tab', j) for i, j in corner[::-1]]
             expected_piece_features = [self.expected_tab_matches[i] for i in corner_features]
