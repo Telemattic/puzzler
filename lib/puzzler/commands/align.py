@@ -14,7 +14,6 @@ import traceback
 import puzzler.feature
 import puzzler
 import puzzler.raft
-import puzzler.renderer.canvas
 import puzzler.solver
 from tqdm import tqdm
 
@@ -216,223 +215,6 @@ class Piece:
             self.approx = ApproxPoly(self.perimeter, epsilon)
         self.coords = Coord()
 
-class PuzzleRenderer:
-
-    def __init__(self, canvas, camera, pieces):
-        self.canvas = canvas
-        self.camera = camera
-        self.pieces = pieces
-        self.selection = None
-        self.frontiers = []
-        self.adjacency = dict()
-        self.renderer = None
-        self.font = None
-        self.render_fast = None
-        self.canvas_w = self.camera.viewport[0]
-        self.canvas_h = self.camera.viewport[1]
-        self.normals = dict()
-        self.vertexes = dict()
-        self.use_cairo = False
-
-    def render(self, render_fast):
-        
-        if self.use_cairo:
-            self.renderer = puzzler.renderer.cairo.CairoRenderer(self.canvas)
-        else:
-            self.canvas.delete('all')
-            self.renderer = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
-            
-        self.renderer.transform(self.camera.matrix)
-
-        # create the font *after* applying the camera transformation so that it is sized in screen space!
-        self.font = self.renderer.make_font('Courier New', 18)
-        
-        self.render_fast = render_fast
-
-        if self.adjacency:
-            self.draw_adjacency(self.adjacency)
-
-        colors = ['red', 'green', 'blue']
-        for i, piece in enumerate(self.pieces):
-
-            color = colors[i%len(colors)]
-            self.draw_piece(piece, color, f"piece_{i}")
-
-        if self.selection is not None:
-            self.draw_rotate_handles(self.selection)
-
-        if self.frontiers:
-            for f in self.frontiers:
-                self.draw_frontier(f)
-
-        return self.renderer.commit()
-
-    def test_bbox(self, bbox):
-
-        ll, ur = bbox
-        x0, y0 = ll
-        x1, y1 = ur
-        points = np.array([(x0,y0), (x1,y0), (x1,y1), (x0,y1)])
-
-        screen = self.renderer.user_to_device(points)
-        x = screen[:,0]
-        y = screen[:,1]
-
-        if np.max(x) < 0 or np.min(x) > self.canvas_w:
-            return False
-
-        if np.max(y) < 0 or np.min(y) > self.canvas_h:
-            return False
-
-        return True
-
-    def draw_piece(self, p, color, tag):
-
-        r = self.renderer
-            
-        with puzzler.render.save(r):
-                
-            r.translate(p.coords.xy)
-            r.rotate(p.coords.angle)
-
-            if not self.test_bbox(p.piece.bbox):
-                return
-            
-            if p.piece.edges and False:
-                for edge in p.piece.edges:
-                    r.draw_lines(edge.line.pts, fill='pink', width=8)
-                    r.draw_points(edge.line.pts[0], fill='purple', radius=8)
-                    r.draw_points(edge.line.pts[1], fill='green', radius=8)
-
-            if p.piece.tabs and False:
-                for tab in p.piece.tabs:
-                    pts = puzzler.geometry.get_ellipse_points(tab.ellipse, npts=40)
-                    r.draw_polygon(pts, fill='cyan', outline='')
-
-            if p.piece.tabs and False:
-                for i in range(len(p.piece.tabs)):
-                    lcr = puzzler.align.TabAligner.get_tab_points(p.piece, i)
-                    r.draw_points(lcr, fill='purple', radius=4)
-
-            if self.render_fast:
-                # ll, ur = p.piece.bbox
-                # x0, y0 = ll
-                # x1, y1 = ur
-                # points = np.array([(x0,y0), (x1,y0), (x1,y1), (x0,y1)])
-                points = p.perimeter.points[p.approx.indexes]
-            else:
-                points = p.piece.points
-                
-            r.draw_polygon(points, outline=color, fill='', width=1, tags=tag)
-
-            normals = self.normals.get(p.piece.label)
-            if normals is not None:
-                for n in normals:
-                    r.draw_lines(np.array((n[0], n[0] + n[1]*10)), fill='black', width=1)
-
-            vertexes = self.vertexes.get(p.piece.label)
-            if vertexes is not None:
-                r.draw_points(vertexes, fill='', outline=color, radius=6)
-
-        # we don't want the text rotated
-        r.draw_text(p.coords.xy, p.piece.label, font=self.font, tags=tag)
-
-    def draw_rotate_handles(self, piece_id):
-
-        p = self.pieces[piece_id]
-
-        r = self.renderer
-        with puzzler.render.save(r):
-
-            r.translate(p.coords.xy)
-            r.rotate(p.coords.angle)
-
-            r1  = 250
-            r2  = 300
-            phi = np.linspace(0, math.pi/2, num=20)
-            cos = np.cos(phi)
-            sin = np.sin(phi)
-            x   = np.concatenate((r1 * cos, r2 * np.flip(cos)))
-            y   = np.concatenate((r1 * sin, r2 * np.flip(sin)))
-            points = np.vstack((x, y)).T
-            tags = ('rotate', f'piece_{piece_id}')
-
-            for i in range(4):
-                with puzzler.render.save(r):
-                    r.rotate(i * math.pi / 2)
-                    r.draw_polygon(points, outline='black', fill='', width=1, tags=tags)
-                    
-    def draw_frontier(self, frontier):
-
-        piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
-        
-        fe = puzzler.solver.FrontierExplorer(piece_dict)
-
-        tabs = collections.defaultdict(list)
-        for label, tab_no in fe.find_tabs(frontier):
-            tabs[label].append(tab_no)
-
-        r = self.renderer
-        
-        piece_dict = dict((i.piece.label, i) for i in self.pieces)
-        
-        for l, tab_nos in tabs.items():
-            p = piece_dict[l]
-            with puzzler.render.save(r):
-                r.translate(p.coords.xy)
-                r.rotate(p.coords.angle)
-                for tab_no in tab_nos:
-                    p0, v = fe.get_tab_center_and_direction((l, tab_no))
-                    p1 = p0 + v * 100
-                    r.draw_lines(np.array((p0, p1)), fill='red', width=1, arrow='last')
-
-        return
-
-        for l, a, b in frontier:
-            p = piece_dict[l]
-            with puzzler.render.save(r):
-                r.translate(p.coords.xy)
-                r.rotate(p.coords.angle)
-                r.draw_points(p.piece.points[a], fill='pink', radius=8)
-                
-        for l, a, b in frontier:
-            p = piece_dict[l]
-            with puzzler.render.save(r):
-                r.translate(p.coords.xy)
-                r.rotate(p.coords.angle)
-                r.draw_points(p.piece.points[b], fill='purple', radius=5)
-
-    def draw_adjacency(self, adjacency):
-        
-        self.piece_dict = dict((i.piece.label, i) for i in self.pieces)
-        
-        fills = ['purple', 'pink', 'yellow', 'orange', 'cyan']
-        i = 0
-        
-        for k1, v1 in adjacency.items():
-            for k2, v2 in v1.items():
-                self.draw_adjacency_list((k1, k2), v2, fills[i])
-                i = (i + 1) % len(fills)
-
-    def draw_adjacency_list(self, k, v, fill):
-
-        src, dst = k
-        p = self.piece_dict[src]
-
-        tag = src + ":" + dst
-
-        r = self.renderer
-        with puzzler.render.save(r):
-            r.translate(p.coords.xy)
-            r.rotate(p.coords.angle)
-            for a, b in v:
-                points = ring_slice(p.piece.points, a, b+1)
-                if len(points) < 2:
-                    # print(f"{src=} {dst=} {a=} {b=} {points=}")
-                    r.draw_points(points, fill=fill, radius=8, tag=tag)
-                else:
-                    r.draw_lines(points, fill=fill, width=8, tag=tag)
-                    
 class PuzzleSGFactory:
 
     # HACK: initialized as singleton on first construction of PuzzleSGFactory
@@ -676,7 +458,7 @@ class CanvasHitTester:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces, renderer, mode, expected=None):
+    def __init__(self, parent, pieces, expected=None):
         
         self.pieces = pieces
 
@@ -688,8 +470,6 @@ class AlignTk:
         self.render_normals = None
         self.render_vertexes = None
         self.render_seams = None
-        self.use_cairo = renderer == 'cairo'
-        self.use_scenegraph = mode == 'scenegraph'
         self.scenegraph = None
         self.hittester = None
 
@@ -768,52 +548,6 @@ class AlignTk:
 
     def render(self):
 
-        if self.use_scenegraph:
-            return self.sg_render()
-        
-        r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
-        r.selection = self.selection
-        r.frontiers = self.solver.frontiers
-        if self.var_render_adjacency.get():
-            r.adjacency = self.solver.adjacency
-        if self.render_normals:
-            r.normals = self.render_normals
-        if self.render_vertexes:
-            r.vertexes = self.render_vertexes
-        if self.use_cairo:
-            r.use_cairo = True
-            
-        self.displayed_image = r.render(True)
-
-        self.render_full += 1
-        if 1 == self.render_full:
-            self.parent.after_idle(self.full_render)
-
-    def full_render(self):
-
-        if self.use_scenegraph:
-            return self.sg_render()
-        
-        self.render_full = -1
-
-        r = PuzzleRenderer(self.canvas, self.camera, self.pieces)
-        r.selection = self.selection
-        r.frontiers = self.solver.frontiers
-        if self.var_render_adjacency.get():
-            r.adjacency = self.solver.adjacency
-        if self.render_normals:
-            r.normals = self.render_normals
-        if self.render_vertexes:
-            r.vertexes = self.render_vertexes
-        if self.use_cairo:
-            r.use_cairo = True
-            
-        self.displayed_image = r.render(False)
-
-        self.render_full = 0
-
-    def sg_render(self):
-
         # ideally the scenegraph doesn't have to get rebuilt for a
         # simple change in camera position
 
@@ -830,11 +564,7 @@ class AlignTk:
             
         t_hittest = time.perf_counter()
 
-        if self.use_cairo:
-            r = puzzler.renderer.cairo.CairoRenderer(self.canvas)
-        else:
-            self.canvas.delete('all')
-            r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
+        r = puzzler.renderer.cairo.CairoRenderer(self.canvas)
 
         r.transform(self.camera.matrix)
 
@@ -1096,8 +826,6 @@ class AlignTk:
         self.var_refine_raft_alignment = IntVar(value=0)
         b9 = ttk.Checkbutton(cf2, text='Refine Raft Alignment', variable=self.var_refine_raft_alignment)
         b9.grid(column=7, row=0)
-
-        self.render_full = False
 
     def resize(self, e):
         viewport = (e.width, e.height)
@@ -1880,11 +1608,10 @@ def align_ui(args):
         expected = read_expected_tab_matches(args.expected)
 
     # approx (simplified polygon) only needed for immediate mode rendering
-    epsilon = 10 if args.mode == 'immediate' else None
-    pieces = [Piece(by_label[l], epsilon) for l in sorted(labels)]
+    pieces = [Piece(by_label[l], None) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, renderer=args.renderer, mode=args.mode, expected=expected)
+    ui = AlignTk(root, pieces, expected=expected)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 
@@ -1901,9 +1628,5 @@ def add_parser(commands):
     parser_align.add_argument("-q", "--quadrophenia", help="quadrophenia, specify output CSV path for computed quads")
     parser_align.add_argument("-i", "--input", help="initialize solver")
     parser_align.add_argument("-b", "--buddies", help="buddy file")
-    parser_align.add_argument("-r", "--renderer", choices=['tk', 'cairo'], default='cairo',
-                               help="renderer (default: %(default)s)")
-    parser_align.add_argument("-m", "--mode", choices=['scenegraph', 'immediate'], default='scenegraph',
-                               help="mode (default: %(default)s)")
     parser_align.add_argument("-e", "--expected", help="expected tab matches csv file")
     parser_align.set_defaults(func=align_ui)
