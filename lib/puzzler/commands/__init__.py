@@ -7,3 +7,4 @@ from . import scan
 from . import normals
 from . import match
 from . import tabs
+from . import quads
