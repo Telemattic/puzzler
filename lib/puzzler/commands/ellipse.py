@@ -839,7 +839,7 @@ def feature_update(args):
 
     tab_data = []
     puzzle = puzzler.file.load(args.puzzle)
-    for piece in tqdm(puzzle.pieces, ascii=True):
+    for piece in tqdm(puzzle.pieces):
         if piece.points is None:
             continue
 
@@ -863,9 +863,10 @@ def feature_update(args):
             
     puzzler.file.save(args.puzzle, puzzle)
 
-    print("piece,tab_no,mse")
-    for label, tab_no, mse in tab_data:
-        print(f"{label},{tab_no},{mse:.3f}")
+    if False:
+        print("piece,tab_no,mse")
+        for label, tab_no, mse in tab_data:
+            print(f"{label},{tab_no},{mse:.3f}")
 
 def add_parser(commands):
     
