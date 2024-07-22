@@ -6,8 +6,11 @@ import puzzler.scenegraph
 import puzzler.sgbuilder
 import puzzler.renderer.canvas
 import puzzler.renderer.cairo
-import puzzler.renderer.opengl
 import re
+import sys
+
+if sys.platform == 'win32':
+    import puzzler.renderer.opengl
 
 from tkinter import *
 from tkinter import ttk
