@@ -18,7 +18,7 @@ def to_col(s):
     return int(s)
 
 def to_row_col(label):
-    m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
+    m = re.fullmatch(r"([a-zA-Z]+)(\d+)", label)
     return (to_row(m[1]), to_col(m[2])) if m else (None, None)
 
 class TabsComputer:

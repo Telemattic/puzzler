@@ -119,7 +119,7 @@ class Formatter:
         
         vec = []
         for p in pieces:
-            m = re.fullmatch("^(\w+)(\d+)", p.label)
+            m = re.fullmatch(r"^(\w+)(\d+)", p.label)
             k = (m[1], int(m[2])) if m else (p.label, 0)
             vec.append((k, p))
                 
