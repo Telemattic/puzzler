@@ -127,11 +127,14 @@ def output_tabs(args):
 
     print("Tab alignment!")
 
-    def sort_key(piece):
+    def sort_key_xy(piece):
         row, col = to_row_col(piece.label)
         return (row, col, piece.label)
 
-    pieces = sorted([i for i in puzzle.pieces], key=sort_key)
+    def sort_key_random(piece):
+        return (hash(piece.label), piece.label)
+
+    pieces = sorted([i for i in puzzle.pieces], key=sort_key_random)
     
     num_indents = 0
     num_outdents = 0
@@ -161,7 +164,7 @@ def output_tabs(args):
                 src_q.put(p.label)
                 
             num_jobs = len(pieces)
-            pbar = tqdm(total=num_jobs)
+            pbar = tqdm(total=num_jobs, smoothing=0)
             while num_jobs > 0:
                 job = dst_q.get()
                 num_jobs -= 1
@@ -176,7 +179,7 @@ def output_tabs(args):
 
         else:
             tabs_computer = TabsComputer(args.puzzle, args.refine, args.sample)
-            for dst in tqdm(pieces): #=True):
+            for dst in tqdm(pieces, smoothing=0):
                 writer.writerows(tabs_computer.compute_rows_for_dst(dst.label))
 
 def add_parser(commands):
