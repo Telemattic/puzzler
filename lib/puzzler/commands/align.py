@@ -1,6 +1,5 @@
 import collections
 import csv
-import cv2 as cv
 import decimal
 import itertools
 import math
@@ -8,7 +7,6 @@ import numpy as np
 import operator
 import palettable.tableau
 import re
-import scipy
 import time
 import traceback
 import puzzler.feature
@@ -19,8 +17,6 @@ from tqdm import tqdm
 
 from tkinter import *
 from tkinter import ttk
-
-from dataclasses import dataclass, field
 
 class Camera:
 
@@ -152,32 +148,6 @@ class MoveCamera(Draggable):
         delta = (xy - self.origin) * np.array((-1, 1))
         self.camera.center = self.init_camera_center + delta
 
-class Perimeter:
-
-    def __init__(self, points):
-        self.points = points
-        self.index = dict((tuple(xy), i) for i, xy in enumerate(points))
-
-class ApproxPoly:
-
-    def __init__(self, perimeter, epsilon):
-        approx = cv.approxPolyDP(perimeter.points, epsilon, True)
-        poly = list(perimeter.index[tuple(xy)] for xy in np.squeeze(approx))
-
-        reset = None
-        for i in range(1,len(poly)):
-            if poly[i-1] > poly[i]:
-                assert reset is None
-                reset = i
-            else:
-                assert poly[i-1] < poly[i]
-                
-        if reset:
-            poly = poly[reset:] + poly[:reset]
-
-        self.perimeter = perimeter
-        self.indexes = poly
-
 class RingRange:
 
     def __init__(self, a, b, n):
@@ -207,12 +177,9 @@ Coord = puzzler.align.Coord
 
 class Piece:
 
-    def __init__(self, piece, epsilon=None):
+    def __init__(self, piece):
 
         self.piece = piece
-        if epsilon is not None:
-            self.perimeter = Perimeter(self.piece.points)
-            self.approx = ApproxPoly(self.perimeter, epsilon)
         self.coords = Coord()
 
 class PuzzleSGFactory:
@@ -1608,7 +1575,7 @@ def align_ui(args):
         expected = read_expected_tab_matches(args.expected)
 
     # approx (simplified polygon) only needed for immediate mode rendering
-    pieces = [Piece(by_label[l], None) for l in sorted(labels)]
+    pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
     ui = AlignTk(root, pieces, expected=expected)
