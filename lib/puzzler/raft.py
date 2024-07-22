@@ -582,7 +582,7 @@ class Raftinator:
         self.raft_error = RaftError(pieces)
         self.verbose = False
 
-    def parse_feature(self, s):
+    def parse_feature(self, s) -> Feature:
         m = re.fullmatch("([A-Z]+\d+)([:/])(\d+)", s)
         if not m:
             raise ValueError("bad feature")
@@ -590,18 +590,21 @@ class Raftinator:
         kind = 'tab' if kind == ':' else 'edge'
         return Feature(piece, kind, index)
 
-    def parse_feature_pair(self, s):
+    def parse_feature_pair(self, s) -> FeaturePair:
         v = s.split('=')
         if len(v) != 2:
             raise ValueError("bad feature pair")
 
         return (self.parse_feature(v[0]), self.parse_feature(v[1]))
 
-    def get_seams_for_raft(self, raft):
+    def parse_feature_pairs(self, s) -> FeaturePairs:
+        return [self.parse_feature_pair(i) for i in s.strip().split(',')]
+
+    def get_seams_for_raft(self, raft) -> Seams:
         s = self.seamstress
         return s.trim_seams(s.seams_within_raft(raft))
 
-    def get_cumulative_error_for_seams(self, seams):
+    def get_cumulative_error_for_seams(self, seams) -> float:
         return self.seamstress.cumulative_error_for_seams(seams)
 
     def get_overlap_error_for_raft(self, raft: Raft) -> float:
@@ -625,7 +628,7 @@ class Raftinator:
 
     def make_raft_from_string(self, s: str) -> Raft:
 
-        feature_pairs = [self.parse_feature_pair(i) for i in s.strip().split(',')]
+        feature_pairs = self.parse_feature_pairs(s)
         return self.make_raft_from_feature_pairs(feature_pairs)
 
     def make_raft_from_feature_pairs(self, feature_pairs: FeaturePairs) -> Raft:
