@@ -3,6 +3,7 @@ import decimal
 import itertools
 import operator
 import math
+import multiprocessing as mp
 import numpy as np
 import puzzler
 from tqdm import tqdm
@@ -318,8 +319,32 @@ def try_triples(pieces, quad):
 
     return retval2
 
-def triplets(pieces, input_csv_path, output_csv_path):
+def triplets_worker(puzzle_path, src_q, dst_q):
 
+    puzzle = puzzler.file.load(puzzle_path)
+    
+    pieces = {p.label: p for p in puzzle.pieces}
+
+    job = src_q.get()
+    while job:
+
+        rows = try_triples(pieces, job)
+
+        dst_q.put(rows)
+        job = src_q.get()
+
+    return
+
+def triplets(args):
+
+    puzzle_path = args.puzzle
+    input_csv_path = args.quads
+    output_csv_path = args.output
+
+    puzzle = puzzler.file.load(puzzle_path)
+    
+    pieces = {p.label: p for p in puzzle.pieces}
+    
     assert len(pieces) == 1026
 
     quads = []
@@ -339,19 +364,45 @@ def triplets(pieces, input_csv_path, output_csv_path):
             writer.writerows(try_triples(pieces, quads[0]))
             return
 
-        for quad in tqdm(quads, smoothing=0):
-            writer.writerows(try_triples(pieces, quad))
+        if args.num_workers:
+            src_q = mp.Queue()
+            dst_q = mp.Queue()
+
+            workers = [mp.Process(target=triplets_worker, args=(puzzle_path, src_q, dst_q)) for _ in range(args.num_workers)]
+            for p in workers:
+                p.start()
+
+            for q in quads:
+                src_q.put(q)
+                
+            num_jobs = len(quads)
+            pbar = tqdm(total=num_jobs, smoothing=0)
+            while num_jobs > 0:
+                job = dst_q.get()
+                num_jobs -= 1
+                pbar.update()
+                writer.writerows(job)
+
+            for _ in workers:
+                src_q.put(None)
+
+            for p in workers:
+                p.join()
+        else:
+
+            for quad in tqdm(quads, smoothing=0):
+                writer.writerows(try_triples(pieces, quad))
 
 def quads_main(args):
 
+    if args.quads is not None:
+        triplets(args)
+        return
+    
     puzzle = puzzler.file.load(args.puzzle)
     
     pieces = {p.label: p for p in puzzle.pieces}
 
-    if args.quads is not None:
-        triplets(pieces, args.quads, args.output)
-        return
-    
     quadrophenia(pieces, args.output)
 
 def add_parser(commands):
@@ -359,4 +410,6 @@ def add_parser(commands):
     parser_quads = commands.add_parser("quads", help="process quads to compute expected matches")
     parser_quads.add_argument("-q", "--quads", help="inputs quads path, runs triplets algorithm")
     parser_quads.add_argument("-o", "--output", help="output CSV path for computed quads", required=True)
+    parser_quads.add_argument("-n", "--num-workers", default=0, type=int,
+                              help="number of workers (default %(default)i)")
     parser_quads.set_defaults(func=quads_main)
