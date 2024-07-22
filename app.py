@@ -12,7 +12,8 @@ def set_process_dpi_awareness():
         
 def main():
 
-    set_process_dpi_awareness()
+    if sys.platform == 'win32':
+        set_process_dpi_awareness()
 
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
     import puzzler
