@@ -441,7 +441,11 @@ def triplets(args):
 
             for q in quads:
                 src_q.put(q)
-                
+
+            # sentinels so workers exit
+            for _ in workers:
+                src_q.put(None)
+
             num_jobs = len(quads)
             pbar = tqdm(total=num_jobs, smoothing=0)
             while num_jobs > 0:
@@ -449,9 +453,6 @@ def triplets(args):
                 num_jobs -= 1
                 pbar.update()
                 writer.writerows(job)
-
-            for _ in workers:
-                src_q.put(None)
 
             for p in workers:
                 p.join()
