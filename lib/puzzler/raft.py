@@ -600,6 +600,12 @@ class Raftinator:
     def parse_feature_pairs(self, s) -> FeaturePairs:
         return [self.parse_feature_pair(i) for i in s.strip().split(',')]
 
+    def format_feature_pair(self, feature_pair: FeaturePair) -> str:
+        return str(feature_pair[0]) + '=' + str(feature_pair[1])
+
+    def format_feature_pairs(self, feature_pairs: FeaturePairs) -> str:
+        return ','.join(self.format_feature_pair(i) for i in feature_pairs)
+
     def get_seams_for_raft(self, raft) -> Seams:
         s = self.seamstress
         return s.trim_seams(s.seams_within_raft(raft))

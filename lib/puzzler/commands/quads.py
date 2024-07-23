@@ -93,7 +93,10 @@ def quadmaster(pieces, quad):
 
     raftinator = puzzler.raft.Raftinator(pieces)
 
-    ul, ur, ll, lr = quad
+    ul = quad['ul_piece']
+    ur = quad['ur_piece']
+    ll = quad['ll_piece']
+    lr = quad['lr_piece']
 
     ul_tabs = tab_pairs_for_piece(pieces[ul])
     ur_tabs = tab_pairs_for_piece(pieces[ur])
@@ -117,7 +120,7 @@ def quadmaster(pieces, quad):
         mse = raftinator.get_total_error_for_raft_and_seams(raft)
         desc = format_feature_pairs(feature_pairs)
         
-        retval.append({'raft':desc, 'mse':mse, 'rank':None})
+        retval.append(quad | {'raft':desc, 'mse':mse, 'rank':None})
 
     retval.sort(key=operator.itemgetter('mse'))
     for i, row in enumerate(retval, start=1):
@@ -125,8 +128,31 @@ def quadmaster(pieces, quad):
         row['mse'] = decimal.Decimal(f"{row['mse']:.3f}")
 
     return retval
+
+def quadrophenia_worker(puzzle_path, src_q, dst_q):
+    
+    puzzle = puzzler.file.load(puzzle_path)
+    
+    pieces = {p.label: p for p in puzzle.pieces}
+
+    job = src_q.get()
+    while job:
+
+        rows = quadmaster(pieces, job)
+
+        dst_q.put(rows)
+        job = src_q.get()
+
+    return
         
-def quadrophenia(pieces, output_csv_path):
+def quadrophenia(args):
+
+    puzzle_path = args.puzzle
+    output_csv_path = args.output
+    
+    puzzle = puzzler.file.load(puzzle_path)
+    
+    pieces = {p.label: p for p in puzzle.pieces}
 
     assert len(pieces) == 1026
 
@@ -137,7 +163,15 @@ def quadrophenia(pieces, output_csv_path):
     quads = []
     for row_no in range(len(rows)-1):
         for col_no in range(len(cols)-1):
-            quads.append((row_no, col_no))
+            row0, row1 = rows[row_no], rows[row_no+1]
+            col0, col1 = cols[col_no], cols[col_no+1]
+            quad = {'row_no': row_no,
+                    'col_no': col_no,
+                    'ul_piece': row0+col0,
+                    'ur_piece': row0+col1,
+                    'll_piece': row1+col0,
+                    'lr_piece': row1+col1}
+            quads.append(quad)
 
     for label, piece in pieces.items():
         try:
@@ -149,16 +183,34 @@ def quadrophenia(pieces, output_csv_path):
     writer = csv.DictWriter(f, fieldnames='col_no row_no ul_piece ur_piece ll_piece lr_piece raft mse rank'.split())
     writer.writeheader()
 
-    for row_no, col_no in tqdm(quads, smoothing=0):
-        
-        row0, row1 = rows[row_no], rows[row_no+1]
-        col0, col1 = cols[col_no], cols[col_no+1]
-        quad = (row0+col0, row0+col1, row1+col0, row1+col1)
+    if args.num_workers:
+        src_q = mp.Queue()
+        dst_q = mp.Queue()
 
-        props = {'row_no':row_no, 'col_no':col_no, 'ul_piece':quad[0], 'ur_piece':quad[1], 'll_piece':quad[2], 'lr_piece':quad[3]}
-        
-        for i in quadmaster(pieces, quad):
-            writer.writerow(props | i)
+        workers = [mp.Process(target=quadrophenia_worker, args=(puzzle_path, src_q, dst_q)) for _ in range(args.num_workers)]
+        for p in workers:
+            p.start()
+
+        for q in quads:
+            src_q.put(q)
+                
+        num_jobs = len(quads)
+        pbar = tqdm(total=num_jobs, smoothing=0)
+        while num_jobs > 0:
+            job = dst_q.get()
+            num_jobs -= 1
+            pbar.update()
+            writer.writerows(job)
+
+        for _ in workers:
+            src_q.put(None)
+
+        for p in workers:
+            p.join()
+    else:
+
+        for quad in tqdm(quads, smoothing=0):
+            writer.writerows(quadmaster(pieces, quad))
 
 def try_triples(pieces, quad):
 
@@ -173,7 +225,7 @@ def try_triples(pieces, quad):
         new_raft = puzzler.raft.Raft(coords, frontiers)
         return raftinator.refine_alignment_within_raft(new_raft)
 
-    def get_fit_features(feature_string, drop_label):
+    def get_fit_and_drop_features(feature_string, drop_label):
 
         fit = []
         drop = []
@@ -196,12 +248,12 @@ def try_triples(pieces, quad):
             elif b + 1 == a or b + 1 == n and a == 0 and n > 2:
                 do_reverse = True
             else:
-                assert False, "tabs not adjacent????"
+                raise ValueError(f"tabs not adjacent: {feature_string=} {drop_label=}")
             if do_reverse:
                 fit = fit[::-1]
                 drop = drop[::-1]
 
-        return fit
+        return fit, drop
 
     def make_feature_pairs(try_piece, try_tab_pair, fit_features):
 
@@ -246,7 +298,7 @@ def try_triples(pieces, quad):
 
         triple_raft = remove_piece_from_raft(good_raft, drop_label)
 
-        fit_features = get_fit_features(quad['raft'], drop_label)
+        fit_features, drop_features = get_fit_and_drop_features(quad['raft'], drop_label)
 
         # HACK
         if debug:
@@ -293,8 +345,18 @@ def try_triples(pieces, quad):
                     new_raft = raftinator.refine_alignment_within_raft(new_raft)
 
                 mse = raftinator.get_total_error_for_raft_and_seams(new_raft)
-                desc = quad['raft'].replace(drop_label, try_label)
 
+                fdict = dict(feature_pairs)
+                
+                desc = raftinator.parse_feature_pairs(quad['raft'])
+                for i in range(len(desc)):
+                    a, b = desc[i]
+                    if a in fdict:
+                        desc[i] = (a, fdict[a])
+                    elif b in fdict:
+                        desc[i] = (fdict[b], b)
+                desc = raftinator.format_feature_pairs(desc)
+                
                 if debug:
                     print(f"  {mse=:.3f} {desc=}")
 
@@ -328,9 +390,12 @@ def triplets_worker(puzzle_path, src_q, dst_q):
     job = src_q.get()
     while job:
 
-        rows = try_triples(pieces, job)
-
-        dst_q.put(rows)
+        try:
+            rows = try_triples(pieces, job)
+            dst_q.put(rows)
+        except:
+            print(f"\n\nError processing {job=}\n")
+            
         job = src_q.get()
 
     return
@@ -399,11 +464,7 @@ def quads_main(args):
         triplets(args)
         return
     
-    puzzle = puzzler.file.load(args.puzzle)
-    
-    pieces = {p.label: p for p in puzzle.pieces}
-
-    quadrophenia(pieces, args.output)
+    quadrophenia(args)
 
 def add_parser(commands):
 
