@@ -425,7 +425,7 @@ def triplets(args):
         writer.writeheader()
 
         # HACK
-        if True:
+        if False:
             for q in quads:
                 if q['ul_piece'] == 'A11':
                     writer.writerows(try_triples(pieces, q))
