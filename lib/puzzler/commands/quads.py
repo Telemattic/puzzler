@@ -259,7 +259,8 @@ def try_triples(pieces, quad):
         next_tab = find_nearest_tab(raft, next_label, curr_label)
 
         # print(f"raft={quad['raft']} prev={prev_label} curr={curr_label} next={next_label} retval={(prev_tab, next_tab)}")
-        return (prev_tab, next_tab)
+        # return (prev_tab, next_tab)
+        return (next_tab, prev_tab)
 
     def make_feature_pair(a, b):
         if a is None or b is None:
@@ -301,7 +302,7 @@ def try_triples(pieces, quad):
         drop_label = quad[drop_quadrant]
 
         # HACK
-        if debug and drop_label != 'B11':
+        if debug and drop_label != 'B3':
             continue
 
         triple_raft = remove_piece_from_raft(good_raft, drop_label)
@@ -324,7 +325,7 @@ def try_triples(pieces, quad):
                 continue
 
             # HACK
-            if debug and try_label not in ('AA12', 'B11'):
+            if debug and try_label not in ('B3'):
                 continue
 
             try_raft = raftinator.factory.make_raft_for_piece(try_label)
@@ -336,7 +337,7 @@ def try_triples(pieces, quad):
                     continue
 
                 if debug:
-                    print(f"  {try_feature_pairs=}")
+                    print(f"  try_feature_pairs={raftinator.format_feature_pairs(try_feature_pairs)}")
 
                 new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(
                     triple_raft, try_raft, try_feature_pairs)
@@ -426,7 +427,7 @@ def triplets(args):
         # HACK
         if False:
             for q in quads:
-                if q['ul_piece'] == 'A11':
+                if q['lr_piece'] == 'B3':
                     writer.writerows(try_triples(pieces, q))
             return
 
@@ -434,7 +435,11 @@ def triplets(args):
             src_q = mp.Queue()
             dst_q = mp.Queue()
 
-            workers = [mp.Process(target=triplets_worker, args=(puzzle_path, src_q, dst_q)) for _ in range(args.num_workers)]
+            workers = []
+            for _ in range(args.num_workers):
+                p = mp.Process(target=triplets_worker, args=(puzzle_path, src_q, dst_q), daemon=True)
+                workers.append(p)
+                
             for p in workers:
                 p.start()
 
