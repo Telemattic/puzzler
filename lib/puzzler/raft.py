@@ -583,7 +583,7 @@ class Raftinator:
         self.verbose = False
 
     def parse_feature(self, s) -> Feature:
-        m = re.fullmatch("([A-Z]+\d+)([:/])(\d+)", s)
+        m = re.fullmatch(r"([A-Z]+\d+)([:/])(\d+)", s)
         if not m:
             raise ValueError("bad feature")
         piece, kind, index = m[1], m[2], int(m[3])
