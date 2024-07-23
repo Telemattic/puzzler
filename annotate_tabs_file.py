@@ -1,6 +1,89 @@
 import csv
 import decimal
 import argparse
+import re
+
+def load_good_matches_as_set(path):
+
+    good_matches = set()
+
+    with open(path, 'r', newline='') as f:
+        
+        reader = csv.DictReader(f)
+        for row in reader:
+            key = tuple(row[i] for i in ('dst_piece', 'dst_tab_no', 'src_piece', 'src_tab_no'))
+            good_matches.add(key)
+
+    return good_matches
+
+def annotate_tabs_file(good_matches, input_path, output_path):
+
+    ifile = open(input_path, 'r', newline='')
+    reader = csv.DictReader(ifile)
+            
+    ofile = open(output_path, 'w', newline='')
+    skip_fields = {'src_coord_x', 'src_coord_y', 'src_coord_angle', 'src_index_0', 'src_index_1', 'neighbor'}
+    ofields = [i for i in reader.fieldnames if i not in skip_fields] + ['good_match']
+            
+    writer = csv.DictWriter(ofile, fieldnames=ofields, extrasaction='ignore')
+    writer.writeheader()
+
+    for row in reader:
+
+        key = tuple(row[i] for i in ('dst_label', 'dst_tab_no', 'src_label', 'src_tab_no'))
+        mse = float(row['mse'])
+        row['mse'] = decimal.Decimal(f"{mse:.3f}")
+        row['good_match'] = key in good_matches
+
+        writer.writerow(row)
+
+    ofile.close()
+    ifile.close()
+
+def parse_constraint(s):
+    m = re.fullmatch("(\w+):(\d+)=(\w+):(\d+)", s)
+    if m is None:
+        raise ValueError(f"bad constraint: {s}")
+
+    return (m[1], m[2], m[3], m[4])
+
+def parse_raft(s):
+    return [parse_constraint(i) for i in s.split(',')]
+
+def annotate_raft_file(good_matches, input_path, output_path):
+
+    def is_good_raft(raft):
+        return all(i in good_matches for i in parse_raft(raft))
+    
+    ifile = open(input_path, 'r', newline='')
+    reader = csv.DictReader(ifile)
+            
+    ofile = open(output_path, 'w', newline='')
+    ofields = reader.fieldnames + ['good_match']
+            
+    writer = csv.DictWriter(ofile, fieldnames=ofields, extrasaction='ignore')
+    writer.writeheader()
+
+    for row in reader:
+        row['good_match'] = is_good_raft(row['raft'])
+        writer.writerow(row)
+
+    ofile.close()
+    ifile.close()
+
+def detect_input_file_type(path):
+
+    with open(path, 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        fn = set(reader.fieldnames)
+
+    if 'raft' in fn:
+        return 'raft'
+
+    if all(i in fn for i in ['dst_label', 'dst_tab_no', 'src_label', 'src_tab_no']):
+        return 'tabs'
+
+    return None
 
 def main():
 
@@ -11,37 +94,16 @@ def main():
 
     args = parser.parse_args()
 
-    good_matches = set()
+    file_type = detect_input_file_type(args.ranked)
+    if file_type is None:
+        print(f"{args.ranked}: file format not recognized")
+        return
 
-    with open(args.good, 'r', newline='') as goodf:
-        
-        reader = csv.DictReader(goodf)
-
-        for row in reader:
-            
-            key = tuple(row[i] for i in ('dst_piece', 'dst_tab_no', 'src_piece', 'src_tab_no'))
-            good_matches.add(key)
-
-    with open(args.ranked, 'r', newline='') as rankedf:
-        
-        reader = csv.DictReader(rankedf)
-            
-        with open(args.output, 'w', newline='') as outputf:
-            
-            skip_fields = {'src_coord_x', 'src_coord_y', 'src_coord_angle', 'src_index_0', 'src_index_1', 'neighbor'}
-            ofields = [i for i in reader.fieldnames if i not in skip_fields] + ['good_match']
-            
-            writer = csv.DictWriter(outputf, fieldnames=ofields, extrasaction='ignore')
-            writer.writeheader()
-
-            for row in reader:
-
-                key = tuple(row[i] for i in ('dst_label', 'dst_tab_no', 'src_label', 'src_tab_no'))
-                mse = float(row['mse'])
-                row['mse'] = decimal.Decimal(f"{mse:.3f}")
-                row['good_match'] = key in good_matches
-
-                writer.writerow(row)
-        
+    good_matches = load_good_matches_as_set(args.good)
+    if file_type == 'tabs':
+        annotate_tabs_file(good_matches, args.ranked, args.output)
+    elif file_type == 'raft':
+        annotate_raft_file(good_matches, args.ranked, args.output)
+     
 if __name__ == '__main__':
     main()
