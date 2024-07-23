@@ -364,7 +364,6 @@ def try_triples(pieces, quad):
                        'init_mse': init_mse,
                        'mse': mse,
                        'rank': None}
-                row[drop_quadrant] = None
                 
                 retval.append(row)
 
@@ -420,7 +419,7 @@ def triplets(args):
                 quads.append(row)
 
     with open(output_csv_path, 'w', newline='') as ofile:
-        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft mse rank'
+        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft init_mse mse rank'
         writer = csv.DictWriter(ofile, fieldnames=fieldnames.split())
         writer.writeheader()
 
