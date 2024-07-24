@@ -656,14 +656,16 @@ class EllipseFitterTk:
 
         if self.var_render_curvature.get():
             if self.approx_pts is not None and self.signed_area is not None:
+                radius = 10 if self.var_render_approx_poly_index.get() else 4
                 for xy, area in zip(self.approx_pts, self.signed_area):
                     color = 'red' if area >= 0 else 'blue'
-                    r.draw_points([xy], radius=4, fill=color, outline='')
+                    r.draw_points([xy], radius=radius, fill=color, outline='')
 
         if self.var_render_approx_poly_index.get():
             if self.approx_pts is not None:
+                f = r.make_font('Courier New', 12)
                 for i, xy in enumerate(self.approx_pts):
-                    r.draw_text(xy, text=f"{i}", fill='green')
+                    r.draw_text(xy, text=f"{i}", font=f, fill='white')
 
         if self.var_render_convexity_defects.get():
             if self.convexity_defects is not None:
