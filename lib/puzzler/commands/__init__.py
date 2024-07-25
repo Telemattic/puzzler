@@ -8,3 +8,4 @@ from . import normals
 from . import match
 from . import tabs
 from . import quads
+from . import lint

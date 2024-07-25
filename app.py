@@ -34,6 +34,7 @@ def main():
     puzzler.commands.normals.add_parser(commands)
     puzzler.commands.match.add_parser(commands)
     puzzler.commands.quads.add_parser(commands)
+    puzzler.commands.lint.add_parser(commands)
 
     args = parser.parse_args()
     args.func(args)
