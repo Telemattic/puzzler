@@ -47,15 +47,8 @@ class ApproxPolyComputer:
         approx = cv.approxPolyDP(perimeter.points, epsilon, True)
         poly = list(perimeter.index[tuple(xy)] for xy in np.squeeze(approx))
 
-        reset = None
-        for i in range(1,len(poly)):
-            if poly[i-1] > poly[i]:
-                assert reset is None
-                reset = i
-            else:
-                assert poly[i-1] < poly[i]
-                
-        if reset:
+        reset = np.argmin(poly)
+        if reset > 0:
             poly = poly[reset:] + poly[:reset]
 
         return poly
@@ -610,21 +603,6 @@ class EllipseFitterTk:
             cross = np.cross(v0, v1)
             print(f"{cross=}")
 
-    def get_camera_matrix(self):
-
-        t = puzzler.render.Transform()
-        
-        h = int(self.canvas.configure('height')[4])
-        camera_matrix = np.array(
-            ((1,  0,   0),
-             (0, -1, h-1),
-             (0,  0,   1)), dtype=np.float64)
-        t.multiply(camera_matrix)
-        t.scale(self.camera_scale)
-        t.translate(-self.camera_trans)
-
-        return t.matrix
-
     def render(self):
 
         canvas = self.canvas
@@ -635,7 +613,7 @@ class EllipseFitterTk:
             canvas.delete('all')
             r = puzzler.renderer.canvas.CanvasRenderer(self.canvas)
 
-        r.transform(self.get_camera_matrix())
+        r.transform(self.camera.matrix)
 
         if self.var_render_perimeter.get():
             r.draw_points(self.perimeter.points, radius=1, fill='black')
@@ -701,8 +679,41 @@ class EllipseFitterTk:
     def canvas_map(self, event):
         self.render()
 
+    def mouse_wheel(self, event):
+        f = pow(1.2, 1 if event.delta > 0 else -1)
+        xy = (event.x, event.y)
+        self.camera.fixed_point_zoom(f, xy)
+        self.motion(event)
+        self.render()
+
+    def canvas_press(self, event):
+
+        self.draggable = puzzler.commands.align.MoveCamera(self.camera)
+        self.draggable.start(np.array((event.x, event.y)))
+
+        self.render()
+
+    def canvas_drag(self, event):
+
+        if not self.draggable:
+            return
+        
+        self.draggable.drag(np.array((event.x, event.y)))
+        
+        self.render()
+
+    def canvas_release(self, event):
+
+        if not self.draggable:
+            return
+        
+        self.draggable.commit()
+        self.draggable = None
+
+        self.render()
+        
     def motion(self, event):
-        cm = self.get_camera_matrix()
+        cm = self.camera.matrix
         xy0 = np.array((event.x, event.y, 1))
         xy1 = xy0 @ np.linalg.inv(cm).T
 
@@ -808,9 +819,7 @@ class EllipseFitterTk:
             h = int(h*s)
 
         # print(f"{w=} {h=} {s=}")
-        self.camera = bbox
-        self.camera_trans = np.array(bbox[0:2])
-        self.camera_scale = min(w / (bbox[2]-bbox[0]), h / (bbox[3]-bbox[1]))
+        self.camera = puzzler.commands.align.Camera(np.array((0,0), dtype=np.float64), 1, (w,h))
         
         self.frame = ttk.Frame(parent, padding=5)
         self.frame.grid(column=0, row=0, sticky=(N, W, E, S))
@@ -820,8 +829,14 @@ class EllipseFitterTk:
         self.canvas = Canvas(self.frame, width=w, height=h,
                              background='white', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.canvas.bind("<Button-1>", self.canvas_press)
+        self.canvas.bind("<B1-Motion>", self.canvas_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.canvas_release)
+        self.canvas.bind("<MouseWheel>", self.mouse_wheel)
         self.canvas.bind("<Motion>", self.motion)
         self.canvas.bind("<Map>", self.canvas_map)
+
+        self.draggable = None
 
         self._init_controls(self.frame)
 
