@@ -51,19 +51,26 @@ class Curvature:
 
 class MagicMatrix:
 
-    def __init__(self, points, poly):
+    def __init__(self, points, poly, verbose=False):
 
         approx = points[poly]
         # w[i,j] is the straight-line distance from p[i] to p[j]
         self._width = scipy.spatial.distance.cdist(approx, approx)
 
         def slice(i, j):
-            a = poly[i-1]
-            b = poly[i]
+            n = len(poly)
+            a = poly[i % n]
+            b = poly[j % n]
             return points[a:b+1] if a <= b else np.vstack((points[a:], points[:b+1]))
 
         # l[i] is the distance from p[i-1] to p[i]
-        l = [cv.arcLength(slice(i-1, i), closed=False) for i in range(len(poly))]
+        l = np.array([cv.arcLength(slice(i-1, i), closed=False) for i in range(len(poly))])
+        if verbose:
+            with np.printoptions(precision=3):
+                print(f"MagicMatrix:")
+                print(f"  {approx=}")
+                print(f"  {l=}")
+                print(f"  w={self._width}")
 
         # cl[j] - cl[i] is the total path length from p[i] to p[j]
         self._cumlen = np.cumsum(l)
@@ -81,6 +88,9 @@ class MagicMatrix:
             p += self._cumlen[-1]
         return p
 
+    def metric(self, ratio):
+        return ratio * (self._cumlen - np.atleast_2d(self._cumlen).T) -  self._width
+
 class Dingleberries:
 
     def __init__(self, epsilon = 5):
@@ -90,6 +100,87 @@ class Dingleberries:
         # maximum perimeter of a dingleberry in pixels
         self.max_perimeter = 200
         self.cutoff_ratio = 0.5
+
+    @staticmethod
+    def to_cuts(candidates):
+        if len(candidates) == 0:
+            return []
+        values = sorted(list(candidates))
+        cuts = []
+        lo = hi = values[0]
+        for v in values[1:]:
+            if v == hi+1:
+                hi = v
+            else:
+                cuts.append((lo, hi))
+                lo = hi = v
+        cuts.append((lo, hi))
+        return cuts
+
+    def find_candidate_cuts(self, points):
+
+        points = np.squeeze(points)
+
+        poly = self.get_poly(points)
+        mm = MagicMatrix(points, poly)
+
+        candidates = set()
+        n = len(poly)
+        for i in range(n):
+            
+            for j in range(i+2,i+n//2):
+                width = mm.width(i, j)
+                if width > self.max_width:
+                    continue
+
+                perimeter = mm.perimeter(i, j)
+                if width > self.cutoff_ratio * perimeter:
+                    continue
+
+                for k in range(i, j+1):
+                    candidates.add(k)
+
+        return self.to_cuts(candidates)
+        
+    def optimize_cut(self, points, cut):
+
+        n = len(points)
+        return self.refine(points, cut[0] % n, cut[1] % n)
+
+    @staticmethod
+    def draw_line(p0, p1):
+        # returns an (x,y) tuple and promotes to int64, stack it and
+        # take the transpose to get the data format we want
+        xy = skimage.draw.line(*p0, *p1)
+        return np.array(np.vstack(xy).T, dtype=p0.dtype)
+        
+    def trim_contour(self, src_points, cuts):
+
+        if len(cuts) == 0:
+            return src_points
+
+        ring_slice = puzzler.commands.align.ring_slice
+
+        n = len(src_points)
+
+        # every cut is "unwrapped"
+        assert all(i < n and i < j < i+n for i, j in cuts)
+
+        cuts = sorted(cuts)
+        
+        # the cuts are in order and disjoint
+        assert all(a[1] < b[0] for a, b in itertools.pairwise(cuts))
+
+        dst_points = []
+        
+        prev = cuts[-1][1]+1
+        for i, j in cuts:
+            if prev < i:
+                dst_points.append(ring_slice(src_points, prev, i))
+            dst_points.append(self.draw_line(src_points[i], src_points[j]))
+            prev = j + 1
+
+        return np.vstack(dst_points)
 
     def get_poly(self, points):
         # HACK: prevent sample points that are too close where we wrap around
@@ -127,9 +218,27 @@ class Dingleberries:
             poly = np.hstack((np.arange(i, len(points)), np.arange(0, j+1)))
         mm = MagicMatrix(points, poly)
 
-        # print(f"{mm._cumlen=}")
+        metric = mm.metric(0.7)
+        
+        ii, jj = np.unravel_index(np.argmax(metric), metric.shape)
+        return (ii+i, jj+i)
+        
+    def refine_to_csv(self, points, i, j, verbose=False):
 
-        metric = 0.7 * (mm._cumlen - np.atleast_2d(mm._cumlen).T) -  mm._width
+        if verbose:
+            print(f"refine: {len(points)=} {i=} {j=}")
+
+        if i <= j:
+            poly = np.arange(i, j+1)
+        else:
+            poly = np.hstack((np.arange(i, len(points)), np.arange(0, j+1)))
+        mm = MagicMatrix(points, poly)
+
+        metric = mm.metric(0.7)
+        if verbose:
+            xx = np.argmax(metric)
+            ij = np.unravel_index(xx, metric.shape)
+            print(f"max(metric)={ij}+{i}")
 
         f = open('refine_lint.csv', 'w', newline='')
         writer = csv.DictWriter(f, fieldnames='i j width perimeter metric'.split())
@@ -155,61 +264,97 @@ class Dingleberries:
 
 class LintTk:
 
-    def __init__(self, root, pieces, label):
+    def __init__(self, root, args):
         
+        puzzle = puzzler.file.load(args.puzzle)
+        pieces = dict((i.label, i) for i in puzzle.pieces)
+
         db = Dingleberries()
 
         self.pieces = pieces
-        self.label = label
-        self.points = self.pieces[label].points
-        self.poly = db.get_poly(self.points)
+        self.label = None
+        self.points = None
+        self.poly = None
+
+        self.candidates = set()
 
         self.curvature_knots = None
         self.spline = None
 
-        self.init_ui(root)
+        if args.input:
+            labels = list()
+            with open(args.input, 'r', newline='') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    p = row['piece']
+                    if p not in labels:
+                        labels.append(p)
+        else:
+            labels = [args.label]
 
-        self.candidates = set()
-        for row in db.identify(self.points):
+        self.init_ui(root, labels)
+
+        self.select_piece(labels[0])
+
+    def select_piece(self, label):
+        
+        points = self.pieces[label].points
+        
+        db = Dingleberries()
+        poly = db.get_poly(points)
+
+        print()
+        candidates = set()
+        for row in db.identify(points):
             i = row['i']
             j = row['j']
-            n = len(self.poly)
+            n = len(poly)
             width = row['width']
             perimeter = row['perimeter']
-            print(f"{i=:3d} {j=:3d} {width=:5.1f} {perimeter=:5.1f}")
+            print(f"{label:4s} {i=:3d} j={j%n:3d} {width=:5.1f} {perimeter=:5.1f}")
             for k in range(i,j+1):
-                self.candidates.add(k % n)
+                candidates.add(k)
 
-        sp_dict = {
-            'F24': (48, 49, 52, 53),
-            'F24x': (201, 202, 1, 2),
-            'F18': (71, 72, 84, 85),
-            'U26': (86, 87, 92, 93),
-            'A1': (189, 190, 192, 193),
-            'A2': (93, 94, 99, 100),
-            'A12': (60, 61, 65, 66),
-            'B24': (85, 86, 93, 94),
-            'B24x': (173, 174, 178, 179),
-            'E25': (117, 118, 124, 125),
-            'K33': (65, 66, 70, 71),
-            'L28': (22, 23, 25, 26),
-            'M20': (24, 25, 28, 29),
-        }
+        def to_ranges(candidates):
+            if len(candidates) == 0:
+                return []
+            values = sorted(list(candidates))
+            ranges = []
+            lo = hi = values[0]
+            for v in values[1:]:
+                if v == hi+1:
+                    hi = v
+                else:
+                    ranges.append((lo, hi))
+                    lo = hi = v
+            ranges.append((lo, hi))
+            return ranges
 
-        if label in sp_dict:
-            n = len(self.poly)
-            sp = sp_dict[label]
-            if len(sp) == 4:
-                a, b, c, d = [self.poly[i%n] for i in sp]
-                fit_pts = np.vstack((self.points[a:b], self.points[c:d]))
-            else:
-                fit_pts = np.array([self.points[self.poly[i%n]] for i in sp])
-            self.spline = db.fit_spline(fit_pts)
-            # print(f"{fit_pts=} {self.spline=}")
+        ranges = to_ranges(candidates)
 
-            sp = sp_dict[label]
-            db.refine(self.points, self.poly[sp[0]%n], self.poly[sp[-1]%n])
+        ring_slice = puzzler.commands.align.ring_slice
 
+        def fit_spline1(i, j):
+            a, b, c, d = [poly[k % len(poly)] for k in (i-1, i, j, j+1)]
+            fit_pts = np.vstack((ring_slice(points, a, b), ring_slice(points, c, d)))
+            return db.fit_spline(fit_pts)
+
+        def fit_spline2(i, j):
+            n = len(poly)
+            i, j = poly[i % n], poly[j % n]
+            a, b = db.refine(points, i, j)
+            print(f"refined: {(i, j)} -> {(a, b)}")
+            fit_pts = np.vstack((ring_slice(points, a-12, a), ring_slice(points, b, b+12)))
+            return db.fit_spline(fit_pts)
+
+        splines = [fit_spline2(i, j) for i, j in ranges]
+
+        self.label = label
+        self.points = points
+        self.poly = poly
+        self.candidates = candidates
+        self.splines = splines
+        
     def render(self):
 
         r = puzzler.renderer.cairo.CairoRenderer(self.canvas)
@@ -236,8 +381,8 @@ class LintTk:
                 r.draw_points([xy], radius=10, fill=color, outline='')
                 r.draw_text(xy, text=f"{i}", font=f, fill='white')
 
-        if self.spline is not None:
-            r.draw_lines(self.spline, fill=(0,.5,0,.5), width=8)
+        for s in self.splines:
+            r.draw_lines(s, fill=(0,.5,0,.5), width=4)
 
         self.displayed_image = r.commit()
 
@@ -296,23 +441,22 @@ class LintTk:
 
         self.var_label.set(s)
         
-    def init_ui(self, parent):
+    def change_piece(self, event):
+        self.select_piece(self.var_label_combo.get())
+        self.render()
+
+    def init_ui(self, parent, labels):
 
         parent.grid_rowconfigure(0, weight=1)
         parent.grid_columnconfigure(0, weight=1)
 
         f1 = ttk.Frame(parent, padding=5)
-        f1.grid(column=0, row=0, sticky=(N, W, E, S))
-        f1.grid_rowconfigure(0, weight=1)
         f1.grid_columnconfigure(0, weight=1)
-        
-        f2 = ttk.Frame(f1, padding=0)
-        f2.grid_columnconfigure(0, weight=1)
-        f2.grid_rowconfigure(0, weight=1)
-        f2.grid(column=0, row=0, sticky=(N, W, E, S))
+        f1.grid_rowconfigure(0, weight=1)
+        f1.grid(column=0, row=0, sticky=(N, W, E, S))
 
         w, h = 800, 800
-        self.canvas = Canvas(f2, width=w, height=h, background='white', highlightthickness=0)
+        self.canvas = Canvas(f1, width=w, height=h, background='white', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
         self.canvas.bind("<Button-1>", self.canvas_press)
         self.canvas.bind("<B1-Motion>", self.canvas_drag)
@@ -324,30 +468,29 @@ class LintTk:
         self.camera = puzzler.commands.align.Camera(np.array((0,0), dtype=np.float64), 1, (w,h))
         self.draggable = None
 
-        f3 = ttk.Frame(f2, padding=5)
-        f3.grid(column=1, row=0, sticky=(N, E, S))
+        f2 = ttk.Frame(f1, padding=5)
+        f2.grid(column=1, row=0, sticky=(N, E, S))
 
-        l = ttk.Label(f3, text='k')
-        l.grid(column=0, row=0)
+        self.var_label_combo = StringVar(value=labels[0])
+        cb = ttk.Combobox(f2, textvariable=self.var_label_combo, values=labels, state='readonly')
+        cb.grid(column=0, row=0)
+        cb.bind("<<ComboboxSelected>>", self.change_piece)
+
+        l = ttk.Label(f2, text='k')
+        l.grid(column=0, row=1)
 
         self.var_k = IntVar(value=10)
-        e = ttk.Entry(f3, width=8, textvariable=self.var_k)
-        e.grid(column=1, row=0)
+        e = ttk.Entry(f2, width=8, textvariable=self.var_k)
+        e.grid(column=1, row=1)
 
         self.var_label = StringVar(value="x,y")
-        l = ttk.Label(f3, textvariable=self.var_label, width=40)
-        l.grid(column=0, row=1, columnspan=2)
-
-        self.trace = Canvas(f1, width=w, height=100, background='grey', highlightthickness=0)
-        self.trace.grid(column=0, row=1, sticky=(W, E))
+        l = ttk.Label(f2, textvariable=self.var_label, width=40)
+        l.grid(column=0, row=2, columnspan=2)
 
 def lint_view(args):
 
-    puzzle = puzzler.file.load(args.puzzle)
-    pieces = dict((i.label, i) for i in puzzle.pieces)
-
     root = Tk()
-    ui = LintTk(root, pieces, args.label)
+    ui = LintTk(root, args)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: lint view")
     root.mainloop()
@@ -414,6 +557,7 @@ def add_parser(commands):
 
     parser_view = commands.add_parser("view")
     parser_view.add_argument("label")
+    parser_view.add_argument("-i", "--input", help="CSV of pieces to look at")
     parser_view.set_defaults(func=lint_view)
 
     parser_csv = commands.add_parser("csv")
