@@ -1,8 +1,10 @@
 import csv
 import cv2 as cv
+import itertools
 import numpy as np
 import scipy.interpolate
 import scipy.spatial.distance
+import skimage.draw
 import puzzler
 from tqdm import tqdm
 
@@ -140,7 +142,8 @@ class Dingleberries:
                 for k in range(i, j+1):
                     candidates.add(k)
 
-        return self.to_cuts(candidates)
+        cuts = self.to_cuts(candidates)
+        return [(poly[i], poly[j%len(poly)]) for i, j in cuts]
         
     def optimize_cut(self, points, cut):
 
@@ -164,21 +167,27 @@ class Dingleberries:
         n = len(src_points)
 
         # every cut is "unwrapped"
-        assert all(i < n and i < j < i+n for i, j in cuts)
+        if not all(i < n and i < j < i+n for i, j in cuts):
+            raise ValueError("all cuts should be unwrapped")
 
         cuts = sorted(cuts)
         
         # the cuts are in order and disjoint
-        assert all(a[1] < b[0] for a, b in itertools.pairwise(cuts))
+        if not all(a[1] < b[0] for a, b in itertools.pairwise(cuts)):
+            raise ValueError("the cuts must be disjoint")
 
         dst_points = []
+
+        tail = cuts[-1][1]
         
-        prev = cuts[-1][1]+1
+        prev = tail+1 if tail > n else 0
         for i, j in cuts:
-            if prev < i:
-                dst_points.append(ring_slice(src_points, prev, i))
-            dst_points.append(self.draw_line(src_points[i], src_points[j]))
+            dst_points.append(ring_slice(src_points, prev, i))
+            dst_points.append(self.draw_line(src_points[i], src_points[j%n]))
             prev = j + 1
+            
+        if prev < n:
+            dst_points.append(src_points[prev:])
 
         return np.vstack(dst_points)
 
@@ -548,7 +557,31 @@ def lint_csv(args):
             except ValueError as x:
                 print(f"problem with piece={piece.label}")
                 print(x)
-                
+
+def remove_lint(points):
+
+    db = Dingleberries()
+
+    cuts = db.find_candidate_cuts(points)
+    if len(cuts) == 0:
+        return points
+
+    optimized_cuts = [db.optimize_cut(points, i) for i in cuts]
+
+    return db.trim_contour(points, optimized_cuts)
+
+def lint_update(args):
+
+    puzzle = puzzler.file.load(args.puzzle)
+
+    for piece in puzzle.pieces:
+
+        piece.points = remove_lint(piece.points)
+        piece.tabs = None
+        piece.edges = None
+
+    puzzler.file.save(args.puzzle, puzzle)
+
 def add_parser(commands):
     
     parser_lint = commands.add_parser("lint", help="remove lint from outlines")
@@ -563,3 +596,6 @@ def add_parser(commands):
     parser_csv = commands.add_parser("csv")
     parser_csv.add_argument("-o", "--output", required=True)
     parser_csv.set_defaults(func=lint_csv)
+
+    parser_update = commands.add_parser("update", help="remove lint from pieces in the puzzle, updating the puzzle file")
+    parser_update.set_defaults(func=lint_update)
