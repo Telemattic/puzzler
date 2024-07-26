@@ -57,8 +57,14 @@ class MagicMatrix:
         # w[i,j] is the straight-line distance from p[i] to p[j]
         self._width = scipy.spatial.distance.cdist(approx, approx)
 
+        def slice(i, j):
+            a = poly[i-1]
+            b = poly[i]
+            return points[a:b+1] if a <= b else np.vstack((points[a:], points[:b+1]))
+
         # l[i] is the distance from p[i-1] to p[i]
-        l = np.linalg.norm(np.diff(approx, prepend=approx[-1:], axis=0), axis=1)
+        l = [cv.arcLength(slice(i-1, i), closed=False) for i in range(len(poly))]
+
         # cl[j] - cl[i] is the total path length from p[i] to p[j]
         self._cumlen = np.cumsum(l)
 
@@ -93,45 +99,57 @@ class Dingleberries:
 
         points = np.squeeze(points)
 
-        if self.first_call:
-            MagicMatrix(points, np.arange(0, len(points), 100))
-            self.first_call = False
-        
         poly = self.get_poly(points)
-        approx = points[poly]
-
-        dist = scipy.spatial.distance.cdist(approx, approx)
+        mm = MagicMatrix(points, poly)
 
         retval = []
         n = len(poly)
         for i in range(n):
             
             for j in range(i+2,i+n//2):
-                pi = poly[i]
-                pj = poly[j%n]
-                width = dist[i,j%n]
-
+                width = mm.width(i, j)
                 if width > self.max_width:
                     continue
 
-                if pj > pi:
-                    snip = points[pi:pj]
-                else:
-                    snip = np.vstack((points[:pj], points[pi:]))
-                perimeter = cv.arcLength(snip, closed=False)
-
+                perimeter = mm.perimeter(i, j)
                 if width > self.cutoff_ratio * perimeter:
                     continue
 
-                retval.append({'i':i, 'j':j, 'pi':pi, 'pj':pj, 'width':width, 'perimeter':perimeter})
+                retval.append({'i':i, 'j':j, 'pi':poly[i], 'pj':poly[j%n], 'width':width, 'perimeter':perimeter})
 
         return retval
+
+    def refine(self, points, i, j):
+
+        if i <= j:
+            poly = np.arange(i, j+1)
+        else:
+            poly = np.hstack((np.arange(i, len(points)), np.arange(0, j+1)))
+        mm = MagicMatrix(points, poly)
+
+        # print(f"{mm._cumlen=}")
+
+        metric = 0.7 * (mm._cumlen - np.atleast_2d(mm._cumlen).T) -  mm._width
+
+        f = open('refine_lint.csv', 'w', newline='')
+        writer = csv.DictWriter(f, fieldnames='i j width perimeter metric'.split())
+        writer.writeheader()
+
+        n = len(poly)
+        for a in range(1,n):
+            for b in range(a+1,n):
+                row = {'i':a+i, 'j':b+i, 'width':mm.width(a,b), 'perimeter':mm.perimeter(a,b), 'metric':metric[a,b]}
+                for k in 'width', 'perimeter', 'metric':
+                    row[k] = f"{row[k]:.3f}"
+                writer.writerow(row)
+
+        f.close()
 
     def fit_spline(self, points):
 
         assert isinstance(points, np.ndarray)
         x, y = points[:,0], points[:,1]
-        tck, u = scipy.interpolate.splprep([x, y], s=len(x))
+        tck, u = scipy.interpolate.splprep([x, y], s=len(x)*.1)
         out = scipy.interpolate.splev(np.linspace(0,1,20), tck)
         return np.vstack((out[0], out[1])).T
 
@@ -164,20 +182,33 @@ class LintTk:
 
         sp_dict = {
             'F24': (48, 49, 52, 53),
+            'F24x': (201, 202, 1, 2),
             'F18': (71, 72, 84, 85),
             'U26': (86, 87, 92, 93),
             'A1': (189, 190, 192, 193),
             'A2': (93, 94, 99, 100),
             'A12': (60, 61, 65, 66),
-            'B24': (85, 86, 91, 92),
+            'B24': (85, 86, 93, 94),
+            'B24x': (173, 174, 178, 179),
             'E25': (117, 118, 124, 125),
+            'K33': (65, 66, 70, 71),
+            'L28': (22, 23, 25, 26),
+            'M20': (24, 25, 28, 29),
         }
 
         if label in sp_dict:
             n = len(self.poly)
-            fit_pts = np.array([self.points[self.poly[i%n]] for i in sp_dict[label]])
+            sp = sp_dict[label]
+            if len(sp) == 4:
+                a, b, c, d = [self.poly[i%n] for i in sp]
+                fit_pts = np.vstack((self.points[a:b], self.points[c:d]))
+            else:
+                fit_pts = np.array([self.points[self.poly[i%n]] for i in sp])
             self.spline = db.fit_spline(fit_pts)
-            print(f"{self.spline=}")
+            # print(f"{fit_pts=} {self.spline=}")
+
+            sp = sp_dict[label]
+            db.refine(self.points, self.poly[sp[0]%n], self.poly[sp[-1]%n])
 
     def render(self):
 
