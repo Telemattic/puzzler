@@ -342,12 +342,16 @@ def try_triples(pieces, quad):
                 new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(
                     triple_raft, try_raft, try_feature_pairs)
 
-                init_mse = raftinator.get_total_error_for_raft_and_seams(new_raft)
+                mse = []
+
+                new_seams = raftinator.get_seams_for_raft(new_raft)
+                mse.append(raftinator.get_total_error_for_raft_and_seams(new_raft, new_seams))
                 
                 for _ in range(3):
-                    new_raft = raftinator.refine_alignment_within_raft(new_raft)
-
-                mse = raftinator.get_total_error_for_raft_and_seams(new_raft)
+                    new_raft = raftinator.refine_alignment_within_raft(new_raft, new_seams)
+                           
+                    new_seams = raftinator.get_seams_for_raft(new_raft)
+                    mse.append(raftinator.get_total_error_for_raft_and_seams(new_raft, new_seams))
 
                 desc = raftinator.format_feature_pairs(triple_feature_pairs + try_feature_pairs)
                 
@@ -362,8 +366,12 @@ def try_triples(pieces, quad):
                        'drop_piece': drop_label,
                        'fit_piece': try_label,
                        'raft': desc,
-                       'init_mse': init_mse,
-                       'mse': mse,
+                       'mse0': mse[0],
+                       'mse1': mse[1],
+                       'mse2': mse[2],
+                       'mse3': mse[3],
+                       'init_mse': mse[0],
+                       'mse': mse[-1],
                        'rank': None}
                 
                 retval.append(row)
@@ -371,8 +379,8 @@ def try_triples(pieces, quad):
         retval.sort(key=operator.itemgetter('mse'))
         for i, row in enumerate(retval, start=1):
             row['rank'] = i
-            row['init_mse'] = decimal.Decimal(f"{row['init_mse']:.3f}")
-            row['mse'] = decimal.Decimal(f"{row['mse']:.3f}")
+            for k in ('init_mse', 'mse', 'mse0', 'mse1', 'mse2', 'mse3'):
+                row[k] = decimal.Decimal(f"{row[k]:.3f}")
 
         retval2 += retval
         quad_no += 1
@@ -420,7 +428,7 @@ def triplets(args):
                 quads.append(row)
 
     with open(output_csv_path, 'w', newline='') as ofile:
-        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft init_mse mse rank'
+        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft init_mse mse rank mse0 mse1 mse2 mse3'
         writer = csv.DictWriter(ofile, fieldnames=fieldnames.split())
         writer.writeheader()
 
