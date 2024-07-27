@@ -626,9 +626,10 @@ class Raftinator:
         src_coord = self.aligner.rough_align(dst_raft, src_raft, feature_pairs)
         return self.factory.merge_rafts(RaftAlignment(dst_raft, src_raft, src_coord))
 
-    def refine_alignment_within_raft(self, raft: Raft) -> Raft:
-        
-        seams = self.get_seams_for_raft(raft)
+    def refine_alignment_within_raft(self, raft: Raft, seams: Optional[Seams] = None) -> Raft:
+
+        if seams is None:
+            seams = self.get_seams_for_raft(raft)
 
         return self.aligner.refine_alignment_within_raft(raft, seams)
 
