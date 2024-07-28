@@ -145,7 +145,7 @@ def quadrophenia_worker(puzzle_path, src_q, dst_q):
 
     return
         
-def quadrophenia(args):
+def quads_main(args):
 
     puzzle_path = args.puzzle
     output_csv_path = args.output
@@ -212,7 +212,7 @@ def quadrophenia(args):
         for quad in tqdm(quads, smoothing=0):
             writer.writerows(quadmaster(pieces, quad))
 
-def try_triples(pieces, quad):
+def try_triples(pieces, quad, num_refine):
 
     Feature = puzzler.raft.Feature
     
@@ -347,7 +347,7 @@ def try_triples(pieces, quad):
                 new_seams = raftinator.get_seams_for_raft(new_raft)
                 mse.append(raftinator.get_total_error_for_raft_and_seams(new_raft, new_seams))
                 
-                for _ in range(3):
+                for _ in range(num_refine):
                     new_raft = raftinator.refine_alignment_within_raft(new_raft, new_seams)
                            
                     new_seams = raftinator.get_seams_for_raft(new_raft)
@@ -366,28 +366,22 @@ def try_triples(pieces, quad):
                        'drop_piece': drop_label,
                        'fit_piece': try_label,
                        'raft': desc,
-                       'mse0': mse[0],
-                       'mse1': mse[1],
-                       'mse2': mse[2],
-                       'mse3': mse[3],
-                       'init_mse': mse[0],
-                       'mse': mse[-1],
+                       'mse': tuple(mse),
                        'rank': None}
                 
                 retval.append(row)
 
-        retval.sort(key=operator.itemgetter('mse'))
+        retval.sort(key=lambda x: x['mse'][-1])
         for i, row in enumerate(retval, start=1):
             row['rank'] = i
-            for k in ('init_mse', 'mse', 'mse0', 'mse1', 'mse2', 'mse3'):
-                row[k] = decimal.Decimal(f"{row[k]:.3f}")
+            row['mse'] = ','.join(f"{i:.3f}" for i in row['mse'])
 
         retval2 += retval
         quad_no += 1
 
     return retval2
 
-def triplets_worker(puzzle_path, src_q, dst_q):
+def triplets_worker(puzzle_path, num_refine, src_q, dst_q):
 
     puzzle = puzzler.file.load(puzzle_path)
     
@@ -397,7 +391,7 @@ def triplets_worker(puzzle_path, src_q, dst_q):
     while job:
 
         try:
-            rows = try_triples(pieces, job)
+            rows = try_triples(pieces, job, num_refine)
             dst_q.put(rows)
         except:
             print(f"\n\nError processing {job=}\n")
@@ -406,7 +400,7 @@ def triplets_worker(puzzle_path, src_q, dst_q):
 
     return
 
-def triplets(args):
+def triples_main(args):
 
     puzzle_path = args.puzzle
     input_csv_path = args.quads
@@ -428,7 +422,7 @@ def triplets(args):
                 quads.append(row)
 
     with open(output_csv_path, 'w', newline='') as ofile:
-        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft init_mse mse rank mse0 mse1 mse2 mse3'
+        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft init_mse mse rank'
         writer = csv.DictWriter(ofile, fieldnames=fieldnames.split())
         writer.writeheader()
 
@@ -436,7 +430,7 @@ def triplets(args):
         if False:
             for q in quads:
                 if q['lr_piece'] == 'B3':
-                    writer.writerows(try_triples(pieces, q))
+                    writer.writerows(try_triples(pieces, q, arg.refine))
             return
 
         if args.num_workers:
@@ -445,7 +439,7 @@ def triplets(args):
 
             workers = []
             for _ in range(args.num_workers):
-                p = mp.Process(target=triplets_worker, args=(puzzle_path, src_q, dst_q), daemon=True)
+                p = mp.Process(target=triplets_worker, args=(puzzle_path, args.refine, src_q, dst_q), daemon=True)
                 workers.append(p)
                 
             for p in workers:
@@ -471,21 +465,24 @@ def triplets(args):
         else:
 
             for quad in tqdm(quads, smoothing=0):
-                writer.writerows(try_triples(pieces, quad))
-
-def quads_main(args):
-
-    if args.quads is not None:
-        triplets(args)
-        return
-    
-    quadrophenia(args)
+                writer.writerows(try_triples(pieces, quad, args.refine))
 
 def add_parser(commands):
 
-    parser_quads = commands.add_parser("quads", help="process quads to compute expected matches")
-    parser_quads.add_argument("-q", "--quads", help="inputs quads path, runs triplets algorithm")
+    parser_quads = commands.add_parser("quads", help="process quads to compute expected tab matches")
     parser_quads.add_argument("-o", "--output", help="output CSV path for computed quads", required=True)
     parser_quads.add_argument("-n", "--num-workers", default=0, type=int,
                               help="number of workers (default %(default)i)")
     parser_quads.set_defaults(func=quads_main)
+
+    parser_triples = commands.add_parser("triples", help="process triples to validate pocket (interior corner) matches")
+    parser_triples.add_argument("-q", "--quads", required=True,
+                                help="inputs quads path")
+    parser_triples.add_argument("-o", "--output", required=True,
+                                help="output CSV path for triples")
+    parser_triples.add_argument("-n", "--num-workers", default=0, type=int,
+                                help="number of workers (default %(default)i)")
+    parser_triples.add_argument("-r", "--refine", default=1, type=int,
+                                help="number of refinement passes for fit (default %(default)i)")
+    parser_triples.set_defaults(func=triples_main)
+    
