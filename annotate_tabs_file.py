@@ -60,13 +60,46 @@ def annotate_raft_file(good_matches, input_path, output_path):
             
     ofile = open(output_path, 'w', newline='')
     ofields = reader.fieldnames + ['good_match']
+
+    add_quad_no = 'quad_no' not in ofields
+    if add_quad_no:
+        ofields.append('quad_no')
+
+    add_init_rank = 'init_rank' not in ofields
+    if add_init_rank:
+        ofields.append('init_rank')
+
+    def update_rows(rows):
+
+        if add_init_rank:
+            vals = [(float(r['init_mse']), i) for i, r in enumerate(rows)]
+            for i, (_, row_no) in enumerate(sorted(vals), start=1):
+                rows[row_no]['init_rank'] = i
             
+        if add_quad_no:
+            for r in rows:
+                r['quad_no'] = quad_no
+
+        for r in rows:
+            r['good_match'] = is_good_raft(r['raft'])
+
+        return rows
+        
     writer = csv.DictWriter(ofile, fieldnames=ofields, extrasaction='ignore')
     writer.writeheader()
 
+    quad_no = -1
+    rows = []
     for row in reader:
-        row['good_match'] = is_good_raft(row['raft'])
-        writer.writerow(row)
+        
+        if row['rank'] == '1':
+            writer.writerows(update_rows(rows))
+            quad_no += 1
+            rows = []
+
+        rows.append(row)
+
+    writer.writerows(update_rows(rows))
 
     ofile.close()
     ifile.close()
