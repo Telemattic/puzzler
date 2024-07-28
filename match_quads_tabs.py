@@ -39,8 +39,14 @@ def match_it(quads):
     def parse_raft(s):
         return [tuple(f.split('=')) for f in s.split(',')]
 
-    tabs = dict()
+    all_tabs = set()
+    for quad in quads:
+        
+        for a, b in parse_raft(quad['raft']):
+            all_tabs.add(a)
+            all_tabs.add(b)
     
+    matching_tabs = dict()
     for quad in quads:
         
         if quad['rank'] != 1 or quad['mse'] > 10.:
@@ -48,17 +54,21 @@ def match_it(quads):
 
         for a, b in parse_raft(quad['raft']):
             
-            if a in tabs:
-                assert tabs[a] == b
+            if a in matching_tabs:
+                assert matching_tabs[a] == b
             else:
-                tabs[a] = b
+                matching_tabs[a] = b
                 
-            if b in tabs:
-                assert tabs[b] == a
+            if b in matching_tabs:
+                assert matching_tabs[b] == a
             else:
-                tabs[b] = a
+                matching_tabs[b] = a
 
-    return tabs
+    for tab in all_tabs:
+        if tab not in matching_tabs:
+            print(f"Tab '{tab}' has no match")
+
+    return matching_tabs
 
 def main():
 
