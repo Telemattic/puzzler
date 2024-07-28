@@ -595,13 +595,12 @@ class EllipseFitterTk:
         if len(self.edges) == 2:
             l0, l1 = self.edges[0]['line'], self.edges[1]['line']
             print(f"{l0=} {l1=}")
-            v0 = l0.pts[1] - l0.pts[0]
-            v0 = v0 / np.linalg.norm(v0)
-            v1 = l1.pts[1] - l1.pts[0]
-            v1 = v1 / np.linalg.norm(v1)
-            print(f"{v0=} {v1=}")
+            v0 = puzzler.math.unit_vector(l0.pts[1] - l0.pts[0])
+            v1 = puzzler.math.unit_vector(l1.pts[1] - l1.pts[0])
             cross = np.cross(v0, v1)
-            print(f"{cross=}")
+            with np.printoptions(precision=3):
+                print(f"{v0=} {v1=}")
+                print(f"{cross=}")
 
     def render(self):
 
@@ -854,13 +853,15 @@ def feature_view(args):
 
 def feature_update(args):
 
+    verbose = False
     tab_data = []
     puzzle = puzzler.file.load(args.puzzle)
-    for piece in tqdm(puzzle.pieces):
+    for piece in tqdm(puzzle.pieces, disable=verbose):
         if piece.points is None:
             continue
 
-        # print(piece.label)
+        if verbose:
+            print(piece.label)
 
         perimeter = PerimeterLoader(piece)
 
