@@ -180,7 +180,7 @@ class Dingleberries:
 
         tail = cuts[-1][1]
         
-        prev = tail+1 if tail > n else 0
+        prev = (tail + 1) % n if tail > n else 0
         for i, j in cuts:
             dst_points.append(ring_slice(src_points, prev, i))
             dst_points.append(self.draw_line(src_points[i], src_points[j%n]))
