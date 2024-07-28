@@ -3,6 +3,10 @@ import numpy as np
 
 # pip install bezier==2023.7.28
 
+# Great resource for bezier curves:
+#
+# https://pomax.github.io/bezierinfo/#derivatives
+
 class Spline:
 
     def __init__(self, data):
