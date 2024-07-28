@@ -5,6 +5,8 @@
 #   pip3 install pycairo
 #   pip3 install PyOpenGL
 #   pip3 install pyopengltk
+#   pip3 install bezier==2023.7.28     # avoid pulling in a dependency on numpy 2.0
+#   pip3 install scikit-image
 
 # 1000.json problems:
 #   1. O28 (bad match to X38, Y37)
@@ -25,3 +27,10 @@ Todo:
   measuring fit error, for example 1000.json and fit of
   "F17:3=F16:0,1,G30:0=G29:1,0" (which is admittely a false match...)
   "F17:3=F16:0,1,E17:0=E16:3,0" (correct match)
+
+* abysmal fit, but not scored that poorly because fit only considered
+  between edges that are proximate, deep overlaps are ignored
+  
+   C11:0=C12:0,D11:2=D12:0,C12:3=D12:1,C11:1=D11:1
+
+  see puzzler.align.MultiTargetError for a better error measurement
