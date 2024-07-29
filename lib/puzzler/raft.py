@@ -62,81 +62,13 @@ class RaftFactory:
         self.pieces = pieces
         self.distance_query_cache = puzzler.align.DistanceQueryCache(purge_interval=10_000)
         
-    def compute_frontiers(self, coords: Coords) -> Frontiers:
-        boundaries = self.compute_boundaries(coords)
-        return [self.compute_frontier_for_boundary(i) for i in boundaries]
-
-    def compute_boundaries(self, coords: Coords) -> Boundaries:
-        
-        closest = puzzler.solver.ClosestPieces(
-            self.pieces, coords, None, self.distance_query_cache)
-        adjacency = dict((i, closest(i)) for i in coords)
-        
-        bc = puzzler.solver.BoundaryComputer(self.pieces)
-        return bc.find_boundaries_from_adjacency(adjacency)
-
-    def compute_frontier_for_boundary(self, boundary) -> Frontier:
-
-        frontier = []
-        for label, (a, b) in boundary:
-            frontier += self.compute_ordered_features_for_segment(label, a, b)
-        return frontier
-
-    def compute_ordered_features_for_segment(self, label, a, b):
-
-        p = self.pieces[label]
-        n = len(p.points)
-        segment = puzzler.commands.align.RingRange(a, b, n)
-        
-        def midpoint(indexes):
-            i, j = indexes
-            if i < j:
-                m = (i + j) // 2
-            else:
-                m = ((i + j + n) // 2) % n
-            return m
-
-        def is_edge_included(edge):
-            return midpoint(edge.fit_indexes) in segment
-
-        def is_tab_included(tab):
-            return midpoint(tab.tangent_indexes) in segment
-
-        def position_in_ring(f):
-            if f.kind == 'tab':
-                m = midpoint(p.tabs[f.index].tangent_indexes)
-            else:
-                m = midpoint(p.edges[f.index].fit_indexes)
-            # adjust the midpoint so that points that occur later in
-            # the segment always have a higher reported midpoint, even
-            # if the segment "wraps" from high indices to low indices.
-            # An alternative would be to report these points as
-            # relative offsets within the segment, i.e. perform all of
-            # these calculations and then subtract a, so it should
-            # always be the case that 0 <= m < len(segment)
-            if a > b and m < b:
-                m += n
-            return m
-            
-        features = []
-        
-        for i, edge in enumerate(p.edges):
-            if is_edge_included(edge):
-                features.append(Feature(label, 'edge', i))
-                
-        for i, tab in enumerate(p.tabs):
-            if is_tab_included(tab):
-                features.append(Feature(label, 'tab', i))
-
-        return sorted(features, key=position_in_ring)
-
     def make_raft_for_piece(self, src: str) -> Raft:
         
         coords = {src: Coord(0.,(0.,0.))}
-        frontiers = self.compute_frontiers(coords)
         return Raft(coords)
 
-    def transform_coords(self, coords: Coords, xform: Coord) -> Coords:
+    @staticmethod
+    def transform_coords(coords: Coords, xform: Coord) -> Coords:
         def helper(coord):
             return Coord.from_matrix(xform.matrix @ coord.matrix)
         return dict((k, helper(v)) for k, v in coords.items())
@@ -147,7 +79,6 @@ class RaftFactory:
         src_raft = alignment.src
 
         coords = dst_raft.coords | self.transform_coords(src_raft.coords, alignment.src_coord)
-        frontiers = self.compute_frontiers(coords)
         return Raft(coords)
 
 class RaftFeatures(NamedTuple):
