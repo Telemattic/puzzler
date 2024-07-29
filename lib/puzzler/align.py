@@ -85,16 +85,20 @@ class DistanceImage:
         o = DistanceImage.cache.get(piece.label)
         if o is None:
             o = DistanceImage(piece)
+            if len(DistanceImage.cache) == 0:
+                print(type(o.dist_image), o.dist_image.dtype)
+                print(o.dist_image)
             DistanceImage.cache[piece.label] = o
 
         return o
 
-    def __init__(self, piece):
+    def __init__(self, piece, compress=True):
 
         pp = piece.points
         
         self.ll = np.min(pp, axis=0) - 256
         self.ur = np.max(pp, axis=0) + 256
+        self.compress = compress
 
         w, h = self.ur + 1 - self.ll
         cols = pp[:,0] - self.ll[0]
@@ -112,6 +116,9 @@ class DistanceImage:
         # negative distance is distance from the boundary of the piece
         # for internal points
         signed_dist_image = np.where(is_exterior_mask, dist_image, -dist_image)
+
+        if self.compress:
+            signed_dist_image = np.array(signed_dist_image * 16, dtype=np.int16)
 
         self.dist_image = signed_dist_image
 
@@ -131,7 +138,8 @@ class DistanceImage:
         rows = np.int32(np.clip(points[:,1] - self.ll[1], a_min=0, a_max=h-1))
         cols = np.int32(np.clip(points[:,0] - self.ll[0], a_min=0, a_max=w-1))
 
-        return self.dist_image[rows, cols]
+        ret = self.dist_image[rows, cols]
+        return ret * (1/16) if self.compress else ret
 
 class NormalsComputer:
 
