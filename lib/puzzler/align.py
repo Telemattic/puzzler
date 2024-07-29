@@ -85,9 +85,6 @@ class DistanceImage:
         o = DistanceImage.cache.get(piece.label)
         if o is None:
             o = DistanceImage(piece)
-            if len(DistanceImage.cache) == 0:
-                print(type(o.dist_image), o.dist_image.dtype)
-                print(o.dist_image)
             DistanceImage.cache[piece.label] = o
 
         return o

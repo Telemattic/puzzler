@@ -460,7 +460,7 @@ class AlignTk:
 
         for tag in tags:
             
-            m = re.fullmatch("piece_(\d+)", tag)
+            m = re.fullmatch(r"piece_(\d+)", tag)
             if m:
                 piece_no = int(m[1])
             if tag == 'rotate':
@@ -816,7 +816,7 @@ class AlignTk:
             return int(s)
 
         def to_row_col(label):
-            m = re.fullmatch("([a-zA-Z]+)(\d+)", label)
+            m = re.fullmatch(r"([a-zA-Z]+)(\d+)", label)
             return (to_row(m[1]), to_col(m[2])) if m else (None, None)
 
         rows = set()
@@ -845,7 +845,7 @@ class AlignTk:
 
     def show_edge_alignment(self):
         s = self.var_show_edge_alignment.get().strip()
-        m = re.fullmatch("([a-zA-Z]+\d+):(\d+),(\d+)=([a-zA-Z]+\d+):(\d+),(\d+)", s)
+        m = re.fullmatch(r"([a-zA-Z]+\d+):(\d+),(\d+)=([a-zA-Z]+\d+):(\d+),(\d+)", s)
         if not m:
             print(f"bad input: \"{s}\", should be <dst_label>:<edge>,<tab>=<src_label>:<edge>,<tab>")
             return
@@ -878,7 +878,7 @@ class AlignTk:
         
     def show_tab_alignment(self):
         s = self.var_show_tab_alignment.get().strip()
-        m = re.fullmatch("([a-zA-Z]+\d+):(\d+)=([a-zA-Z]+\d+):(\d+)", s)
+        m = re.fullmatch(r"([a-zA-Z]+\d+):(\d+)=([a-zA-Z]+\d+):(\d+)", s)
         if not m:
             print(f"bad input: \"{s}\", should be <dst_label>:<dst_tab_no>=<src_label>:<src_tab_no>")
             return
@@ -1025,7 +1025,7 @@ class AlignTk:
         print(f"{dst_raft_name=} {dst_trace_no=} {src_raft_name=} {src_trace_no=}")
 
         def frob_raft_name(s):
-            m = re.fullmatch("([A-Z]+\d+):(\d+)=([A-Z]+\d+):(\d+)", s)
+            m = re.fullmatch(r"([A-Z]+\d+):(\d+)=([A-Z]+\d+):(\d+)", s)
             if not m:
                 print(f"bad raft name: \"{s}\", should be <dst_piece>:<tab_no>=<src_piece>:<tab_no>")
             return ((m[1], int(m[2])), (m[3], int(m[4])))

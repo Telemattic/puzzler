@@ -56,7 +56,7 @@ class BorderSolver:
                 continue
 
             # HACK: drop incorrectly labeled border pieces
-            if True and len(self.pieces) == 1026 and not re.fullmatch("([A-Z]+(1|38))|((A|AA)\d+)", p.label):
+            if True and len(self.pieces) == 1026 and not re.fullmatch(r"([A-Z]+(1|38))|((A|AA)\d+)", p.label):
                 print(f"HACK: Skipping {p.label}, not actually a border piece!")
                 continue
 
@@ -995,9 +995,9 @@ class PuzzleSolver:
         # HACK: only consider pieces that could definitely go in this corner
         if False and len(self.pieces) == 1026:
             p0, p1 = corner[0][0], corner[1][0]
-            m0 = re.fullmatch("([A-Z]+)(\d+)", p0)
+            m0 = re.fullmatch(r"([A-Z]+)(\d+)", p0)
             assert m0
-            m1 = re.fullmatch("([A-Z]+)(\d+)", p1)
+            m1 = re.fullmatch(r"([A-Z]+)(\d+)", p1)
             assert m1
             rows = (m0[1], m1[1])
             cols = (m0[2], m1[2])
