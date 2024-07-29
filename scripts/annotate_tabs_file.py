@@ -59,7 +59,11 @@ def annotate_raft_file(good_matches, input_path, output_path):
     reader = csv.DictReader(ifile)
             
     ofile = open(output_path, 'w', newline='')
-    ofields = reader.fieldnames + ['good_match']
+    ofields = reader.fieldnames.copy()
+    
+    ofields.remove('mse')
+    for i in range(4):
+        ofields.append(f'mse{i}')
 
     add_quad_no = 'quad_no' not in ofields
     if add_quad_no:
@@ -69,10 +73,18 @@ def annotate_raft_file(good_matches, input_path, output_path):
     if add_init_rank:
         ofields.append('init_rank')
 
+    ofields.remove('rank')
+    ofields.append('rank')
+    ofields.append('good_match')
+
     def update_rows(rows):
 
+        for r in rows:
+            for i, mse in enumerate(r.pop('mse').split(',')):
+                r[f'mse{i}'] = mse
+
         if add_init_rank:
-            vals = [(float(r['init_mse']), i) for i, r in enumerate(rows)]
+            vals = [(float(r['mse0']), i) for i, r in enumerate(rows)]
             for i, (_, row_no) in enumerate(sorted(vals), start=1):
                 rows[row_no]['init_rank'] = i
             
