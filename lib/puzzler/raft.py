@@ -1,6 +1,8 @@
 import puzzler
 import collections
 import functools
+import itertools
+import operator
 import numpy as np
 import re
 import scipy
@@ -37,11 +39,12 @@ Frontiers = Sequence[Frontier]
 FeaturePair = Tuple[Feature,Feature]
 FeaturePairs = Sequence[FeaturePair]
 
+AxisFeatures = Mapping[int,Frontier]
+
 @dataclass
 class Raft:
 
     coords: Coords
-    frontiers: Frontiers
 
 @dataclass
 class RaftAlignment:
@@ -131,7 +134,7 @@ class RaftFactory:
         
         coords = {src: Coord(0.,(0.,0.))}
         frontiers = self.compute_frontiers(coords)
-        return Raft(coords, frontiers)
+        return Raft(coords)
 
     def transform_coords(self, coords: Coords, xform: Coord) -> Coords:
         def helper(coord):
@@ -145,7 +148,141 @@ class RaftFactory:
 
         coords = dst_raft.coords | self.transform_coords(src_raft.coords, alignment.src_coord)
         frontiers = self.compute_frontiers(coords)
-        return Raft(coords, frontiers)
+        return Raft(coords)
+
+class RaftFeatures(NamedTuple):
+    tab_strips: Frontiers
+    edge_strips: Frontiers
+
+class RaftFeaturesComputer:
+
+    def __init__(self, pieces: Pieces):
+        self.pieces = pieces
+        self.distance_query_cache = puzzler.align.DistanceQueryCache(purge_interval=10_000)
+
+    def compute_features(self, coords: Coords) -> RaftFeatures:
+        boundaries = self.compute_boundaries(coords)
+        frontiers = [self.compute_frontier_for_boundary(i) for i in boundaries]
+
+        tabs = []
+        edges = []
+        for frontier in frontiers:
+            if any(f.kind == 'edge' for f in frontier):
+                edges.append(frontier)
+            else:
+                tabs.append(frontier)
+
+        if len(edges) > 1:
+            raise ValueError("all edges should be contained in a single frontier!")
+
+        if len(edges):
+            edges = self.split_frontier_into_edge_strips(edges[0], coords)
+
+    def split_frontier_into_edge_strips(self, frontier: Frontier, coords: Coords) -> Frontiers:
+
+        edges = []
+        
+        for k, g in itertools.groupby(frontier, key=operator.attrgetter('kind')):
+            if k == 'edge':
+                edges += list(g)
+
+        # rotate the edges so we start with a corner piece, thus
+        # insuring we don't split a run along one axis
+
+        for i, f in enumerate(edges):
+            if f.index != 0:
+                break
+
+        edges = edges[i:] + edges[:i]
+
+        print(f"{edges=}")
+        
+        helper = FeatureHelper(self.pieces, coords)
+        
+        axes = [helper.get_edge_unit_vector(edges[0])]
+        for _ in range(3):
+            x, y = axes[-1]
+            axes.append(np.array((-y, x)))
+
+        axes = np.array(axes)
+
+        print(f"{axes=}")
+
+        axis_nos = []
+        for f in edges:
+            v = helper.get_edge_unit_vector(f)
+            axis_nos.append(np.argmax(np.sum(axes * v, axis=1)))
+
+        print(f"{axis_nos=}")
+
+        for k, g in itertools.groupby(axis_nos):
+            print(f"axis={k} count={len(list(g))}")
+
+        return edges
+
+    def compute_boundaries(self, coords: Coords) -> Boundaries:
+        
+        closest = puzzler.solver.ClosestPieces(
+            self.pieces, coords, None, self.distance_query_cache)
+        adjacency = dict((i, closest(i)) for i in coords)
+        
+        bc = puzzler.solver.BoundaryComputer(self.pieces)
+        return bc.find_boundaries_from_adjacency(adjacency)
+
+    def compute_frontier_for_boundary(self, boundary) -> Frontier:
+
+        frontier = []
+        for label, (a, b) in boundary:
+            frontier += self.compute_ordered_features_for_segment(label, a, b)
+        return frontier
+
+    def compute_ordered_features_for_segment(self, label, a, b):
+
+        p = self.pieces[label]
+        n = len(p.points)
+        segment = puzzler.commands.align.RingRange(a, b, n)
+        
+        def midpoint(indexes):
+            i, j = indexes
+            if i < j:
+                m = (i + j) // 2
+            else:
+                m = ((i + j + n) // 2) % n
+            return m
+
+        def is_edge_included(edge):
+            return midpoint(edge.fit_indexes) in segment
+
+        def is_tab_included(tab):
+            return midpoint(tab.tangent_indexes) in segment
+
+        def position_in_ring(f):
+            if f.kind == 'tab':
+                m = midpoint(p.tabs[f.index].tangent_indexes)
+            else:
+                m = midpoint(p.edges[f.index].fit_indexes)
+            # adjust the midpoint so that points that occur later in
+            # the segment always have a higher reported midpoint, even
+            # if the segment "wraps" from high indices to low indices.
+            # An alternative would be to report these points as
+            # relative offsets within the segment, i.e. perform all of
+            # these calculations and then subtract a, so it should
+            # always be the case that 0 <= m < len(segment)
+            if a > b and m < b:
+                m += n
+            return m
+            
+        features = []
+        
+        for i, edge in enumerate(p.edges):
+            if is_edge_included(edge):
+                features.append(Feature(label, 'edge', i))
+                
+        for i, tab in enumerate(p.tabs):
+            if is_tab_included(tab):
+                features.append(Feature(label, 'tab', i))
+
+        return sorted(features, key=position_in_ring)
 
 class FeatureHelper:
 
@@ -161,6 +298,11 @@ class FeatureHelper:
         edge = self.pieces[f.piece].edges[f.index]
 
         return coord.xform.apply_v2(edge.line.pts)
+
+    def get_edge_unit_vector(self, f: Feature) -> np.ndarray:
+
+        pts = self.get_edge_points(f)
+        return puzzler.math.unit_vector(pts[1] - pts[0])
 
     def get_edge_angle(self, f: Feature) -> float:
         
@@ -224,10 +366,10 @@ class RaftAligner:
 
         raise ValueError("don't know how to align features")
 
-    def is_edge_pair(self, p):
+    def is_edge_pair(self, p: FeaturePair) -> bool:
         return p[0].kind == 'edge' and p[1].kind == 'edge'
 
-    def is_tab_pair(self, p):
+    def is_tab_pair(self, p: FeaturePair) -> bool:
         return p[0].kind == 'tab' and p[1].kind == 'tab'
 
     def feature_helper(self, raft: Raft) -> FeatureHelper:
@@ -345,6 +487,8 @@ class RaftAligner:
         seams = self.seamstress.trim_seams(
             self.seamstress.seams_between_rafts(dst_raft, src_raft, src_raft_coord))
 
+        raise ValueError("oops, not implemented")
+
     def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam]) -> Raft:
 
         verbose = False
@@ -394,7 +538,7 @@ class RaftAligner:
                 coord = Coord(body.angle, body.center)
             coords[piece] = coord
 
-        return Raft(coords, raft.frontiers)
+        return Raft(coords)
 
 class RaftSeamstress:
 

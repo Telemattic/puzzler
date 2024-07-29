@@ -221,8 +221,7 @@ def try_triples(pieces, quad, num_refine):
     def remove_piece_from_raft(raft, label):
         coords = raft.coords.copy()
         coords.pop(label)
-        frontiers = raftinator.factory.compute_frontiers(coords)
-        new_raft = puzzler.raft.Raft(coords, frontiers)
+        new_raft = puzzler.raft.Raft(coords)
         return raftinator.refine_alignment_within_raft(new_raft)
 
     def find_nearest_tab(raft, dst_label, src_label):
@@ -422,7 +421,7 @@ def triples_main(args):
                 quads.append(row)
 
     with open(output_csv_path, 'w', newline='') as ofile:
-        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft init_mse mse rank'
+        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft mse rank'
         writer = csv.DictWriter(ofile, fieldnames=fieldnames.split())
         writer.writeheader()
 

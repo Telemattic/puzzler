@@ -646,12 +646,15 @@ class AlignTk:
         for p, c in self.solver.geometry.coords.items():
             coords[p] = puzzler.raft.Coord(c.angle, c.xy)
 
-        raft = puzzler.raft.Raft(coords, raftinator.factory.compute_frontiers(coords))
+        raft = puzzler.raft.Raft(coords)
         mse = raftinator.get_total_error_for_raft_and_seams(raft)
             
         raft2 = raftinator.refine_alignment_within_raft(raft)
         mse2 = raftinator.get_total_error_for_raft_and_seams(raft2)
 
+        rfc = puzzler.raft.RaftFeaturesComputer(pieces)
+        rfc.compute_features(raft.coords)
+        
         print(f"raft: {mse=:.3f} {mse2=:.3f}")
 
         for p in self.pieces:
@@ -993,6 +996,11 @@ class AlignTk:
             curr_m = dst_coord.xform.matrix
             prev_m = coord.matrix
             pieces[label].coords = Coord.from_matrix(curr_m @ prev_m)
+
+        pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
+
+        rfc = puzzler.raft.RaftFeaturesComputer(pieces)
+        rfc.compute_features(raft.coords)
 
         self.render_vertexes = dict()
         self.render_normals = dict()

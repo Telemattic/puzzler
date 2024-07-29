@@ -60,6 +60,22 @@ class BorderSolver:
                 print(f"HACK: Skipping {p.label}, not actually a border piece!")
                 continue
 
+            # HACK: reject pieces with too many edges that aren't clearly corner pieces
+            if True and n > 1:
+                assert n == 2
+                l0, l1 = p.edges[0].line, p.edges[1].line
+                v0 = puzzler.math.unit_vector(l0.pts[1] - l0.pts[0])
+                v1 = puzzler.math.unit_vector(l1.pts[1] - l1.pts[0])
+                cross = np.cross(v0, v1)
+                with np.printoptions(precision=3):
+                    print(f"CORNER: {p.label} {v0=} {v1=} {cross=}")
+                if np.abs(cross) < 0.9:
+                    print(f"HACK: piece {p.label} has {n} edges, but doesn't look like a corner, only keeping longest edge")
+                    len0 = np.linalg.norm(l0.pts[1] - l0.pts[0])
+                    len1 = np.linalg.norm(l1.pts[1] - l1.pts[0])
+                    p.edges.pop(1 if len0 > len1 else 0)
+                    n = 1
+
             (pred, succ) = self.compute_edge_info(p)
             self.pred[p.label] = pred
             self.succ[p.label] = succ
@@ -202,7 +218,7 @@ class BorderSolver:
 
     def link_pieces(self, scores):
 
-        print(f"link_pieces: corners={len(self.corners)}, edges={len(self.edges)}")
+        print(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
         # print(f"{scores=}")
 
         expected_pairs = dict()
@@ -728,7 +744,7 @@ class PuzzleSolver:
         self.frontiers = None
         self.corners = []
         self.distance_query_cache = puzzler.align.DistanceQueryCache()
-        self.use_raftinator = False
+        self.use_raftinator = True
         self.raftinator = puzzler.raft.Raftinator(pieces)
         self.seams = []
         self.expected_tab_matches = expected
@@ -894,7 +910,7 @@ class PuzzleSolver:
                 e = ','.join(str(f) for f in expected_piece_features)
                 print(f"    expected={e} actual={a}\n")
 
-        dst_raft = puzzler.raft.Raft(self.geometry.coords, [])
+        dst_raft = puzzler.raft.Raft(self.geometry.coords)
         src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
         seams = self.raftinator.seamstress.trim_seams(
             self.raftinator.seamstress.seams_between_rafts(dst_raft, src_raft, coords))
@@ -944,11 +960,12 @@ class PuzzleSolver:
                     coords[label] = self.coords[label]
                 coords[src_label] = src_coord
 
-                # print(f"  measure_fit: {src_label=} {src_coord=} pieces={','.join(coords.keys())}")
+                magic_corner = src_label == 'B2' and all(k in coords for k in ('A1', 'A2', 'B1'))
+                if magic_corner:
+                    print(f"  measure_fit: {src_label=} {src_coord=} pieces={','.join(coords.keys())}")
+                    coords = {k:coords[k] for k in ('A1', 'A2', 'B1', 'B2')}
 
-                frontiers = self.raftinator.factory.compute_frontiers(coords)
-                
-                raft = puzzler.raft.Raft(coords, frontiers)
+                raft = puzzler.raft.Raft(coords)
 
                 for _ in range(1):
                     raft = self.raftinator.refine_alignment_within_raft(raft)
