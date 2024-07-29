@@ -82,8 +82,8 @@ class RaftFactory:
         return Raft(coords)
 
 class RaftFeatures(NamedTuple):
-    tab_strips: Frontiers
-    edge_strips: Frontiers
+    tabs: Frontiers
+    axes: Mapping[int,Frontier]
 
 class RaftFeaturesComputer:
 
@@ -106,10 +106,11 @@ class RaftFeaturesComputer:
         if len(edges) > 1:
             raise ValueError("all edges should be contained in a single frontier!")
 
-        if len(edges):
-            edges = self.split_frontier_into_edge_strips(edges[0], coords)
+        axes = self.split_frontier_into_axes(edges[0], coords) if edges else dict()
 
-    def split_frontier_into_edge_strips(self, frontier: Frontier, coords: Coords) -> Frontiers:
+        return RaftFeatures(tabs, axes)
+
+    def split_frontier_into_axes(self, frontier: Frontier, coords: Coords) -> Frontiers:
 
         edges = []
         
@@ -126,8 +127,6 @@ class RaftFeaturesComputer:
 
         edges = edges[i:] + edges[:i]
 
-        print(f"{edges=}")
-        
         helper = FeatureHelper(self.pieces, coords)
         
         axes = [helper.get_edge_unit_vector(edges[0])]
@@ -137,19 +136,18 @@ class RaftFeaturesComputer:
 
         axes = np.array(axes)
 
-        print(f"{axes=}")
-
         axis_nos = []
         for f in edges:
             v = helper.get_edge_unit_vector(f)
-            axis_nos.append(np.argmax(np.sum(axes * v, axis=1)))
+            i = np.argmax(np.sum(axes * v, axis=1))
+            axis_nos.append((i, f))
 
-        print(f"{axis_nos=}")
+        axes = dict()
+        for axis_no, group in itertools.groupby(axis_nos, key=operator.itemgetter(0)):
+            assert axis_no not in axes
+            axes[axis_no] = [f for _, f in group]
 
-        for k, g in itertools.groupby(axis_nos):
-            print(f"axis={k} count={len(list(g))}")
-
-        return edges
+        return axes
 
     def compute_boundaries(self, coords: Coords) -> Boundaries:
         
