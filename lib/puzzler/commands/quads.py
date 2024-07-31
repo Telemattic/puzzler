@@ -1,3 +1,4 @@
+import collections
 import csv
 import decimal
 import itertools
@@ -212,6 +213,86 @@ def quads_main(args):
         for quad in tqdm(quads, smoothing=0):
             writer.writerows(quadmaster(pieces, quad))
 
+class PocketFinder:
+
+    class Helper:
+        def __init__(self, pieces, coords):
+            self.pieces = pieces
+            self.coords = coords
+            self.helper = puzzler.raft.FeatureHelper(pieces, coords)
+            self.overlaps = puzzler.solver.OverlappingPieces(pieces, coords)
+            self.features = puzzler.raft.RaftFeaturesComputer(pieces).compute_features(coords)
+
+        def get_tab_unit_vector(self, f):
+            p0 = self.coords[f.piece].xy
+            p1 = self.helper.get_tab_center(f)
+            return puzzler.math.unit_vector(p1 - p0)
+
+        def get_neighbor(self, label, vec):
+
+            coord = self.coords[label]
+            piece = self.pieces[label]
+            for neighbor in self.overlaps(coord.xy, piece.radius):
+                if neighbor == label:
+                    continue
+                neighbor_coord = self.coords[neighbor]
+                nvec = puzzler.math.unit_vector(neighbor_coord.xy - coord.xy)
+                if np.sum(nvec * vec) > .9:
+                    return neighbor
+
+            return None
+
+    def __init__(self, pieces):
+        self.pieces = pieces
+
+    def find_pockets(self, raft):
+
+        pockets = []
+        try:
+            helper = PocketFinder.Helper(self.pieces, raft.coords)
+            for frontier in helper.features.tabs:
+                pockets += self.get_pockets_for_frontier(helper, frontier)
+        except ValueError as x:
+            # see split_frontier_into_axes
+            print(x)
+
+        return pockets
+
+    def get_pockets_for_frontier(self, helper, frontier):
+
+        n = len(frontier)
+        if n < 2:
+            return []
+
+        retval = []
+        for i in range(n):
+            a = frontier[i-1]
+            b = frontier[i]
+            if a.kind != 'tab' or b.kind != 'tab':
+                continue
+
+            # does this look like an inside corner?
+            va = helper.get_tab_unit_vector(a)
+            vb = helper.get_tab_unit_vector(b)
+
+            # with np.printoptions(precision=3):
+            #     print(f"{a=!s} {b=!s} {va=} {vb=} {np.cross(va,vb)=}")
+            
+            if np.cross(va, vb) < .7:
+                continue
+
+            # find the shared piece between A and B
+            na = helper.get_neighbor(a.piece, (va[1], -va[0]))
+            nb = helper.get_neighbor(b.piece, (-vb[1], vb[0]))
+            if na is None or nb is None or a == nb or b == na or na != nb:
+                continue
+
+            retval.append((a, na, b))
+
+        return retval
+
+pocket_histogram = collections.defaultdict(int)
+
 def try_triples(pieces, quad, num_refine):
 
     Feature = puzzler.raft.Feature
@@ -313,6 +394,42 @@ def try_triples(pieces, quad, num_refine):
             if a.piece != drop_label and b.piece != drop_label:
                 triple_feature_pairs.append((a,b))
                 
+        if True:
+            print(f"quad_raft={quad['raft']}")
+            print(f"  {drop_quadrant=} {drop_label=}")
+            print(f"  triple_raft={raftinator.format_feature_pairs(triple_feature_pairs)}")
+            print(f"  {fit_tab_pair=}")
+            pf = PocketFinder(pieces)
+            pockets = pf.find_pockets(triple_raft)
+            s = [(str(a), b, str(c)) for a, b, c in pockets]
+            print(f"  pockets={s}")
+
+            quadrants = ('ul_piece', 'ur_piece', 'lr_piece', 'll_piece')
+            i = quadrants.index(drop_quadrant)
+
+            pred = quad[quadrants[i-1]]
+            succ = quad[quadrants[i-3]]
+            other = quad[quadrants[i-2]]
+
+            print(f"  {pred=} {other=} {succ=}")
+
+            for pocket in pockets:
+                assert pocket[0].piece == pred and pocket[1] == other and pocket[2].piece == succ
+                assert pocket[0].piece == fit_tab_pair[1][0]
+                assert pocket[0].index == fit_tab_pair[1][1]
+                assert pocket[2].piece == fit_tab_pair[0][0]
+                assert pocket[2].index == fit_tab_pair[0][1]
+
+            if len(pockets) == 0:
+                if fit_tab_pair[0] is not None and fit_tab_pair[1] is not None:
+                    print("  --- NO POCKETS! ---")
+
+            pocket_histogram[len(pockets)] += 1
+
+            print("\n")
+
+            continue
+
         if debug:
             print(f"{drop_label=} {fit_tab_pair=}")
 
@@ -465,6 +582,8 @@ def triples_main(args):
 
             for quad in tqdm(quads, smoothing=0):
                 writer.writerows(try_triples(pieces, quad, args.refine))
+
+            print(f"{pocket_histogram=}")
 
 def add_parser(commands):
 
