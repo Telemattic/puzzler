@@ -382,12 +382,12 @@ def try_triples(pieces, quad, num_refine):
 
         return retval
 
-    debug = False
+    def make_tab_pair(a, b):
 
-    # HACK
-    if debug:
-        print(f"raft_desc={quad['raft']}")
-            
+        tab_a = (a.piece, a.index, pieces[a.piece].tabs[a.index].indent) if a is not None else None
+        tab_b = (b.piece, b.index, pieces[b.piece].tabs[b.index].indent) if b is not None else None
+        return (tab_a, tab_b)
+
     good_raft = raftinator.make_raft_from_string(quad['raft'])
 
     retval2 = []
@@ -398,84 +398,27 @@ def try_triples(pieces, quad, num_refine):
 
         drop_label = quad[drop_quadrant]
 
-        # HACK
-        if debug and drop_label != 'B3':
-            continue
-
         triple_raft = remove_piece_from_raft(good_raft, drop_label)
 
-        fit_tab_pair = get_inside_corner_tab_pair(good_raft, quad, drop_quadrant)
+        pockets = PocketFinder(pieces).find_pockets(triple_raft)
+        assert len(pockets) == 1
+
+        pocket = pockets.pop()
+
+        assert pocket.pieces == frozenset(triple_raft.coords.keys())
+
+        fit_tab_pair = make_tab_pair(pocket.tab_a, pocket.tab_b)
 
         triple_feature_pairs = []
         for a, b in raftinator.parse_feature_pairs(quad['raft']):
             if a.piece != drop_label and b.piece != drop_label:
                 triple_feature_pairs.append((a,b))
-                
-        if True:
-            print(f"quad_raft={quad['raft']}")
-            print(f"  {drop_quadrant=} {drop_label=}")
-            print(f"  triple_raft={raftinator.format_feature_pairs(triple_feature_pairs)}")
-            print(f"  {fit_tab_pair=}")
-            pf = PocketFinder(pieces)
-            pockets = pf.find_pockets(triple_raft)
-
-            print(', '.join(str(i) for i in pockets))
-
-            quadrants = ('ul_piece', 'ur_piece', 'lr_piece', 'll_piece')
-            i = quadrants.index(drop_quadrant)
-
-            pred = quad[quadrants[i-1]]
-            succ = quad[quadrants[i-3]]
-            other = quad[quadrants[i-2]]
-
-            print(f"{pred=} {succ=} {other=}")
-
-            for pocket in pockets:
-
-                print(str(pocket))
-
-                fit_a, fit_b = fit_tab_pair
-                
-                if fit_a is None:
-                    assert pocket.tab_a is None
-                else:
-                    assert pocket.tab_a is not None
-                    assert pocket.tab_a.piece == fit_a[0] == succ
-                    assert pocket.tab_a.kind == 'tab'
-                    assert pocket.tab_a.index == fit_a[1]
-
-                if fit_b is None:
-                    assert pocket.tab_b is None
-                else:
-                    assert pocket.tab_b is not None
-                    assert pocket.tab_b.piece == fit_b[0] == pred
-                    assert pocket.tab_b.kind == 'tab'
-                    assert pocket.tab_b.index == fit_b[1]
-
-                assert set(pocket.pieces) == {pred, succ, other}
-                    
-            if len(pockets) == 0:
-                if fit_tab_pair[0] is not None and fit_tab_pair[1] is not None:
-                    print("  --- NO POCKETS! ---")
-
-            pocket_histogram[len(pockets)] += 1
-
-            print("\n")
-
-            continue
-
-        if debug:
-            print(f"{drop_label=} {fit_tab_pair=}")
 
         retval = []
 
         for try_label, try_piece in pieces.items():
             
             if try_label in triple_raft.coords:
-                continue
-
-            # HACK
-            if debug and try_label not in ('B3'):
                 continue
 
             try_raft = raftinator.factory.make_raft_for_piece(try_label)
@@ -485,9 +428,6 @@ def try_triples(pieces, quad, num_refine):
                 try_feature_pairs = make_feature_pairs(fit_tab_pair, try_tab_pair)
                 if len(try_feature_pairs) < 1:
                     continue
-
-                if debug:
-                    print(f"  try_feature_pairs={raftinator.format_feature_pairs(try_feature_pairs)}")
 
                 new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(
                     triple_raft, try_raft, try_feature_pairs)
@@ -505,9 +445,6 @@ def try_triples(pieces, quad, num_refine):
 
                 desc = raftinator.format_feature_pairs(triple_feature_pairs + try_feature_pairs)
                 
-                if debug:
-                    print(f"  {mse=:.3f} {desc=}")
-
                 row = {'quad_no': quad_no,
                        'ul_piece': quad['ul_piece'],
                        'ur_piece': quad['ur_piece'],
