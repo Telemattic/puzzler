@@ -563,7 +563,7 @@ class ClosestPieces:
                     v.pop()
 
         return retval
-    
+
 class BoundaryComputer:
 
     def __init__(self, pieces):
@@ -573,6 +573,33 @@ class BoundaryComputer:
 
         successors, neighbors, nodes_on_frontier = self.compute_successors_and_neighbors(adjacency)
         return self.find_boundaries(successors, neighbors, nodes_on_frontier)[0]
+
+    @staticmethod
+    def to_dotty(f, successors, neighbors, nodes_on_frontier):
+
+        assert all(neighbors[v] == k for k, v in neighbors.items())
+
+        node_set = successors.keys() | set(successors.values()) | neighbors.keys() | set(neighbors.values())
+        nodes = dict()
+        for i, n in enumerate(node_set):
+            nodes[n] = f"node_{i}"
+
+        print('digraph G {', file=f)
+
+        for k, v in nodes.items():
+            attr = f'label="{k}"'
+            if k in nodes_on_frontier:
+                attr += ' style=bold'
+            print(f'  {v} [{attr}]', file=f)
+
+        for k, v in successors.items():
+            print(f'  {nodes[k]} -> {nodes[v]} [style=dashed]', file=f)
+
+        for k, v in neighbors.items():
+            if nodes[k] <= nodes[v]:
+                print(f'  {nodes[k]} -> {nodes[v]} [dir=both]', file=f)
+
+        print('}', file=f)
 
     def compute_successors_and_neighbors(self, adjacency):
 
@@ -634,38 +661,26 @@ class BoundaryComputer:
             visited = set(frontier)
 
             fullpath = [head]
-        
+
+            # on the frontier, therefore has no neighbor, must take
+            # successor
             curr = successors[head]
 
-            while curr not in visited: # [1]
+            while curr != head:
 
-                # [1] this condition was formerly curr != head, followed by
-                #
-                #   assert curr not in visited
-                #
-                # but this assertion got tripped on simple rafts of
-                # just two pieces, perhaps uniquely because of their
-                # topology.  Changing the while loop as above fixes
-                # the issue, without understanding why the assert was
-                # failing
-                
-                visited.add(curr)
-
-                # if the current node has a neighbor (is not on the
-                # frontier) then jump to the neighbor and then to its
-                # successor (by definition the neighbor's neighbor would
-                # take us back to curr)
                 if neighbor := neighbors.get(curr):
-
-                    assert neighbor not in visited
-                    visited.add(neighbor)
-                    fullpath.append(neighbor)
-                    
+                    # if the current node has a neighbor (is not on the
+                    # frontier) then jump to the neighbor and then to its
+                    # successor (by definition the neighbor's neighbor would
+                    # take us back to curr)
                     curr = neighbor
                 else:
+                    # the current node has no neighbor, and is
+                    # therefore on the frontier
+                    visited.add(curr)
                     frontier.append(curr)
-                    fullpath.append(curr)
-                
+
+                fullpath.append(curr)
                 curr = successors[curr]
 
             covered |= visited
