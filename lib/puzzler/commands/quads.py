@@ -7,6 +7,8 @@ import math
 import multiprocessing as mp
 import numpy as np
 import puzzler
+from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Set, Tuple
+
 from tqdm import tqdm
 
 def axis_for_angle(phi):
@@ -213,6 +215,16 @@ def quads_main(args):
         for quad in tqdm(quads, smoothing=0):
             writer.writerows(quadmaster(pieces, quad))
 
+Feature = puzzler.raft.Feature
+
+class Pocket(NamedTuple):
+    tab_a: Feature
+    tab_b: Feature
+    pieces: Set[str]
+
+    def __str__(self):
+        return f"Pocket({self.tab_a!s}, {self.tab_b!s}, {self.pieces})"
+
 class PocketFinder:
 
     class Helper:
@@ -221,12 +233,26 @@ class PocketFinder:
             self.coords = coords
             self.helper = puzzler.raft.FeatureHelper(pieces, coords)
             self.overlaps = puzzler.solver.OverlappingPieces(pieces, coords)
-            self.features = puzzler.raft.RaftFeaturesComputer(pieces).compute_features(coords)
+            self.frontiers = puzzler.raft.RaftFeaturesComputer(pieces).compute_frontiers(coords)
 
         def get_tab_unit_vector(self, f):
             p0 = self.coords[f.piece].xy
             p1 = self.helper.get_tab_center(f)
             return puzzler.math.unit_vector(p1 - p0)
+
+        def find_tab_in_direction(self, p, v0):
+            tabs = self.pieces[p].tabs
+            if len(tabs) == 0:
+                return None
+            
+            tab_vecs = np.array([tab.ellipse.center for tab in tabs])
+            tab_vecs = tab_vecs / np.linalg.norm(tab_vecs, axis=1, keepdims=True)
+            tab_vecs = self.coords[p].xform.apply_n2(tab_vecs)
+            
+            dp = np.sum(tab_vecs * v0, axis=1)
+
+            i = np.argmax(dp)
+            return i if dp[i] > .7 else None
 
         def get_neighbor(self, label, vec):
 
@@ -247,56 +273,47 @@ class PocketFinder:
 
     def find_pockets(self, raft):
 
+        helper = PocketFinder.Helper(self.pieces, raft.coords)
+
         pockets = []
-        try:
-            helper = PocketFinder.Helper(self.pieces, raft.coords)
-            for frontier in helper.features.tabs:
-                pockets += self.get_pockets_for_frontier(helper, frontier)
-        except ValueError as x:
-            # see split_frontier_into_axes
-            print(x)
+        for tab in self.get_tabs_on_frontiers(helper.frontiers):
+            pockets += self.get_pockets_for_tab(helper, tab)
+
+        return set(pockets)
+
+    def get_pockets_for_tab(self, helper, tab):
+
+        vt = helper.get_tab_unit_vector(tab)
+        vl = np.array((vt[1], -vt[0]))
+        vr = -vl
+
+        pockets = []
+
+        if nl := helper.get_neighbor(tab.piece, vl):
+            if nll := helper.get_neighbor(nl, vt):
+                tabl = helper.find_tab_in_direction(nll, -vl)
+                if tabl is not None:
+                    tabl = Feature(nll, 'tab', tabl)
+                pockets.append(Pocket(tabl, tab, frozenset([tab.piece, nl, nll])))
+            
+        if nr := helper.get_neighbor(tab.piece, vr):
+            if nrr := helper.get_neighbor(nr, vt):
+                tabr = helper.find_tab_in_direction(nrr, -vr)
+                if tabr is not None:
+                    tabr = Feature(nrr, 'tab', tabr)
+                pockets.append(Pocket(tab, tabr, frozenset([tab.piece, nr, nrr])))
 
         return pockets
 
-    def get_pockets_for_frontier(self, helper, frontier):
+    @staticmethod
+    def get_tabs_on_frontiers(frontiers):
 
-        n = len(frontier)
-        if n < 2:
-            return []
-
-        retval = []
-        for i in range(n):
-            a = frontier[i-1]
-            b = frontier[i]
-            if a.kind != 'tab' or b.kind != 'tab':
-                continue
-
-            # does this look like an inside corner?
-            va = helper.get_tab_unit_vector(a)
-            vb = helper.get_tab_unit_vector(b)
-
-            # with np.printoptions(precision=3):
-            #     print(f"{a=!s} {b=!s} {va=} {vb=} {np.cross(va,vb)=}")
-            
-            if np.cross(va, vb) < .7:
-                continue
-
-            # find the shared piece between A and B
-            na = helper.get_neighbor(a.piece, (va[1], -va[0]))
-            nb = helper.get_neighbor(b.piece, (-vb[1], vb[0]))
-            if na is None or nb is None or a == nb or b == na or na != nb:
-                continue
-
-            retval.append((a, na, b))
-
-        return retval
+        return set([i for i in itertools.chain(*frontiers) if i.kind == 'tab'])
 
 pocket_histogram = collections.defaultdict(int)
 
 def try_triples(pieces, quad, num_refine):
 
-    Feature = puzzler.raft.Feature
-    
     raftinator = puzzler.raft.Raftinator(pieces)
     
     def remove_piece_from_raft(raft, label):
@@ -401,8 +418,8 @@ def try_triples(pieces, quad, num_refine):
             print(f"  {fit_tab_pair=}")
             pf = PocketFinder(pieces)
             pockets = pf.find_pockets(triple_raft)
-            s = [(str(a), b, str(c)) for a, b, c in pockets]
-            print(f"  pockets={s}")
+
+            print(', '.join(str(i) for i in pockets))
 
             quadrants = ('ul_piece', 'ur_piece', 'lr_piece', 'll_piece')
             i = quadrants.index(drop_quadrant)
@@ -411,15 +428,32 @@ def try_triples(pieces, quad, num_refine):
             succ = quad[quadrants[i-3]]
             other = quad[quadrants[i-2]]
 
-            print(f"  {pred=} {other=} {succ=}")
+            print(f"{pred=} {succ=} {other=}")
 
             for pocket in pockets:
-                assert pocket[0].piece == pred and pocket[1] == other and pocket[2].piece == succ
-                assert pocket[0].piece == fit_tab_pair[1][0]
-                assert pocket[0].index == fit_tab_pair[1][1]
-                assert pocket[2].piece == fit_tab_pair[0][0]
-                assert pocket[2].index == fit_tab_pair[0][1]
 
+                print(str(pocket))
+
+                fit_a, fit_b = fit_tab_pair
+                
+                if fit_a is None:
+                    assert pocket.tab_a is None
+                else:
+                    assert pocket.tab_a is not None
+                    assert pocket.tab_a.piece == fit_a[0] == succ
+                    assert pocket.tab_a.kind == 'tab'
+                    assert pocket.tab_a.index == fit_a[1]
+
+                if fit_b is None:
+                    assert pocket.tab_b is None
+                else:
+                    assert pocket.tab_b is not None
+                    assert pocket.tab_b.piece == fit_b[0] == pred
+                    assert pocket.tab_b.kind == 'tab'
+                    assert pocket.tab_b.index == fit_b[1]
+
+                assert set(pocket.pieces) == {pred, succ, other}
+                    
             if len(pockets) == 0:
                 if fit_tab_pair[0] is not None and fit_tab_pair[1] is not None:
                     print("  --- NO POCKETS! ---")

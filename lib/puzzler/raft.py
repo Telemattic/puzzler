@@ -93,39 +93,9 @@ class RaftFeaturesComputer:
 
     def compute_features(self, coords: Coords) -> RaftFeatures:
 
-        def merge_boundary(boundary):
-
-            # Gross: we can end up with the same piece appearing
-            # consecutively on the boundary and get confused, just
-            # smoosh them all together and pray
-
-            if len(boundary) > 1 and boundary[0][0] == boundary[-1][0]:
-                for i, b in enumerate(boundary):
-                    if boundary[0][0] != b[0]:
-                        break
-
-                boundary = boundary[i:] + boundary[:i]
-
-            retval = []
-            for k, g in itertools.groupby(boundary, key=operator.itemgetter(0)):
-                g = list(j for _, j in g)
-                a, b = g[0][0], g[-1][1]
-                retval.append((k, (a,b)))
-                    
-            return retval
-            
-        boundaries = [merge_boundary(i) for i in self.compute_boundaries(coords)]
-        
-        frontiers = [self.compute_frontier_for_boundary(i) for i in boundaries]
-
-        if False:
-            print(f"{boundaries=}")
-            s = [tuple(str(i) for i in frontier) for frontier in frontiers]
-            print(f"frontiers={s}")
-
         tabs = []
         edges = []
-        for frontier in frontiers:
+        for frontier in self.compute_frontiers(coords):
             if any(f.kind == 'edge' for f in frontier):
                 edges.append(frontier)
             if any(f.kind == 'tab' for f in frontier):
@@ -176,6 +146,10 @@ class RaftFeaturesComputer:
 
         return axes
 
+    def compute_frontiers(self, coords: Coords) -> Frontiers:
+
+        return [self.compute_frontier_for_boundary(i) for i in self.compute_boundaries(coords)]
+
     def compute_boundaries(self, coords: Coords) -> Boundaries:
         
         closest = puzzler.solver.ClosestPieces(
@@ -183,8 +157,30 @@ class RaftFeaturesComputer:
         adjacency = dict((i, closest(i)) for i in coords)
         
         bc = puzzler.solver.BoundaryComputer(self.pieces)
-        return bc.find_boundaries_from_adjacency(adjacency)
+        return [self.simplify_boundary(i) for i in bc.find_boundaries_from_adjacency(adjacency)]
 
+    @staticmethod
+    def simplify_boundary(boundary):
+
+        # Gross: we can end up with the same piece appearing
+        # consecutively on the boundary and get confused, just
+        # smoosh them all together and pray
+
+        if len(boundary) > 1 and boundary[0][0] == boundary[-1][0]:
+            for i, b in enumerate(boundary):
+                if boundary[0][0] != b[0]:
+                    break
+
+            boundary = boundary[i:] + boundary[:i]
+
+        retval = []
+        for k, g in itertools.groupby(boundary, key=operator.itemgetter(0)):
+            g = list(j for _, j in g)
+            a, b = g[0][0], g[-1][1]
+            retval.append((k, (a,b)))
+                    
+        return retval
+            
     def compute_frontier_for_boundary(self, boundary) -> Frontier:
 
         frontier = []
