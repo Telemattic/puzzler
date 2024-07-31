@@ -92,15 +92,43 @@ class RaftFeaturesComputer:
         self.distance_query_cache = puzzler.align.DistanceQueryCache(purge_interval=10_000)
 
     def compute_features(self, coords: Coords) -> RaftFeatures:
-        boundaries = self.compute_boundaries(coords)
+
+        def merge_boundary(boundary):
+
+            # Gross: we can end up with the same piece appearing
+            # consecutively on the boundary and get confused, just
+            # smoosh them all together and pray
+
+            if len(boundary) > 1 and boundary[0][0] == boundary[-1][0]:
+                for i, b in enumerate(boundary):
+                    if boundary[0][0] != b[0]:
+                        break
+
+                boundary = boundary[i:] + boundary[:i]
+
+            retval = []
+            for k, g in itertools.groupby(boundary, key=operator.itemgetter(0)):
+                g = list(j for _, j in g)
+                a, b = g[0][0], g[-1][1]
+                retval.append((k, (a,b)))
+                    
+            return retval
+            
+        boundaries = [merge_boundary(i) for i in self.compute_boundaries(coords)]
+        
         frontiers = [self.compute_frontier_for_boundary(i) for i in boundaries]
+
+        if False:
+            print(f"{boundaries=}")
+            s = [tuple(str(i) for i in frontier) for frontier in frontiers]
+            print(f"frontiers={s}")
 
         tabs = []
         edges = []
         for frontier in frontiers:
             if any(f.kind == 'edge' for f in frontier):
                 edges.append(frontier)
-            else:
+            if any(f.kind == 'tab' for f in frontier):
                 tabs.append(frontier)
 
         if len(edges) > 1:
@@ -118,15 +146,6 @@ class RaftFeaturesComputer:
             if k == 'edge':
                 edges += list(g)
 
-        # rotate the edges so we start with a corner piece, thus
-        # insuring we don't split a run along one axis
-
-        for i, f in enumerate(edges):
-            if f.index != 0:
-                break
-
-        edges = edges[i:] + edges[:i]
-
         helper = FeatureHelper(self.pieces, coords)
         
         axes = [helper.get_edge_unit_vector(edges[0])]
@@ -142,9 +161,17 @@ class RaftFeaturesComputer:
             i = np.argmax(np.sum(axes * v, axis=1))
             axis_nos.append((i, f))
 
+        # rotate the edge so we don't split an axis if we can avoid it
+        if len(axis_nos) > 1 and axis_nos[0][0] == axis_nos[-1][0]:
+            for i, axis_no in enumerate(axis_nos):
+                if axis_no[0] != axis_nos[0][0]:
+                    break
+            axis_nos = axis_nos[i:] + axis_nos[:i]
+
         axes = dict()
         for axis_no, group in itertools.groupby(axis_nos, key=operator.itemgetter(0)):
-            assert axis_no not in axes
+            if axis_no in axes:
+                raise ValueError("axis order is nonsense, indicative of bad edge labeling")
             axes[axis_no] = [f for _, f in group]
 
         return axes
