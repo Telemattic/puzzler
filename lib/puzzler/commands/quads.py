@@ -35,10 +35,6 @@ def tab_pairs_for_piece(piece):
 
     for tab_no, tab in enumerate(piece.tabs):
 
-        # HACK: skip known bad runt tab
-        if piece.label == 'K33' and len(piece.tabs) == 5 and tab_no == 1:
-            continue
-
         x, y = tab.ellipse.center
         angle = math.atan2(y, x)
             
@@ -310,8 +306,6 @@ class PocketFinder:
 
         return set([i for i in itertools.chain(*frontiers) if i.kind == 'tab'])
 
-pocket_histogram = collections.defaultdict(int)
-
 def try_triples(pieces, quad, num_refine):
 
     raftinator = puzzler.raft.Raftinator(pieces)
@@ -321,43 +315,6 @@ def try_triples(pieces, quad, num_refine):
         coords.pop(label)
         new_raft = puzzler.raft.Raft(coords)
         return raftinator.refine_alignment_within_raft(new_raft)
-
-    def find_nearest_tab(raft, dst_label, src_label):
-        src_coord = raft.coords[src_label]
-        dst_coord = raft.coords[dst_label]
-        dst_piece = pieces[dst_label]
-
-        dst_src_vec = puzzler.math.unit_vector(src_coord.xy - dst_coord.xy)
-
-        best_dp = 0.7 # set a floor on how close things need to be
-        nearest_tab = None
-        
-        for dst_tab_no, dst_tab in enumerate(dst_piece.tabs):
-            dst_tab_vec = puzzler.math.unit_vector(dst_coord.xform.apply_n2(dst_tab.ellipse.center))
-            dp = np.sum(dst_src_vec * dst_tab_vec)
-
-            if best_dp < dp:
-                assert nearest_tab is None 
-                best_dp = dp
-                nearest_tab = (dst_label, dst_tab_no, dst_tab.indent)
-
-        return nearest_tab
-            
-    def get_inside_corner_tab_pair(raft, quad, drop_quadrant):
-
-        label_order = ['ul_piece', 'ur_piece', 'lr_piece', 'll_piece']
-        i = label_order.index(drop_quadrant)
-
-        curr_label = quad[drop_quadrant]
-        prev_label = quad[label_order[i-1]]
-        next_label = quad[label_order[i-3]]
-
-        prev_tab = find_nearest_tab(raft, prev_label, curr_label)
-        next_tab = find_nearest_tab(raft, next_label, curr_label)
-
-        # print(f"raft={quad['raft']} prev={prev_label} curr={curr_label} next={next_label} retval={(prev_tab, next_tab)}")
-        # return (prev_tab, next_tab)
-        return (next_tab, prev_tab)
 
     def make_feature_pair(a, b):
         if a is None or b is None:
@@ -553,8 +510,6 @@ def triples_main(args):
 
             for quad in tqdm(quads, smoothing=0):
                 writer.writerows(try_triples(pieces, quad, args.refine))
-
-            print(f"{pocket_histogram=}")
 
 def add_parser(commands):
 
