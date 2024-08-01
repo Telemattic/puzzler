@@ -32,7 +32,7 @@ class Feature(NamedTuple):
         else:
             x = '{' + x + '}'
         return self.piece + x + str(self.index)
-    
+
 Frontier = Sequence[Feature]
 Frontiers = Sequence[Frontier]
 
@@ -441,7 +441,11 @@ class RaftAligner:
 
         raise ValueError("oops, not implemented")
 
-    def refine_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam]) -> Raft:
+    def refine_alignment_within_raft(
+            self,
+            raft: Raft,
+            seams: Sequence[Seam],
+            axis_features: Optional[Frontiers] = None) -> Raft:
 
         verbose = False
 
@@ -449,8 +453,18 @@ class RaftAligner:
 
         pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
 
-        fixed_piece = self.find_piece_closest_to_origin(raft)
-        
+        axes = [None] * 4
+
+        if axis_features is None:
+            fixed_piece = self.find_piece_closest_to_origin(raft)
+        else:
+            axes = [
+                icp.make_axis(np.array((0, -1), dtype=float), 0., True),
+                icp.make_axis(np.array((1, 0), dtype=float)),
+                icp.make_axis(np.array((0, 1), dtype=float)),
+                icp.make_axis(np.array((-1, 0), dtype=float), 0., True)
+            ]
+
         if verbose:
             print(f"refine_alignment_within_raft: {fixed_piece=}")
 
@@ -473,6 +487,12 @@ class RaftAligner:
             
             icp.add_body_correspondence(src_body, src_points,
                                         dst_body, dst_points, dst_normals)
+
+        if axis_features:
+            for axis_no, frontier in enumerate(axis_features):
+                for f in frontier:
+                    e = self.pieces[f.piece].edges[f.index]
+                    icp.add_axis_correspondence(bodies[f.piece], e.line.pts, axes[axis_no])
 
         icp.solve()
 
@@ -613,6 +633,7 @@ class RaftSeamstress:
         b = si[i]
         return (a, b)
 
+    @functools.lru_cache(maxsize=1024)
     def seam_between_pieces(self, dst_label: str, dst_coord: Coord, src_label: str, src_coord: Coord) -> Optional[Seam]:
 
         src_piece = self.pieces[src_label]
@@ -626,7 +647,8 @@ class RaftSeamstress:
 
         src_points_in_dst_frame = dst_inverse_xform.apply_v2(src_points)
 
-        distance, dst_indices = self.get_kdtree(dst_label).query(src_points_in_dst_frame, distance_upper_bound=self.medium_cutoff)
+        distance, dst_indices = self.get_kdtree(dst_label).query(
+            src_points_in_dst_frame, distance_upper_bound=self.medium_cutoff)
         if np.all(distance > self.medium_cutoff):
             return None
 

@@ -845,6 +845,39 @@ class PuzzleSolver:
 
         Feature = puzzler.raft.Feature
 
+        def get_axis_features(raft):
+
+            rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+            
+            border = None
+            for frontier in rfc.compute_frontiers(raft.coords):
+                if all(i.kind == 'edge' for i in frontier):
+                    border = frontier
+                    break
+
+            if border is None:
+                return None
+
+            axes = rfc.split_frontier_into_axes(border, raft.coords)
+
+            # convert from a dict to an array
+            axes = [axes.get(i, []) for i in range(4)]
+
+            fh = puzzler.raft.FeatureHelper(self.pieces, raft.coords)
+
+            # rotate the array so that the "natural" axis 0 is first
+            for i, axis in enumerate(axes):
+                if len(axis) == 0:
+                    continue
+                vec = fh.get_edge_unit_vector(axis[0])
+                if np.dot(vec, np.array((-1, 0))) > .8:
+                    break
+
+            if i < 4:
+                axes = axes[i:] + axes[:i]
+
+            return None
+
         def get_expected_piece_and_tabs_for_corner(corner):
             if self.expected_tab_matches is None:
                 return None, tuple()
@@ -894,20 +927,40 @@ class PuzzleSolver:
                 e = ','.join(str(f) for f in expected_piece_features)
                 print(f"    expected={e} actual={a}\n")
 
-        dst_raft = puzzler.raft.Raft(self.geometry.coords)
-        src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
-        seams = self.raftinator.seamstress.trim_seams(
-            self.raftinator.seamstress.seams_between_rafts(dst_raft, src_raft, coords))
-        self.seams = seams
-        print(f"{src_label=} MSE={self.raftinator.seamstress.cumulative_error_for_seams(seams):.3f}")
-        if src_label == 'Z4':
-            for i, seam in enumerate(seams):
-                print(f" seam[{i}]: {seam.dst.piece=} {seam.src.piece=} {seam.error=:.3f} seam.n_points={len(seam.src.indices)}")
+        if False:
+            dst_raft = puzzler.raft.Raft(self.geometry.coords)
+            src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
+            seams = self.raftinator.seamstress.trim_seams(
+                self.raftinator.seamstress.seams_between_rafts(dst_raft, src_raft, coords))
+            self.seams = seams
+            print(f"{src_label=} MSE={self.raftinator.seamstress.cumulative_error_for_seams(seams):.3f}")
+            if src_label == 'Z4':
+                for i, seam in enumerate(seams):
+                    print(f" seam[{i}]: {seam.dst.piece=} {seam.src.piece=} {seam.error=:.3f} seam.n_points={len(seam.src.indices)}")
             
         for src_tab_no, dst in zip(src_tabs, corner):
             self.constraints.append(TabConstraint((src_label, src_tab_no), dst))
 
-        self.geometry.coords[src_label] = coords
+        feature_pairs = [
+            (Feature(corner[0][0], 'tab', corner[0][1]), Feature(src_label, 'tab', src_tabs[0])),
+            (Feature(corner[1][0], 'tab', corner[1][1]), Feature(src_label, 'tab', src_tabs[1]))
+        ]
+
+        dst_raft = puzzler.raft.Raft(self.geometry.coords)
+        src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
+        new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
+            dst_raft, src_raft, feature_pairs)
+
+        seams = self.raftinator.get_seams_for_raft(new_raft)
+
+        axis_features = get_axis_features(new_raft)
+
+        refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
+            new_raft, seams, axis_features)
+
+        print(f"trim_seams: {self.raftinator.seamstress.seam_between_pieces.cache_info()}")
+
+        self.geometry.coords = refined_raft.coords
 
         self.update_adjacency()
 

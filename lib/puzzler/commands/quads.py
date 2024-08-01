@@ -272,7 +272,7 @@ class PocketFinder:
         helper = PocketFinder.Helper(self.pieces, raft.coords)
         if frontiers is None:
             frontiers = puzzler.raft.RaftFeaturesComputer(self.pieces).compute_frontiers(raft.coords)
-            
+
         pockets = []
         for tab in self.get_tabs_on_frontiers(frontiers):
             pockets += self.get_pockets_for_tab(helper, tab)
