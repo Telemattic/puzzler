@@ -219,7 +219,8 @@ class Pocket(NamedTuple):
     pieces: Set[str]
 
     def __str__(self):
-        return f"Pocket({self.tab_a!s}, {self.tab_b!s}, {self.pieces})"
+        s = '{' + ', '.join(self.pieces) + '}'
+        return f"Pocket({self.tab_a!s}, {self.tab_b!s}, {s})"
 
 class PocketFinder:
 
@@ -229,7 +230,6 @@ class PocketFinder:
             self.coords = coords
             self.helper = puzzler.raft.FeatureHelper(pieces, coords)
             self.overlaps = puzzler.solver.OverlappingPieces(pieces, coords)
-            self.frontiers = puzzler.raft.RaftFeaturesComputer(pieces).compute_frontiers(coords)
 
         def get_tab_unit_vector(self, f):
             p0 = self.coords[f.piece].xy
@@ -248,7 +248,7 @@ class PocketFinder:
             dp = np.sum(tab_vecs * v0, axis=1)
 
             i = np.argmax(dp)
-            return i if dp[i] > .7 else None
+            return int(i) if dp[i] > .7 else None
 
         def get_neighbor(self, label, vec):
 
@@ -260,19 +260,21 @@ class PocketFinder:
                 neighbor_coord = self.coords[neighbor]
                 nvec = puzzler.math.unit_vector(neighbor_coord.xy - coord.xy)
                 if np.sum(nvec * vec) > .9:
-                    return neighbor
+                    return str(neighbor)
 
             return None
 
     def __init__(self, pieces):
         self.pieces = pieces
 
-    def find_pockets(self, raft):
+    def find_pockets(self, raft, frontiers = None):
 
         helper = PocketFinder.Helper(self.pieces, raft.coords)
-
+        if frontiers is None:
+            frontiers = puzzler.raft.RaftFeaturesComputer(self.pieces).compute_frontiers(raft.coords)
+            
         pockets = []
-        for tab in self.get_tabs_on_frontiers(helper.frontiers):
+        for tab in self.get_tabs_on_frontiers(frontiers):
             pockets += self.get_pockets_for_tab(helper, tab)
 
         return set(pockets)

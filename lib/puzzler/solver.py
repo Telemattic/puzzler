@@ -2,6 +2,7 @@ import puzzler
 import collections
 import csv
 from datetime import datetime
+import functools
 import itertools
 import json
 import math
@@ -867,39 +868,7 @@ class PuzzleSolver:
 
         self.distance_query_cache.purge()
 
-        fits = []
-        for corner in self.corners:
-            v = self.score_corner(corner)
-            if False and len(v) >= 2 and v[0][1] == 'O28' and v[1][1] == 'X37':
-                # HACK: force X37 to fit in place of O28
-                fits.append((0.1, *v[1]))
-            elif len(v) > 1:
-                r = v[0][0] / v[1][0]
-                fits.append((r, *v[0]))
-            elif v:
-                fits.append((1., *v[0]))
-
-            s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
-
-            # HACK: show the scoring on the known correct piece
-            if corner == (('Y4', 3), ('Z5', 0)):
-                for i in v[3:]:
-                    s.append(f"{i[1]}:{i[0]:.1f}")
-                    if i[1] == 'Y5':
-                        break
-                        
-            print(f"{corner}: " + ", ".join(s))
-
-            expected_piece, expected_tabs = get_expected_piece_and_tabs_for_corner(corner)
-            if expected_piece:
-                for i, fit in enumerate(v):
-                    if fit[1] == expected_piece: # and fit[3] == expected_tabs:
-                        break
-                if i == len(v):
-                    print(f">>> expected match ({expected_piece}, {expected_tabs}) not scored!")
-                elif i > 0:
-                    print(f">>> expected match ({expected_piece}, {expected_tabs}) found at position {i}")
-                    print(v[i][1], v[i][3])
+        fits = self.score_pockets() if self.use_raftinator else self.score_corners()
 
         if not fits:
             return
@@ -952,42 +921,76 @@ class PuzzleSolver:
         path = self.next_path('solver_' + ts, 'json')
         save_json(path, self)
 
+    def score_corners(self):
+        fits = []
+        for corner in self.corners:
+            v = self.score_corner(corner)
+            if False and len(v) >= 2 and v[0][1] == 'O28' and v[1][1] == 'X37':
+                # HACK: force X37 to fit in place of O28
+                fits.append((0.1, *v[1]))
+            elif len(v) > 1:
+                r = v[0][0] / v[1][0]
+                fits.append((r, *v[0]))
+            elif v:
+                fits.append((1., *v[0]))
+
+            s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
+
+            # HACK: show the scoring on the known correct piece
+            if corner == (('Y4', 3), ('Z5', 0)):
+                for i in v[3:]:
+                    s.append(f"{i[1]}:{i[0]:.1f}")
+                    if i[1] == 'Y5':
+                        break
+                        
+            print(f"{corner}: " + ", ".join(s))
+
+            expected_piece, expected_tabs = get_expected_piece_and_tabs_for_corner(corner)
+            if expected_piece:
+                for i, fit in enumerate(v):
+                    if fit[1] == expected_piece: # and fit[3] == expected_tabs:
+                        break
+                if i == len(v):
+                    print(f">>> expected match ({expected_piece}, {expected_tabs}) not scored!")
+                elif i > 0:
+                    print(f">>> expected match ({expected_piece}, {expected_tabs}) found at position {i}")
+                    print(v[i][1], v[i][3])
+
+        return fits
+
+    def score_pockets(self):
+
+        pocket_finder = puzzler.commands.quads.PocketFinder(self.pieces)
+        pockets = pocket_finder.find_pockets(puzzler.raft.Raft(self.geometry.coords)) #, self.frontiers)
+
+        fits = []
+        for pocket in pockets:
+            
+            v = self.score_pocket(pocket)
+            
+            if False and len(v) >= 2 and v[0][1] == 'O28' and v[1][1] == 'X37':
+                # HACK: force X37 to fit in place of O28
+                fits.append((0.1, *v[1]))
+            elif len(v) > 1:
+                r = v[0][0] / v[1][0]
+                fits.append((r, *v[0]))
+            elif v:
+                fits.append((1., *v[0]))
+
+            s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
+
+            print(f"{pocket!s}: " + ','.join(s))
+
+        return fits
+
+    @functools.cache
     def score_corner(self, corner):
 
         # print(f"score_corner: {corner=}")
 
-        class RaftHelper:
-
-            def __init__(self, pieces, coords, raftinator):
-                self.pieces = pieces
-                self.coords = coords
-                self.overlaps = OverlappingPieces(pieces, coords)
-                self.max_dist = 256
-                self.raftinator = raftinator
-
-            def measure_fit(self, src_label, src_coord):
-
-                src_center = src_coord.xy
-                src_radius = self.pieces[src_label].radius
-                
-                coords = dict()
-                for label in self.overlaps(src_center, src_radius + self.max_dist).tolist():
-                    coords[label] = self.coords[label]
-                coords[src_label] = src_coord
-
-                magic_corner = src_label == 'B2' and all(k in coords for k in ('A1', 'A2', 'B1'))
-                if magic_corner:
-                    print(f"  measure_fit: {src_label=} {src_coord=} pieces={','.join(coords.keys())}")
-                    coords = {k:coords[k] for k in ('A1', 'A2', 'B1', 'B2')}
-
-                raft = puzzler.raft.Raft(coords)
-
-                for _ in range(1):
-                    raft = self.raftinator.refine_alignment_within_raft(raft)
-
-                return self.raftinator.get_total_error_for_raft_and_seams(raft)
-                
         assert 2 == len(corner)
+
+        print(f"score_corner: {corner=}")
 
         corner = (corner[1], corner[0])
         dst_tabs = tuple([self.pieces[p].tabs[i].indent for p, i in corner])
@@ -999,6 +1002,9 @@ class PuzzleSolver:
                 continue
 
             n = len(src_piece.tabs)
+            if n < 2:
+                continue
+            
             for i in range(n):
                 prev = src_piece.tabs[i-1]
                 curr = src_piece.tabs[i]
@@ -1007,25 +1013,8 @@ class PuzzleSolver:
                     src_tabs = ((i+n-1)%n, i)
                     allways.append((src_piece.label, src_tabs))
 
-        # HACK: only consider pieces that could definitely go in this corner
-        if False and len(self.pieces) == 1026:
-            p0, p1 = corner[0][0], corner[1][0]
-            m0 = re.fullmatch(r"([A-Z]+)(\d+)", p0)
-            assert m0
-            m1 = re.fullmatch(r"([A-Z]+)(\d+)", p1)
-            assert m1
-            rows = (m0[1], m1[1])
-            cols = (m0[2], m1[2])
-            valid = set(row + col for row in rows for col in cols)
-            # print(f"HACK: {corner=} {valid=}")
-            allways = [(src_label, src_tabs) for src_label, src_tabs in allways if src_label in valid]
-
         aligner = puzzler.align.MultiAligner(
             corner, self.pieces, self.geometry, self.distance_query_cache)
-
-        raft_helper = None
-        if self.use_raftinator:
-            raft_helper = RaftHelper(self.pieces, self.geometry.coords, self.raftinator)
 
         fits = []
 
@@ -1034,12 +1023,76 @@ class PuzzleSolver:
             src_piece = self.pieces[src_label]
             src_coords = aligner.compute_alignment(src_piece, src_tabs)
 
-            if raft_helper is not None:
-                mse = raft_helper.measure_fit(src_label, src_coords)
-            else:
-                mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
+            mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
             
             fits.append((mse, src_label, src_coords, src_tabs, corner))
+
+        fits.sort(key=operator.itemgetter(0))
+
+        return fits
+
+    @functools.cache
+    def score_pocket(self, pocket):
+
+        print(str(pocket))
+
+        # FIXME: bail out if we've got a pocket w/o both tabs
+        if pocket.tab_a is None or pocket.tab_b is None:
+            return []
+        
+        dst_corner = ((pocket.tab_a.piece, pocket.tab_a.index), (pocket.tab_b.piece, pocket.tab_b.index))
+
+        # dst_tabs = tuple([self.pieces[p].tabs[i].indent for p, i in corner])
+        dst_tabs = tuple([self.pieces[i.piece].tabs[i.index].indent for i in (pocket.tab_a, pocket.tab_b)])
+
+        allways = []
+        for src_label, src_piece in self.pieces.items():
+            
+            if src_label in self.geometry.coords:
+                continue
+
+            n = len(src_piece.tabs)
+            if n < 2:
+                continue
+
+            for i in range(n):
+                
+                prev = src_piece.tabs[i-1]
+                curr = src_piece.tabs[i]
+
+                if prev.indent == dst_tabs[0] or curr.indent == dst_tabs[1]:
+                    continue
+
+                src_tabs = ((i-1) % n, i)
+                allways.append((src_label, src_tabs))
+
+        dst_raft = puzzler.raft.Raft({k: self.geometry.coords[k] for k in pocket.pieces})
+        dst_raft = self.raftinator.refine_alignment_within_raft(dst_raft)
+
+        fits = []
+
+        Feature = puzzler.raft.Feature
+
+        for src_label, src_tabs in allways:
+
+            try_feature_pairs = [(pocket.tab_a, Feature(src_label, 'tab', src_tabs[0])),
+                                 (pocket.tab_b, Feature(src_label, 'tab', src_tabs[1]))]
+
+            src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
+
+            new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
+                dst_raft, src_raft, try_feature_pairs)
+
+            new_raft2 = self.raftinator.refine_alignment_within_raft(new_raft)
+                           
+            mse = self.raftinator.get_total_error_for_raft_and_seams(new_raft2)
+
+            # we return the coordinate of the first fit (no alignment)
+            # because otherwise the position of the pieces it has been
+            # fit against also get adjusted, confusing things --
+            # really it would be better to just return the
+            # "instruction" for the fit instead of the fit corner.
+            fits.append((mse, src_label, new_raft.coords[src_label], src_tabs, dst_corner))
 
         fits.sort(key=operator.itemgetter(0))
 
