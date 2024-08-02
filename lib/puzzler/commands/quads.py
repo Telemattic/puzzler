@@ -388,7 +388,12 @@ class PocketFitter:
                 d = 0
             else:
                 d = axis_for_angle(angle - ref_angle)
-                
+
+            # HACK, see piece L16 from 300.json
+            if dirs[d] is not None:
+                assert label in {'L16'}
+                continue
+             
             assert dirs[d] is None
             dirs[d] = (piece.label, tab_no, tab.indent)
 
@@ -573,26 +578,20 @@ def try_triples(pieces, quad, num_refine):
 
     return retval2
 
-def triplets_worker(puzzle_path, num_refine, src_q, dst_q):
+TRIPLES_PUZZLE = None
+TRIPLES_REFINE = None
 
-    puzzle = puzzler.file.load(puzzle_path)
-    
-    pieces = {p.label: p for p in puzzle.pieces}
+def triples_init(puzzle_path, num_refine):
 
-    job = src_q.get()
-    while job:
+    global TRIPLES_PUZZLE, TRIPLES_REFINE
 
-        try:
-            rows = try_triples(pieces, job, num_refine)
-            dst_q.put(rows)
-        except:
-            print(f"\n\nError processing {job=}\n")
+    TRIPLES_PUZZLE = puzzler.file.load(puzzle_path)
+    TRIPLES_REFINE = num_refine
 
-        # HACK: only do 1 job and then exit
-        break
-        job = src_q.get()
+def triples_work(quad):
 
-    return
+    pieces = {p.label: p for p in TRIPLES_PUZZLE.pieces}
+    return try_triples(pieces, quad, TRIPLES_REFINE)
 
 def triples_main(args):
 
@@ -620,47 +619,17 @@ def triples_main(args):
         writer = csv.DictWriter(ofile, fieldnames=fieldnames.split())
         writer.writeheader()
 
-        # HACK
-        if False:
-            for q in quads:
-                if q['lr_piece'] == 'B3':
-                    writer.writerows(try_triples(pieces, q, arg.refine))
-            return
-
-        def start_worker():
-            p = mp.Process(target=triplets_worker, args=(puzzle_path, args.refine, src_q, dst_q), daemon=True)
-            p.start()
-            return p
-
         if args.num_workers:
-            src_q = mp.Queue()
-            dst_q = mp.Queue()
-
-            workers = []
-            for _ in range(args.num_workers):
-                workers.append(start_worker())
-
-            for q in quads:
-                src_q.put(q)
-
-            num_jobs = len(quads)
-            pbar = tqdm(total=num_jobs, smoothing=0)
-            while num_jobs > 0:
-                job = dst_q.get()
-                num_jobs -= 1
-                pbar.update()
-                writer.writerows(job)
-
-                dead = [p for p in workers if not p.is_alive()]
-                for p in dead:
-                    p.join()
-                    workers.remove(p)
-
-                while len(workers) < min(num_jobs, args.num_workers):
-                    workers.append(start_worker())
-
-            for p in workers:
-                p.join()
+            
+            with mp.Pool(args.num_workers,
+                         triples_init,
+                         [puzzle_path, args.refine],
+                         maxtasksperchild=10) as pool:
+                
+                pbar = tqdm(total=len(quads), smoothing=0)
+                for result in pool.imap_unordered(triples_work, quads):
+                    writer.writerows(result)
+                    pbar.update()
         else:
 
             for quad in tqdm(quads, smoothing=0):
