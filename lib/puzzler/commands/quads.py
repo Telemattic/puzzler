@@ -330,7 +330,7 @@ class PocketFitter:
 
         self.dst_tab_pair = (dst_tab_a, dst_tab_b)
 
-    def measure_fit(self, src_label, debug=False):
+    def measure_fit(self, src_label):
 
         if src_label in self.dst_raft.coords:
             return []
@@ -342,11 +342,6 @@ class PocketFitter:
 
             feature_pairs = self.make_feature_pairs(src_tab_pair)
 
-            if debug:
-                print(f"DEBUG: dst_tab_pair={self.dst_tab_pair} {src_tab_pair=}")
-                s = [(str(a), str(b)) for a, b in feature_pairs]
-                print(f"DEBUG:   --> feature_pairs={s}")
-            
             if len(feature_pairs) < 1:
                 continue
 
@@ -550,9 +545,7 @@ def try_triples(pieces, quad, num_refine):
 
             for fit_label in pieces:
     
-                debug = drop_label == 'A10' and fit_label == 'A12'
-                
-                for mse, try_feature_pairs in pocket_fitter.measure_fit(fit_label, debug):
+                for mse, try_feature_pairs in pocket_fitter.measure_fit(fit_label):
     
                     desc = raftinator.format_feature_pairs(
                         triple_feature_pairs + try_feature_pairs)
@@ -570,10 +563,6 @@ def try_triples(pieces, quad, num_refine):
                     
                     retval.append(row)
 
-        for i, row in enumerate(retval):
-            if row['drop_piece'] == 'A10' and row['fit_piece'] == 'A10':
-                print(f"retval[{i}]={row}")
-    
         retval.sort(key=lambda x: x['mse'][-1])
         for i, row in enumerate(retval, start=1):
             row['rank'] = i
@@ -598,7 +587,9 @@ def triplets_worker(puzzle_path, num_refine, src_q, dst_q):
             dst_q.put(rows)
         except:
             print(f"\n\nError processing {job=}\n")
-            
+
+        # HACK: only do 1 job and then exit
+        break
         job = src_q.get()
 
     return
@@ -636,24 +627,21 @@ def triples_main(args):
                     writer.writerows(try_triples(pieces, q, arg.refine))
             return
 
+        def start_worker():
+            p = mp.Process(target=triplets_worker, args=(puzzle_path, args.refine, src_q, dst_q), daemon=True)
+            p.start()
+            return p
+
         if args.num_workers:
             src_q = mp.Queue()
             dst_q = mp.Queue()
 
             workers = []
             for _ in range(args.num_workers):
-                p = mp.Process(target=triplets_worker, args=(puzzle_path, args.refine, src_q, dst_q), daemon=True)
-                workers.append(p)
-                
-            for p in workers:
-                p.start()
+                workers.append(start_worker())
 
             for q in quads:
                 src_q.put(q)
-
-            # sentinels so workers exit
-            for _ in workers:
-                src_q.put(None)
 
             num_jobs = len(quads)
             pbar = tqdm(total=num_jobs, smoothing=0)
@@ -662,6 +650,14 @@ def triples_main(args):
                 num_jobs -= 1
                 pbar.update()
                 writer.writerows(job)
+
+                dead = [p for p in workers if not p.is_alive()]
+                for p in dead:
+                    p.join()
+                    workers.remove(p)
+
+                while len(workers) < min(num_jobs, args.num_workers):
+                    workers.append(start_worker())
 
             for p in workers:
                 p.join()
