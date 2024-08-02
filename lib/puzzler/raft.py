@@ -157,30 +157,8 @@ class RaftFeaturesComputer:
         adjacency = dict((i, closest(i)) for i in coords)
         
         bc = puzzler.solver.BoundaryComputer(self.pieces)
-        return [self.simplify_boundary(i) for i in bc.find_boundaries_from_adjacency(adjacency)]
+        return bc.find_boundaries_from_adjacency(adjacency)
 
-    @staticmethod
-    def simplify_boundary(boundary):
-
-        # Gross: we can end up with the same piece appearing
-        # consecutively on the boundary and get confused, just
-        # smoosh them all together and pray
-
-        if len(boundary) > 1 and boundary[0][0] == boundary[-1][0]:
-            for i, b in enumerate(boundary):
-                if boundary[0][0] != b[0]:
-                    break
-
-            boundary = boundary[i:] + boundary[:i]
-
-        retval = []
-        for k, g in itertools.groupby(boundary, key=operator.itemgetter(0)):
-            g = list(j for _, j in g)
-            a, b = g[0][0], g[-1][1]
-            retval.append((k, (a,b)))
-                    
-        return retval
-            
     def compute_frontier_for_boundary(self, boundary) -> Frontier:
 
         frontier = []

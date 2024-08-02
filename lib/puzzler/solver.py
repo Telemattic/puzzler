@@ -11,6 +11,7 @@ import operator
 import os
 import re
 import scipy
+import time
 from dataclasses import dataclass
 
 def pairwise_circular(iterable):
@@ -573,7 +574,8 @@ class BoundaryComputer:
     def find_boundaries_from_adjacency(self, adjacency):
 
         successors, neighbors, nodes_on_frontier = self.compute_successors_and_neighbors(adjacency)
-        return self.find_boundaries(successors, neighbors, nodes_on_frontier)[0]
+        boundaries = self.find_boundaries(successors, neighbors, nodes_on_frontier)[0]
+        return [self.simplify_boundary(i) for i in boundaries]
 
     @staticmethod
     def to_dotty(f, successors, neighbors, nodes_on_frontier):
@@ -602,6 +604,28 @@ class BoundaryComputer:
 
         print('}', file=f)
 
+    @staticmethod
+    def simplify_boundary(boundary):
+
+        # Gross: we can end up with the same piece appearing
+        # consecutively on the boundary and get confused, just
+        # smoosh them all together and pray
+
+        if len(boundary) > 1 and boundary[0][0] == boundary[-1][0]:
+            for i, b in enumerate(boundary):
+                if boundary[0][0] != b[0]:
+                    break
+
+            boundary = boundary[i:] + boundary[:i]
+
+        retval = []
+        for k, g in itertools.groupby(boundary, key=operator.itemgetter(0)):
+            g = list(j for _, j in g)
+            a, b = g[0][0], g[-1][1]
+            retval.append((k, (a,b)))
+                    
+        return retval
+            
     def compute_successors_and_neighbors(self, adjacency):
 
         src_and_range_to_dst = dict()
@@ -764,6 +788,7 @@ class PuzzleSolver:
         self.raftinator = puzzler.raft.Raftinator(pieces)
         self.seams = []
         self.expected_tab_matches = expected
+        self.start_time = time.monotonic()
 
     def solve(self):
         if self.geometry:
@@ -959,6 +984,8 @@ class PuzzleSolver:
             new_raft, seams, axis_features)
 
         print(f"trim_seams: {self.raftinator.seamstress.seam_between_pieces.cache_info()}")
+        elapsed = time.monotonic() - self.start_time
+        print(f"{elapsed=:.1f} seconds")
 
         self.geometry.coords = refined_raft.coords
 
@@ -1086,8 +1113,6 @@ class PuzzleSolver:
 
     @functools.cache
     def score_pocket(self, pocket):
-
-        print(str(pocket))
 
         # FIXME: bail out if we've got a pocket w/o both tabs
         if pocket.tab_a is None or pocket.tab_b is None:
