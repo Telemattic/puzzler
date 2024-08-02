@@ -308,6 +308,128 @@ class PocketFinder:
 
         return set([i for i in itertools.chain(*frontiers) if i.kind == 'tab'])
 
+class PocketFitter:
+
+    def __init__(self, pieces, dst_raft, pocket, num_refine):
+        self.pieces = pieces
+        self.raftinator = puzzler.raft.Raftinator(pieces)
+        self.num_refine = num_refine
+
+        pocket_raft = puzzler.raft.Raft({i: dst_raft.coords[i].copy() for i in pocket.pieces})
+        self.dst_raft = self.raftinator.refine_alignment_within_raft(pocket_raft)
+
+        dst_tab_a = None
+        if pocket.tab_a is not None:
+            t = pocket.tab_a
+            dst_tab_a = (t.piece, t.index, self.pieces[t.piece].tabs[t.index].indent)
+
+        dst_tab_b = None
+        if pocket.tab_b is not None:
+            t = pocket.tab_b
+            dst_tab_b = (t.piece, t.index, self.pieces[t.piece].tabs[t.index].indent)
+
+        self.dst_tab_pair = (dst_tab_a, dst_tab_b)
+
+    def measure_fit(self, src_label, debug=False):
+
+        if src_label in self.dst_raft.coords:
+            return []
+
+        src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
+
+        retval = []
+        for src_tab_pair in self.tab_pairs_for_piece(src_label):
+
+            feature_pairs = self.make_feature_pairs(src_tab_pair)
+
+            if debug:
+                print(f"DEBUG: dst_tab_pair={self.dst_tab_pair} {src_tab_pair=}")
+                s = [(str(a), str(b)) for a, b in feature_pairs]
+                print(f"DEBUG:   --> feature_pairs={s}")
+            
+            if len(feature_pairs) < 1:
+                continue
+
+            new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
+                self.dst_raft, src_raft, feature_pairs)
+
+            mse = self.compute_mse_with_refinement(new_raft)
+            
+            retval.append((mse, feature_pairs))
+
+        return retval
+
+    def compute_mse_with_refinement(self, raft):
+
+        mse = []
+
+        r = self.raftinator
+
+        seams = r.get_seams_for_raft(raft)
+        mse.append(r.get_total_error_for_raft_and_seams(raft, seams))
+                
+        for _ in range(self.num_refine):
+            raft = r.refine_alignment_within_raft(raft, seams)
+            
+            seams = r.get_seams_for_raft(raft)
+            mse.append(r.get_total_error_for_raft_and_seams(raft, seams))
+
+        return mse
+
+    def tab_pairs_for_piece(self, label):
+
+        piece = self.pieces[label]
+
+        ref_angle = None
+        dirs = [None, None, None, None]
+
+        for tab_no, tab in enumerate(piece.tabs):
+
+            x, y = tab.ellipse.center
+            angle = math.atan2(y, x)
+            
+            if ref_angle is None:
+                ref_angle = angle
+                d = 0
+            else:
+                d = axis_for_angle(angle - ref_angle)
+                
+            assert dirs[d] is None
+            dirs[d] = (piece.label, tab_no, tab.indent)
+
+        retval = []
+        for i in range(4):
+            a = dirs[i-1]
+            b = dirs[i]
+            if a is not None or b is not None:
+                retval.append((a, b))
+
+        return retval
+
+    def make_feature_pairs(self, src_tab_pair):
+
+        retval = []
+        try:
+            fp = self.make_feature_pair(self.dst_tab_pair[0], src_tab_pair[1])
+            if fp is not None:
+                retval.append(fp)
+            fp = self.make_feature_pair(self.dst_tab_pair[1], src_tab_pair[0])
+            if fp is not None:
+                retval.append(fp)
+            
+        except ValueError:
+            retval = []
+
+        return retval
+
+    @staticmethod
+    def make_feature_pair(a, b):
+        if a is None or b is None:
+            return None
+        if a[2] == b[2]:
+            raise ValueError("tab conflict")
+        return (Feature(a[0],'tab',a[1]), Feature(b[0],'tab',b[1]))
+
 def try_triples(pieces, quad, num_refine):
 
     raftinator = puzzler.raft.Raftinator(pieces)
@@ -375,48 +497,83 @@ def try_triples(pieces, quad, num_refine):
 
         retval = []
 
-        for try_label, try_piece in pieces.items():
+        use_legacy_algorithm = False
+
+        if use_legacy_algorithm:
             
-            if try_label in triple_raft.coords:
-                continue
+            for try_label, try_piece in pieces.items():
 
-            try_raft = raftinator.factory.make_raft_for_piece(try_label)
-
-            for try_tab_pair in tab_pairs_for_piece(try_piece):
-
-                try_feature_pairs = make_feature_pairs(fit_tab_pair, try_tab_pair)
-                if len(try_feature_pairs) < 1:
+                if try_label in triple_raft.coords:
                     continue
+    
+                try_raft = raftinator.factory.make_raft_for_piece(try_label)
+    
+                for try_tab_pair in tab_pairs_for_piece(try_piece):
 
-                new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(
-                    triple_raft, try_raft, try_feature_pairs)
+                    try_feature_pairs = make_feature_pairs(fit_tab_pair, try_tab_pair)
 
-                mse = []
-
-                new_seams = raftinator.get_seams_for_raft(new_raft)
-                mse.append(raftinator.get_total_error_for_raft_and_seams(new_raft, new_seams))
-                
-                for _ in range(num_refine):
-                    new_raft = raftinator.refine_alignment_within_raft(new_raft, new_seams)
-                           
+                    if len(try_feature_pairs) < 1:
+                        continue
+    
+                    new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(
+                        triple_raft, try_raft, try_feature_pairs)
+    
+                    mse = []
+    
                     new_seams = raftinator.get_seams_for_raft(new_raft)
                     mse.append(raftinator.get_total_error_for_raft_and_seams(new_raft, new_seams))
+                    
+                    for _ in range(num_refine):
+                        new_raft = raftinator.refine_alignment_within_raft(new_raft, new_seams)
+                               
+                        new_seams = raftinator.get_seams_for_raft(new_raft)
+                        mse.append(raftinator.get_total_error_for_raft_and_seams(new_raft, new_seams))
+    
+                    desc = raftinator.format_feature_pairs(triple_feature_pairs + try_feature_pairs)
 
-                desc = raftinator.format_feature_pairs(triple_feature_pairs + try_feature_pairs)
-                
-                row = {'quad_no': quad_no,
-                       'ul_piece': quad['ul_piece'],
-                       'ur_piece': quad['ur_piece'],
-                       'll_piece': quad['ll_piece'],
-                       'lr_piece': quad['lr_piece'],
-                       'drop_piece': drop_label,
-                       'fit_piece': try_label,
-                       'raft': desc,
-                       'mse': tuple(mse),
-                       'rank': None}
-                
-                retval.append(row)
+                    row = {'quad_no': quad_no,
+                           'ul_piece': quad['ul_piece'],
+                           'ur_piece': quad['ur_piece'],
+                           'll_piece': quad['ll_piece'],
+                           'lr_piece': quad['lr_piece'],
+                           'drop_piece': drop_label,
+                           'fit_piece': try_label,
+                           'raft': desc,
+                           'mse': tuple(mse),
+                           'rank': None}
+                    
+                    retval.append(row)
 
+        else:
+                    
+            pocket_fitter = PocketFitter(pieces, good_raft, pocket, num_refine)
+
+            for fit_label in pieces:
+    
+                debug = drop_label == 'A10' and fit_label == 'A12'
+                
+                for mse, try_feature_pairs in pocket_fitter.measure_fit(fit_label, debug):
+    
+                    desc = raftinator.format_feature_pairs(
+                        triple_feature_pairs + try_feature_pairs)
+                    
+                    row = {'quad_no': quad_no,
+                           'ul_piece': quad['ul_piece'],
+                           'ur_piece': quad['ur_piece'],
+                           'll_piece': quad['ll_piece'],
+                           'lr_piece': quad['lr_piece'],
+                           'drop_piece': drop_label,
+                           'fit_piece': fit_label,
+                           'raft': desc,
+                           'mse': tuple(mse),
+                           'rank': None}
+                    
+                    retval.append(row)
+
+        for i, row in enumerate(retval):
+            if row['drop_piece'] == 'A10' and row['fit_piece'] == 'A10':
+                print(f"retval[{i}]={row}")
+    
         retval.sort(key=lambda x: x['mse'][-1])
         for i, row in enumerate(retval, start=1):
             row['rank'] = i
