@@ -80,7 +80,7 @@ def compute_rigid_transform(P, Q):
 class DistanceImage:
 
     # try to keep this from running away
-    cache = cachetools.LRUCache(maxsize=128)
+    cache = cachetools.LRUCache(maxsize=1026)
 
     @staticmethod
     def Factory(piece):

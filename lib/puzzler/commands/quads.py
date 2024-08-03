@@ -624,7 +624,7 @@ def triples_main(args):
             with mp.Pool(args.num_workers,
                          triples_init,
                          [puzzle_path, args.refine],
-                         maxtasksperchild=10) as pool:
+                         maxtasksperchild=None) as pool:
                 
                 pbar = tqdm(total=len(quads), smoothing=0)
                 for result in pool.imap_unordered(triples_work, quads):
