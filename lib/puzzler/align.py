@@ -1,4 +1,5 @@
 import puzzler
+import cachetools
 import math
 import numpy as np
 import cv2 as cv
@@ -78,7 +79,8 @@ def compute_rigid_transform(P, Q):
 
 class DistanceImage:
 
-    cache = dict()
+    # try to keep this from running away
+    cache = cachetools.LRUCache(maxsize=128)
 
     @staticmethod
     def Factory(piece):

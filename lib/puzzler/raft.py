@@ -660,7 +660,7 @@ class RaftSeamstress:
 
         return Seam(dst_stitches, src_stitches, error)
 
-    @functools.cache
+    @functools.lru_cache(maxsize=128)
     def get_kdtree(self, label: str) -> scipy.spatial.KDTree:
         piece = self.pieces[label]
         return scipy.spatial.KDTree(piece.points)
