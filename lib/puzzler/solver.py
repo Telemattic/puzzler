@@ -780,7 +780,6 @@ class PuzzleSolver:
         self.pieces = pieces
         self.geometry = None
         self.constraints = None
-        self.adjacency = None
         self.frontiers = None
         self.corners = []
         self.distance_query_cache = puzzler.align.DistanceQueryCache()
@@ -905,21 +904,6 @@ class PuzzleSolver:
 
             return None
 
-        def get_expected_piece_and_tabs_for_corner(corner):
-            if self.expected_tab_matches is None:
-                return None, tuple()
-            
-            # corner gets processed backward by score_corner, repeat that here
-            corner_features = [Feature(i, 'tab', j) for i, j in corner[::-1]]
-            expected_piece_features = [self.expected_tab_matches[i] for i in corner_features]
-
-            expected_piece = expected_piece_features[0].piece
-            expected_tabs = tuple(i.index for i in expected_piece_features)
-
-            if all(i.piece == expected_piece for i in expected_piece_features):
-                return expected_piece, expected_tabs
-            return None, tuple()
-        
         if self.geometry is None:
             return
 
@@ -930,7 +914,7 @@ class PuzzleSolver:
 
         t0 = time.monotonic()
 
-        fits = self.score_pockets() if self.use_raftinator else self.score_corners()
+        fits = self.score_pockets()
 
         t_score = time.monotonic() - t0
 
@@ -1022,43 +1006,6 @@ class PuzzleSolver:
         t_process = time.monotonic() - self.start_time
         print(f"solve_field: wall: {t_start=:.1f} {t_finish=:.1f} elapsed: {t_process=:.1f} {t_score=:.1f} {t_seams=:.1f} {t_axis=:.1f} {t_refine=:.1f}\n")
 
-    def score_corners(self):
-        fits = []
-        for corner in self.corners:
-            v = self.score_corner(corner)
-            if False and len(v) >= 2 and v[0][1] == 'O28' and v[1][1] == 'X37':
-                # HACK: force X37 to fit in place of O28
-                fits.append((0.1, *v[1]))
-            elif len(v) > 1:
-                r = v[0][0] / v[1][0]
-                fits.append((r, *v[0]))
-            elif v:
-                fits.append((1., *v[0]))
-
-            s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
-
-            # HACK: show the scoring on the known correct piece
-            if corner == (('Y4', 3), ('Z5', 0)):
-                for i in v[3:]:
-                    s.append(f"{i[1]}:{i[0]:.1f}")
-                    if i[1] == 'Y5':
-                        break
-                        
-            print(f"{corner}: " + ", ".join(s))
-
-            expected_piece, expected_tabs = get_expected_piece_and_tabs_for_corner(corner)
-            if expected_piece:
-                for i, fit in enumerate(v):
-                    if fit[1] == expected_piece: # and fit[3] == expected_tabs:
-                        break
-                if i == len(v):
-                    print(f">>> expected match ({expected_piece}, {expected_tabs}) not scored!")
-                elif i > 0:
-                    print(f">>> expected match ({expected_piece}, {expected_tabs}) found at position {i}")
-                    print(v[i][1], v[i][3])
-
-        return fits
-
     def score_pockets(self):
 
         pocket_finder = puzzler.commands.quads.PocketFinder(self.pieces)
@@ -1081,53 +1028,6 @@ class PuzzleSolver:
             s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
 
             print(f"{pocket!s}: " + ', '.join(s))
-
-        return fits
-
-    def score_corner(self, corner):
-
-        # print(f"score_corner: {corner=}")
-
-        assert 2 == len(corner)
-
-        print(f"score_corner: {corner=}")
-
-        corner = (corner[1], corner[0])
-        dst_tabs = tuple([self.pieces[p].tabs[i].indent for p, i in corner])
-
-        allways = []
-        for src_piece in self.pieces.values():
-                
-            if src_piece.label in self.geometry.coords:
-                continue
-
-            n = len(src_piece.tabs)
-            if n < 2:
-                continue
-            
-            for i in range(n):
-                prev = src_piece.tabs[i-1]
-                curr = src_piece.tabs[i]
-
-                if prev.indent != dst_tabs[0] and curr.indent != dst_tabs[1]:
-                    src_tabs = ((i+n-1)%n, i)
-                    allways.append((src_piece.label, src_tabs))
-
-        aligner = puzzler.align.MultiAligner(
-            corner, self.pieces, self.geometry, self.distance_query_cache)
-
-        fits = []
-
-        for src_label, src_tabs in allways:
-
-            src_piece = self.pieces[src_label]
-            src_coords = aligner.compute_alignment(src_piece, src_tabs)
-
-            mse = aligner.measure_fit(src_piece, src_tabs, src_coords)
-            
-            fits.append((mse, src_label, src_coords, src_tabs, corner))
-
-        fits.sort(key=operator.itemgetter(0))
 
         return fits
 
@@ -1200,7 +1100,6 @@ class PuzzleSolver:
             if is_interesting:
                 good_corners.append((tab0, tab1))
 
-        self.adjacency = adjacency
         self.frontiers = frontiers
         self.corners = good_corners
 
@@ -1250,20 +1149,6 @@ def from_json(pieces, s):
 
         assert False
 
-    def parse_adjacency(o):
-
-        def helper(o):
-            ret = collections.defaultdict(list)
-            for k, v in o.items():
-                ret[k] = [tuple(i) for i in v]
-
-            return ret
-
-        if o is None:
-            return None
-
-        return dict((k, helper(v)) for k, v in o.items())
-
     def parse_frontiers(o):
         if o is None:
             return None
@@ -1290,14 +1175,12 @@ def from_json(pieces, s):
 
     geometry = parse_geometry(o['geometry'])
     constraints = parse_constraints(o['constraints'])
-    adjacency = parse_adjacency(o['adjacency'])
     frontiers = parse_frontiers(o['frontiers'])
     corners = parse_corners(o['corners'])
 
     solver = PuzzleSolver(pieces)
     solver.geometry = geometry
     solver.constraints = constraints
-    solver.adjacency = adjacency
     solver.frontiers = frontiers
     solver.corners = corners
 
@@ -1341,12 +1224,6 @@ def to_json(solver):
 
         assert False
 
-    def format_adjacency(adjacency):
-        if adjacency is None:
-            return None
-
-        return dict((k,v) for k, v in adjacency.items())
-
     def format_frontiers(frontiers):
 
         return frontiers
@@ -1371,7 +1248,6 @@ def to_json(solver):
     o['pieces'] = format_pieces(solver.pieces)
     o['geometry'] = format_geometry(solver.geometry)
     o['constraints'] = format_constraints(solver.constraints)
-    o['adjacency'] = format_adjacency(solver.adjacency)
     o['frontiers'] = format_frontiers(solver.frontiers)
     o['corners'] = format_corners(solver.corners)
 

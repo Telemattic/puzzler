@@ -193,7 +193,6 @@ class PuzzleSGFactory:
         self.frontiers = []
         self.render_frontier_details = False
         self.render_vertex_details = False
-        self.adjacency = dict()
         self.renderer = None
         self.font = None
         self.normals = dict()
@@ -210,9 +209,6 @@ class PuzzleSGFactory:
 
         self.scenegraphbuilder = puzzler.sgbuilder.SceneGraphBuilder()
             
-        if self.adjacency:
-            self.draw_adjacency(self.adjacency)
-
         colors = [tuple(c/255 for c in color) for color in palettable.tableau.Tableau_20.colors]
         for i, piece in enumerate(self.pieces):
 
@@ -381,38 +377,6 @@ class PuzzleSGFactory:
                 label = str(i)
                 sgb.add_text(v, label, font=('Courier New', 12))
 
-    def draw_adjacency(self, adjacency):
-        
-        self.piece_dict = dict((i.piece.label, i) for i in self.pieces)
-        
-        fills = ['purple', 'pink', 'yellow', 'orange', 'cyan']
-        i = 0
-        
-        for k1, v1 in adjacency.items():
-            for k2, v2 in v1.items():
-                self.draw_adjacency_list((k1, k2), v2, fills[i])
-                i = (i + 1) % len(fills)
-
-    def draw_adjacency_list(self, k, v, fill):
-
-        src, dst = k
-        p = self.piece_dict[src]
-
-        tag = src + ":" + dst
-
-        sgb = self.scenegraphbuilder
-
-        with puzzler.sgbuilder.insert_sequence(sgb):
-            sgb.add_translate(p.coords.xy)
-            sgb.add_rotate(p.coords.angle)
-            for a, b in v:
-                points = ring_slice(p.piece.points, a, b+1)
-                if len(points) < 2:
-                    # print(f"{src=} {dst=} {a=} {b=} {points=}")
-                    sgb.add_points(points, radius=8, fill=fill, tags=(tag,))
-                else:
-                    sgb.add_lines(points, width=8, fill=fill, tags=(tag,))
-
 class CanvasHitTester:
 
     def __init__(self, canvas):
@@ -570,11 +534,6 @@ class AlignTk:
         f.frontiers = self.solver.frontiers
         if self.var_render_frontier.get():
             f.render_frontier_details = True
-        if self.var_render_adjacency.get():
-            f.adjacency = self.solver.adjacency
-            # HACK, just show adjacency for this single piece
-            if False and 'B1' in f.adjacency:
-                f.adjacency = {'B1':f.adjacency['B1']}
         if self.render_normals:
             f.normals = self.render_normals
         if self.var_render_vertexes.get():
@@ -602,11 +561,6 @@ class AlignTk:
         self.render()
 
     def do_render_frontier(self):
-        
-        self.scenegraph = None
-        self.render()
-
-    def do_render_adjacency(self):
         
         self.scenegraph = None
         self.render()
@@ -733,12 +687,6 @@ class AlignTk:
 
         b2 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment)
         b2.grid(column=1, row=0, sticky=W)
-
-        self.var_render_adjacency = IntVar(value=0)
-        b3 = ttk.Checkbutton(self.controls, text="Adjacency",
-                             command=self.do_render_adjacency,
-                             variable=self.var_render_adjacency)
-        b3.grid(column=2, row=0, sticky=W)
 
         self.var_render_frontier = IntVar(value=0)
         b4 = ttk.Checkbutton(self.controls, text="Frontier",
