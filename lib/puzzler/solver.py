@@ -115,28 +115,6 @@ class BorderSolver:
 
         return constraints
 
-    def init_placement_X(self, border, scores):
-
-        coords = dict()
-        start = border[0] # "I1"
-
-        p = self.pieces[start]
-        e = p.edges[self.pred[start][0]]
-        v = e.line.pts[0] - e.line.pts[1]
-        angle = -np.arctan2(v[1], v[0])
-
-        coords[start] = Coord(angle)
-
-        for prev, curr in zip(border, border[1:]):
-            assert prev in coords and curr not in coords
-
-            prev_m = coords[prev].xform.matrix
-            curr_m = scores[curr][prev][1].xform.matrix
-
-            coords[curr] = Coord.from_matrix(curr_m @ prev_m)
-
-        return Geometry(0., 0., coords)
-
     def init_placement(self, border):
 
         icp = puzzler.icp.IteratedClosestPoint()
@@ -357,34 +335,7 @@ class BorderSolver:
         with open(path, 'w', newline='') as f:
             f.write(json.dumps(o, indent=4))
                 
-    def score_matches(self, reverse=False):
-
-        def raftinator_compute_alignment(dst_label, dst_desc, src_label, src_desc):
-
-            r = self.raftinator
-            
-            Feature = puzzler.raft.Feature
-            edge_pair = (Feature(dst_label, 'edge', dst_desc[0]), Feature(src_label, 'edge', src_desc[0]))
-            tab_pair = (Feature(dst_label, 'tab', dst_desc[1]), Feature(src_label, 'tab', src_desc[1]))
-
-            dst_raft = r.factory.make_raft_for_piece(dst_label)
-            src_raft = r.factory.make_raft_for_piece(src_label)
-
-            src_coord = r.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
-            raft = r.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
-
-            if True:
-                seams = r.get_seams_for_raft(raft)
-                raft = r.aligner.refine_edge_alignment_within_raft(raft, seams, edge_pair)
-            else:
-                raft = r.refine_alignment_within_raft(raft)
-                    
-            mse = r.get_total_error_for_raft_and_seams(raft)
-            src_coord = raft.coords[src]
-            src_fit_pts = (None, None)
-            dst_fit_pts = (None, None)
-
-            return (mse, src_coord, dst_desc, src_desc)
+    def score_matches(self):
 
         scores = collections.defaultdict(dict)
         
@@ -393,10 +344,6 @@ class BorderSolver:
         for dst in borders:
 
             dst_piece = self.pieces[dst]
-
-            edge_aligner = None
-            if not self.use_raftinator:
-                edge_aligner = puzzler.align.EdgeAligner(dst_piece)
 
             for src in borders:
 
@@ -407,22 +354,36 @@ class BorderSolver:
 
                 src_piece = self.pieces[src]
 
-                dst_desc = self.pred[dst] if reverse else self.succ[dst]
-                src_desc = self.succ[src] if reverse else self.pred[src]
+                dst_desc = self.succ[dst]
+                src_desc = self.pred[src]
 
                 # tabs have to be complementary (one indent and one
                 # outdent)
                 if dst_piece.tabs[dst_desc[1]].indent == src_piece.tabs[src_desc[1]].indent:
                     continue
 
-                if self.use_raftinator:
-                    scores[dst][src] = raftinator_compute_alignment(
-                        dst, dst_desc, src, src_desc)
-                else:
-                    scores[dst][src] = edge_aligner.compute_alignment(
-                        dst_desc, src_piece, src_desc)
+                scores[dst][src] = (self.score_edge_pair(dst, dst_desc, src, src_desc), dst_desc, src_desc)
 
         return scores
+
+    def score_edge_pair(self, dst_label, dst_desc, src_label, src_desc):
+
+        r = self.raftinator
+            
+        Feature = puzzler.raft.Feature
+        edge_pair = (Feature(dst_label, 'edge', dst_desc[0]), Feature(src_label, 'edge', src_desc[0]))
+        tab_pair = (Feature(dst_label, 'tab', dst_desc[1]), Feature(src_label, 'tab', src_desc[1]))
+
+        dst_raft = r.factory.make_raft_for_piece(dst_label)
+        src_raft = r.factory.make_raft_for_piece(src_label)
+
+        src_coord = r.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
+        raft = r.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
+
+        seams = r.get_seams_for_raft(raft)
+        raft = r.aligner.refine_edge_alignment_within_raft(raft, seams, edge_pair)
+                    
+        return r.get_total_error_for_raft_and_seams(raft)
 
     def compute_edge_info(self, piece):
 
@@ -801,17 +762,17 @@ class PuzzleSolver:
             self.solve_border()
 
     @staticmethod
-    def save_border_scores(path, cw_scores, ccw_scores = None):
+    def save_border_scores(path, scores):
 
-        def to_rows(scores, winding):
+        def to_rows(scores):
 
             retval = []
             for dst, sources in scores.items():
                 rows = []
                 for src, score in sources.items():
-                    mse, _, dst_desc, src_desc = score
+                    mse, dst_desc, src_desc = score
                     raft = f"{dst}/{dst_desc[0]}={src}/{src_desc[0]},{dst}:{dst_desc[1]}={src}:{src_desc[1]}"
-                    rows.append({'dst':dst, 'src':src, 'raft':raft, 'mse':mse, 'winding':winding, 'rank':None})
+                    rows.append({'dst':dst, 'src':src, 'raft':raft, 'mse':mse, 'rank':None})
                 rows.sort(key=operator.itemgetter('mse'))
                 for i, row in enumerate(rows, start=1):
                     row['rank'] = i
@@ -821,25 +782,28 @@ class PuzzleSolver:
             return retval
 
         with open(path, 'w', newline='') as f:
-            writer = csv.DictWriter(f, dialect='excel-tab', fieldnames='dst src winding rank mse raft'.split())
+            writer = csv.DictWriter(f, dialect='excel-tab', fieldnames='dst src rank mse raft'.split())
             writer.writeheader()
 
-            writer.writerows(to_rows(cw_scores, 'CW'))
-            if ccw_scores:
-                writer.writerows(to_rows(ccw_scores, 'CCW'))
+            writer.writerows(to_rows(scores))
 
     def solve_border(self):
         
         bs = BorderSolver(self.pieces, use_raftinator=self.use_raftinator)
 
+        t0 = time.monotonic()
+
         scores = bs.score_matches()
 
+        t_score = time.monotonic() - t0
+
+        print(f"solve_border: {t_score=:.1f}")
+
         if True:
-            scores_ccw = None # bs.score_matches(True)
             ts = datetime.now().strftime('%Y%m%d-%H%M%S')
             path = self.next_path('border_match_scores_' + ts, 'tab')
             print(f"Saving border score data to {path}")
-            self.save_border_scores(path, scores, scores_ccw)
+            self.save_border_scores(path, scores)
 
         if False:
             coords = dict()

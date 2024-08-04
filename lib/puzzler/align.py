@@ -387,6 +387,10 @@ class TabAligner:
 
 class EdgeAligner:
 
+    # HACK:
+    # HACK: dead code, no longer used
+    # HACK:
+
     def __init__(self, dst):
         self.dst = dst
         self.kdtree = scipy.spatial.KDTree(dst.points)
