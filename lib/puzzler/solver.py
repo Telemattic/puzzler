@@ -868,6 +868,8 @@ class PuzzleSolver:
 
     def solve_field(self):
 
+        t_start = time.monotonic() - self.start_time
+
         Feature = puzzler.raft.Feature
 
         def get_axis_features(raft):
@@ -926,72 +928,86 @@ class PuzzleSolver:
 
         self.distance_query_cache.purge()
 
+        t0 = time.monotonic()
+
         fits = self.score_pockets() if self.use_raftinator else self.score_corners()
 
+        t_score = time.monotonic() - t0
+
         if not fits:
+            # UI sentinel -- there is no more progress to be made
+            self.corners = []
             return
         
         fits.sort(key=operator.itemgetter(0))
 
-        for i, f in enumerate(fits[:10]):
-            r, mse, src_label, src_coords, src_tabs, corner = f
-            angle = src_coords.angle * (180. / math.pi)
-            print(f"{i}: {src_label:3s} angle={angle:+6.1f} {r=:.3f} {mse=:5.1f} {src_tabs=} {corner=}")
-
-        _, _, src_label, coords, src_tabs, corner = fits[0]
-
-        if self.expected_tab_matches is not None:
-            corner_features = [Feature(i, 'tab', j) for i, j in corner]
-            piece_features = [Feature(src_label, 'tab', i) for i in src_tabs]
-
-            expected_piece_features = [self.expected_tab_matches[i] for i in corner_features]
-
-            if piece_features != expected_piece_features:
-                print(f"\n>>> {src_label=} {src_tabs=} {corner=}")
-                a = ','.join(str(f) for f in piece_features)
-                e = ','.join(str(f) for f in expected_piece_features)
-                print(f"    expected={e} actual={a}\n")
-
-        if False:
-            dst_raft = puzzler.raft.Raft(self.geometry.coords)
-            src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
-            seams = self.raftinator.seamstress.trim_seams(
-                self.raftinator.seamstress.seams_between_rafts(dst_raft, src_raft, coords))
-            self.seams = seams
-            print(f"{src_label=} MSE={self.raftinator.seamstress.cumulative_error_for_seams(seams):.3f}")
-            if src_label == 'Z4':
-                for i, seam in enumerate(seams):
-                    print(f" seam[{i}]: {seam.dst.piece=} {seam.src.piece=} {seam.error=:.3f} seam.n_points={len(seam.src.indices)}")
+        if self.use_raftinator:
             
-        for src_tab_no, dst in zip(src_tabs, corner):
-            self.constraints.append(TabConstraint((src_label, src_tab_no), dst))
+            for i, f in enumerate(fits[:20]):
+                r, mse, src_label, feature_pairs = f
+                dst = ','.join(str(i[0]) for i in feature_pairs)
+                src = ','.join(str(i[1]) for i in feature_pairs)
+                print(f"{i:2d}: {src_label:4s} {mse=:5.1f} {src=} {dst=}")
 
-        feature_pairs = [
-            (Feature(corner[0][0], 'tab', corner[0][1]), Feature(src_label, 'tab', src_tabs[0])),
-            (Feature(corner[1][0], 'tab', corner[1][1]), Feature(src_label, 'tab', src_tabs[1]))
-        ]
+            _, _, src_label, feature_pairs = fits[0]
+
+        else:
+
+            for i, f in enumerate(fits[:10]):
+                r, mse, src_label, src_coords, src_tabs, corner = f
+                angle = src_coords.angle * (180. / math.pi)
+                print(f"{i}: {src_label:3s} angle={angle:+6.1f} {r=:.3f} {mse=:5.1f} {src_tabs=} {corner=}")
+
+            _, _, src_label, coords, src_tabs, corner = fits[0]
+
+            for src_tab_no, dst in zip(src_tabs, corner):
+                self.constraints.append(TabConstraint((src_label, src_tab_no), dst))
+
+            feature_pairs = [
+                (Feature(corner[0][0], 'tab', corner[0][1]), Feature(src_label, 'tab', src_tabs[0])),
+                (Feature(corner[1][0], 'tab', corner[1][1]), Feature(src_label, 'tab', src_tabs[1]))
+            ]
 
         dst_raft = puzzler.raft.Raft(self.geometry.coords)
         src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
         new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
             dst_raft, src_raft, feature_pairs)
 
-        seams = self.raftinator.get_seams_for_raft(new_raft)
+        do_refine = len(new_raft.coords) % 20 == 0
 
-        axis_features = get_axis_features(new_raft)
+        if do_refine:
 
-        refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
-            new_raft, seams, axis_features)
+            t0 = time.monotonic()
 
-        print(f"trim_seams: {self.raftinator.seamstress.seam_between_pieces.cache_info()}")
-        elapsed = time.monotonic() - self.start_time
-        print(f"{elapsed=:.1f} seconds")
+            seams = self.raftinator.get_seams_for_raft(new_raft)
+
+            t_seams = time.monotonic() - t0
+        
+            t0 = time.monotonic()
+
+            axis_features = get_axis_features(new_raft)
+
+            t_axis = time.monotonic() - t0
+
+            t0 = time.monotonic()
+
+            refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
+                new_raft, seams, axis_features)
+
+            t_refine = time.monotonic() - t0
+
+        else:
+
+            t_seams = t_axis = t_refine = 0.
+            refined_raft = new_raft
+
+        # print(f"trim_seams: {self.raftinator.seamstress.seam_between_pieces.cache_info()}")
 
         self.geometry.coords = refined_raft.coords
 
         self.update_adjacency()
 
-        print(self.distance_query_cache.stats | {'cache_size': len(self.distance_query_cache.cache)})
+        # print(self.distance_query_cache.stats | {'cache_size': len(self.distance_query_cache.cache)})
 
         ts = datetime.now().strftime('%Y%m%d-%H%M%S')
         
@@ -1000,6 +1016,11 @@ class PuzzleSolver:
         
         path = self.next_path('solver_' + ts, 'json')
         save_json(path, self)
+
+        t_finish = time.monotonic() - self.start_time
+        
+        t_process = time.monotonic() - self.start_time
+        print(f"solve_field: wall: {t_start=:.1f} {t_finish=:.1f} elapsed: {t_process=:.1f} {t_score=:.1f} {t_seams=:.1f} {t_axis=:.1f} {t_refine=:.1f}\n")
 
     def score_corners(self):
         fits = []
@@ -1059,11 +1080,10 @@ class PuzzleSolver:
 
             s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
 
-            print(f"{pocket!s}: " + ','.join(s))
+            print(f"{pocket!s}: " + ', '.join(s))
 
         return fits
 
-    @functools.cache
     def score_corner(self, corner):
 
         # print(f"score_corner: {corner=}")
@@ -1111,70 +1131,21 @@ class PuzzleSolver:
 
         return fits
 
-    @functools.cache
+    @functools.lru_cache(maxsize=128)
     def score_pocket(self, pocket):
 
-        # FIXME: bail out if we've got a pocket w/o both tabs
-        if pocket.tab_a is None or pocket.tab_b is None:
-            return []
-        
-        dst_corner = ((pocket.tab_a.piece, pocket.tab_a.index), (pocket.tab_b.piece, pocket.tab_b.index))
-
-        # dst_tabs = tuple([self.pieces[p].tabs[i].indent for p, i in corner])
-        dst_tabs = tuple([self.pieces[i.piece].tabs[i.index].indent for i in (pocket.tab_a, pocket.tab_b)])
-
-        allways = []
-        for src_label, src_piece in self.pieces.items():
-            
-            if src_label in self.geometry.coords:
-                continue
-
-            n = len(src_piece.tabs)
-            if n < 2:
-                continue
-
-            for i in range(n):
-                
-                prev = src_piece.tabs[i-1]
-                curr = src_piece.tabs[i]
-
-                if prev.indent == dst_tabs[0] or curr.indent == dst_tabs[1]:
-                    continue
-
-                src_tabs = ((i-1) % n, i)
-                allways.append((src_label, src_tabs))
-
-        dst_raft = puzzler.raft.Raft({k: self.geometry.coords[k] for k in pocket.pieces})
-        dst_raft = self.raftinator.refine_alignment_within_raft(dst_raft)
+        fitter = puzzler.commands.quads.PocketFitter(
+            self.pieces, puzzler.raft.Raft(self.geometry.coords), pocket, 1)
 
         fits = []
+        
+        for src_label in self.pieces:
+            if src_label in self.geometry.coords:
+                continue
+            for mse, feature_pairs in fitter.measure_fit(src_label):
+                fits.append((mse[-1], src_label, feature_pairs))
 
-        Feature = puzzler.raft.Feature
-
-        for src_label, src_tabs in allways:
-
-            try_feature_pairs = [(pocket.tab_a, Feature(src_label, 'tab', src_tabs[0])),
-                                 (pocket.tab_b, Feature(src_label, 'tab', src_tabs[1]))]
-
-            src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
-
-            new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
-                dst_raft, src_raft, try_feature_pairs)
-
-            new_raft2 = self.raftinator.refine_alignment_within_raft(new_raft)
-                           
-            mse = self.raftinator.get_total_error_for_raft_and_seams(new_raft2)
-
-            # we return the coordinate of the first fit (no alignment)
-            # because otherwise the position of the pieces it has been
-            # fit against also get adjusted, confusing things --
-            # really it would be better to just return the
-            # "instruction" for the fit instead of the fit corner.
-            fits.append((mse, src_label, new_raft.coords[src_label], src_tabs, dst_corner))
-
-        fits.sort(key=operator.itemgetter(0))
-
-        return fits
+        return sorted(fits, key=operator.itemgetter(0))
 
     def save_tab_matches(self, path):
 
