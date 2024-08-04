@@ -68,7 +68,7 @@ def merge_good_runs(good_nodes, node_ids):
 
     return node_ids
 
-def make_graph(ofile, expected, actual, layout='linear'):
+def make_graph(ofile, expected, actual, opt):
 
     # three kinds of edge: good, bad, missing
 
@@ -95,11 +95,15 @@ def make_graph(ofile, expected, actual, layout='linear'):
     # for node in ordered_nodes:
     #     print(f"{node=} in_edges={in_edges[node]} out_edges={out_edges[node]}")
     
-    def has_single_good_edge(dst, src):
+    def has_single_good_edgex(dst, src):
         return (len(out_edges[src]) == 1 and
                 len(in_edges[dst]) == 1 and
                 out_edges[src][0] == (dst, 'good') and
                 in_edges[dst][0] == (src, 'good'))
+
+    def has_single_good_edge(a):
+        return (len(out_edges[a]) == 1 and out_edges[a][0][1] == 'good'
+                and len(in_edges[a]) == 1 and in_edges[a][0][1] == 'good')
 
     def merge_nodes(a, b):
 
@@ -144,12 +148,13 @@ def make_graph(ofile, expected, actual, layout='linear'):
 
     ordered_expected_nodes = sorted(expected.keys(), key=lambda x: node_to_id[x])
 
-    for i in range(len(ordered_expected_nodes)):
-        a = ordered_expected_nodes[i-1]
-        b = ordered_expected_nodes[i]
-        # print(f"merge_nodes: test {a},{b}")
-        if has_single_good_edge(a, b):
-            merge_nodes(a, b)
+    if opt.get('merge', False):
+        for i in range(len(ordered_expected_nodes)):
+            a = ordered_expected_nodes[i-1]
+            b = ordered_expected_nodes[i]
+            # print(f"merge_nodes: test {a},{b}")
+            if has_single_good_edge(a) and has_single_good_edge(b):
+                merge_nodes(a, b)
 
     # print(f"{id_to_nodes=}")
 
@@ -168,7 +173,7 @@ def make_graph(ofile, expected, actual, layout='linear'):
 
     print('digraph G {', file=f)
 
-    if layout == 'circular':
+    if opt.get('layout', 'linear') == 'circular':
         print('  layout="twopi";', file=f)
         print('  ranksep=4;', file=f)
         print('  root=CENTER;', file=f)
@@ -225,6 +230,8 @@ def main():
                         action='store_const', const='circular')
     parser.add_argument('-l', '--linear', help='linear layout (default)', dest='layout',
                         action='store_const', const='linear')
+    parser.add_argument('-m', '--merge', help='merge runs of nodes with only good edges in and out',
+                        action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('-o', '--output', help='output filename (default: None)')
 
     args = parser.parse_args()
@@ -233,19 +240,21 @@ def main():
         s = f.read()
         o = json.loads(s)
 
+    opt = {'layout': args.layout, 'merge': args.merge}
+    
     if args.output.endswith('.pdf'):
 
         # delete_on_close depends on python 3.12
         with tempfile.NamedTemporaryFile(dir=r'C:\Temp', prefix='graphit_', suffix='.dot',
                                          mode='w', newline='\n', delete=False) as dotfile:
-            make_graph(dotfile, o['expected_pairs'], o['actual_pairs'], args.layout)
+            make_graph(dotfile, o['expected_pairs'], o['actual_pairs'], opt)
             dotfile.close()
             make_pdf(dotfile.name, args.output)
             os.unlink(dotfile.name)
 
     elif args.output.endswith('.dot'):
-            
-        make_graph(args.output, o['expected_pairs'], o['actual_pairs'], args.layout)
+
+        make_graph(args.output, o['expected_pairs'], o['actual_pairs'], opt)
 
 if __name__ == '__main__':
     main()

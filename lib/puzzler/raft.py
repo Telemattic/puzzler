@@ -419,6 +419,69 @@ class RaftAligner:
 
         raise ValueError("oops, not implemented")
 
+    def refine_edge_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam], edges: FeaturePair, verbose=False) -> Raft:
+
+        if len(raft.coords) != 2:
+            raise ValueError("expected raft with exactly two pieces")
+
+        dst_edge, src_edge = edges
+
+        if verbose:
+            print(f"{dst_edge=} {src_edge=}")
+        
+        dst_piece = dst_edge.piece
+
+        icp = puzzler.icp.IteratedClosestPoint()
+        
+        pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
+
+        helper = FeatureHelper(self.pieces, raft.coords)
+
+        dst_edge_points = helper.get_edge_points(dst_edge)
+        dst_edge_value = puzzler.math.distance_to_line(np.array((0.,0.)), dst_edge_points)
+        
+        dst_edge_unit_vector = puzzler.math.unit_vector(dst_edge_points[1] - dst_edge_points[0])
+        dst_edge_normal = np.array((-dst_edge_unit_vector[1], dst_edge_unit_vector[0]))
+
+        if verbose:
+            with np.printoptions(precision=4):
+                print(f"{dst_edge_points=} {dst_edge_normal=} {dst_edge_value=}")
+
+        axis = icp.make_axis(dst_edge_normal, dst_edge_value, fixed=True)
+
+        bodies = dict()
+        for piece, coord in raft.coords.items():
+            bodies[piece] = icp.make_rigid_body(coord.angle, coord.xy, fixed=(piece == dst_piece))
+
+        for i in seams:
+            src_body = bodies[i.src.piece]
+            if src_body.fixed:
+                continue
+            src_piece = self.pieces[i.src.piece]
+            src_points = src_piece.points[i.src.indices]
+            
+            dst_body = bodies[i.dst.piece]
+            dst_piece = self.pieces[i.dst.piece]
+            dst_points = dst_piece.points[i.dst.indices]
+            dst_normals = puzzler.align.NormalsComputer()(dst_piece.points, i.dst.indices)
+            
+            icp.add_body_correspondence(src_body, src_points,
+                                        dst_body, dst_points, dst_normals)
+
+            e = src_piece.edges[src_edge.index]
+            icp.add_axis_correspondence(src_body, e.line.pts, axis)
+
+        icp.solve()
+
+        coords = dict()
+        for piece, coord in raft.coords.items():
+            body = bodies.get(piece)
+            if body:
+                coord = Coord(body.angle, body.center)
+            coords[piece] = coord
+
+        return Raft(coords)
+    
     def refine_alignment_within_raft(
             self,
             raft: Raft,

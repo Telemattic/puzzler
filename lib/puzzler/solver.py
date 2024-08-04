@@ -58,7 +58,7 @@ class BorderSolver:
                 continue
 
             # HACK: drop incorrectly labeled border pieces
-            if True and len(self.pieces) == 1026 and not re.fullmatch(r"([A-Z]+(1|38))|((A|AA)\d+)", p.label):
+            if False and len(self.pieces) == 1026 and not re.fullmatch(r"([A-Z]+(1|38))|((A|AA)\d+)", p.label):
                 print(f"HACK: Skipping {p.label}, not actually a border piece!")
                 continue
 
@@ -244,7 +244,7 @@ class BorderSolver:
             assert set(expected_pairs.keys()) == set(expected_pairs.values())
 
         # HACK: define pairs for the 1026 piece puzzle automagically
-        if True and len(self.pieces) == 1026:
+        if False and len(self.pieces) == 1026:
             print(f"HACK: forcing known border solution for puzzle")
             retval = [min(self.corners)]
             curr = expected_pairs[retval[0]]
@@ -357,7 +357,7 @@ class BorderSolver:
         with open(path, 'w', newline='') as f:
             f.write(json.dumps(o, indent=4))
                 
-    def score_matches(self):
+    def score_matches(self, reverse=False):
 
         def raftinator_compute_alignment(dst_label, dst_desc, src_label, src_desc):
 
@@ -372,14 +372,19 @@ class BorderSolver:
 
             src_coord = r.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
             raft = r.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
-            raft = r.refine_alignment_within_raft(raft)
+
+            if True:
+                seams = r.get_seams_for_raft(raft)
+                raft = r.aligner.refine_edge_alignment_within_raft(raft, seams, edge_pair)
+            else:
+                raft = r.refine_alignment_within_raft(raft)
                     
             mse = r.get_total_error_for_raft_and_seams(raft)
             src_coord = raft.coords[src]
             src_fit_pts = (None, None)
             dst_fit_pts = (None, None)
 
-            return (mse, src_coord, src_fit_pts, dst_fit_pts)
+            return (mse, src_coord, dst_desc, src_desc)
 
         scores = collections.defaultdict(dict)
         
@@ -402,8 +407,8 @@ class BorderSolver:
 
                 src_piece = self.pieces[src]
 
-                dst_desc = self.succ[dst]
-                src_desc = self.pred[src]
+                dst_desc = self.pred[dst] if reverse else self.succ[dst]
+                src_desc = self.succ[src] if reverse else self.pred[src]
 
                 # tabs have to be complementary (one indent and one
                 # outdent)
@@ -795,34 +800,46 @@ class PuzzleSolver:
         else:
             self.solve_border()
 
+    @staticmethod
+    def save_border_scores(path, cw_scores, ccw_scores = None):
+
+        def to_rows(scores, winding):
+
+            retval = []
+            for dst, sources in scores.items():
+                rows = []
+                for src, score in sources.items():
+                    mse, _, dst_desc, src_desc = score
+                    raft = f"{dst}/{dst_desc[0]}={src}/{src_desc[0]},{dst}:{dst_desc[1]}={src}:{src_desc[1]}"
+                    rows.append({'dst':dst, 'src':src, 'raft':raft, 'mse':mse, 'winding':winding, 'rank':None})
+                rows.sort(key=operator.itemgetter('mse'))
+                for i, row in enumerate(rows, start=1):
+                    row['rank'] = i
+                    row['mse'] = f"{row['mse']:.3f}"
+                retval += rows
+
+            return retval
+
+        with open(path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, dialect='excel-tab', fieldnames='dst src winding rank mse raft'.split())
+            writer.writeheader()
+
+            writer.writerows(to_rows(cw_scores, 'CW'))
+            if ccw_scores:
+                writer.writerows(to_rows(ccw_scores, 'CCW'))
+
     def solve_border(self):
         
         bs = BorderSolver(self.pieces, use_raftinator=self.use_raftinator)
 
         scores = bs.score_matches()
 
-        if False:
+        if True:
+            scores_ccw = None # bs.score_matches(True)
             ts = datetime.now().strftime('%Y%m%d-%H%M%S')
             path = self.next_path('border_match_scores_' + ts, 'tab')
-
-            f = open(path, 'w', newline='')
-            writer = csv.DictWriter(f, dialect='excel-tab', fieldnames='dst src align rank mse raft'.split())
-            writer.writeheader()
-            
-            for dst, sources in scores.items():
-                dst_desc = bs.succ[dst]
-                rows = []
-                for src, score in sources.items():
-                    src_desc = bs.pred[src]
-                    s = f"{dst}:{dst_desc[0]},{dst_desc[1]}={src}:{src_desc[0]},{src_desc[1]}"
-                    t = f"{dst}/{dst_desc[0]}={src}/{src_desc[0]},{dst}:{dst_desc[1]}={src}:{src_desc[1]}"
-                    rows.append({'dst':dst, 'src':src, 'align':s, 'raft':t, 'mse':score[0], 'rank':None})
-                rows.sort(key=operator.itemgetter('mse'))
-                for i, row in enumerate(rows, start=1):
-                    row['rank'] = i
-                writer.writerows(rows)
-            writer = None
-            f = None
+            print(f"Saving border score data to {path}")
+            self.save_border_scores(path, scores, scores_ccw)
 
         if False:
             coords = dict()
@@ -848,8 +865,9 @@ class PuzzleSolver:
 
         ts = datetime.now().strftime('%Y%m%d-%H%M%S')
 
-        path = self.next_path('matches_' + ts, 'csv')
-        self.save_tab_matches(path)
+        if False:
+            path = self.next_path('matches_' + ts, 'csv')
+            self.save_tab_matches(path)
         
         path = self.next_path('solver_' + ts, 'json')
         save_json(path, self)
@@ -985,13 +1003,9 @@ class PuzzleSolver:
             t_seams = t_axis = t_refine = 0.
             refined_raft = new_raft
 
-        # print(f"trim_seams: {self.raftinator.seamstress.seam_between_pieces.cache_info()}")
-
         self.geometry.coords = refined_raft.coords
 
         self.update_adjacency()
-
-        # print(self.distance_query_cache.stats | {'cache_size': len(self.distance_query_cache.cache)})
 
         ts = datetime.now().strftime('%Y%m%d-%H%M%S')
         
@@ -1016,10 +1030,7 @@ class PuzzleSolver:
             
             v = self.score_pocket(pocket)
             
-            if False and len(v) >= 2 and v[0][1] == 'O28' and v[1][1] == 'X37':
-                # HACK: force X37 to fit in place of O28
-                fits.append((0.1, *v[1]))
-            elif len(v) > 1:
+            if len(v) > 1:
                 r = v[0][0] / v[1][0]
                 fits.append((r, *v[0]))
             elif v:

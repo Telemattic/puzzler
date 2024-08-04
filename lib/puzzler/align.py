@@ -442,7 +442,7 @@ class EdgeAligner:
 
         # print(f"  MSE={mse:.1f}")
 
-        return (mse, src_coords, src_fit_pts, dst_fit_pts)
+        return (mse, src_coords, dst_desc, src_desc)
         
     def get_correspondence(self, src, src_coords, src_fit_indexes):
 
