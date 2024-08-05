@@ -43,13 +43,12 @@ class Geometry:
 
 class BorderSolver:
 
-    def __init__(self, pieces, use_raftinator=False):
+    def __init__(self, pieces):
         self.pieces = pieces
         self.pred = dict()
         self.succ = dict()
         self.corners = []
         self.edges = []
-        self.use_raftinator = use_raftinator
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
 
         for p in self.pieces.values():
@@ -337,35 +336,34 @@ class BorderSolver:
                 
     def score_matches(self):
 
-        scores = collections.defaultdict(dict)
-        
         borders = self.corners + self.edges
+        return {dst: self.score_edge_piece(dst, borders) for dst in borders}
 
-        for dst in borders:
+    def score_edge_piece(self, dst, sources):
 
-            dst_piece = self.pieces[dst]
+        dst_piece = self.pieces[dst]
+        dst_desc = self.succ[dst]
 
-            for src in borders:
+        scores = dict()
+        for src in sources:
 
-                # while the fit might be excellent, this would prove
-                # topologically difficult
-                if src == dst:
-                    continue
+            # while the fit might be excellent, this would prove
+            # topologically difficult
+            if src == dst:
+                continue
 
-                src_piece = self.pieces[src]
+            src_piece = self.pieces[src]
+            src_desc = self.pred[src]
 
-                dst_desc = self.succ[dst]
-                src_desc = self.pred[src]
+            # tabs have to be complementary (one indent and one
+            # outdent)
+            if dst_piece.tabs[dst_desc[1]].indent == src_piece.tabs[src_desc[1]].indent:
+                continue
 
-                # tabs have to be complementary (one indent and one
-                # outdent)
-                if dst_piece.tabs[dst_desc[1]].indent == src_piece.tabs[src_desc[1]].indent:
-                    continue
-
-                scores[dst][src] = (self.score_edge_pair(dst, dst_desc, src, src_desc), dst_desc, src_desc)
+            scores[src] = (self.score_edge_pair(dst, dst_desc, src, src_desc), dst_desc, src_desc)
 
         return scores
-
+                
     def score_edge_pair(self, dst_label, dst_desc, src_label, src_desc):
 
         r = self.raftinator
@@ -789,7 +787,7 @@ class PuzzleSolver:
 
     def solve_border(self):
         
-        bs = BorderSolver(self.pieces, use_raftinator=self.use_raftinator)
+        bs = BorderSolver(self.pieces)
 
         t0 = time.monotonic()
 
@@ -1227,3 +1225,27 @@ def to_json(solver):
     o['corners'] = format_corners(solver.corners)
 
     return json.JSONEncoder(indent=0).encode(o)
+
+class SolveWorker:
+
+    state = dict()
+
+    def score_edge_piece(puzzle_path, dst, sources):
+
+        bs = SolveWorker.get_border_solver(puzzle_path)
+        return bs.score_edge_piece(dst, sources)
+
+    def get_border_solver(puzzle_path):
+
+        state = SolveWorker.state
+
+        if state.get('path') != puzzle_path:
+            SolveWorker.state = state = {'path': puzzle_path, 'puzzle': puzzler.file.load(puzzle_path)}
+
+        if bs := state.get('bs'):
+            return bs
+
+        pieces = {i.label: i for i in state['puzzle'].pieces}
+        bs = state['bs'] = BorderSolver(pieces)
+
+        return bs
