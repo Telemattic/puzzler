@@ -389,12 +389,12 @@ class CanvasHitTester:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces, expected=None):
+    def __init__(self, parent, pieces, *, expected=None, puzzle_path=None):
         
         self.pieces = pieces
 
         pieces_dict = {i.piece.label: i.piece for i in pieces}
-        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, expected=expected)
+        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, expected=expected, puzzle_path=puzzle_path)
 
         self.draggable = None
         self.selection = None
@@ -974,6 +974,13 @@ def read_expected_tab_matches(path):
     
 def align_ui(args):
 
+    if args.num_workers:
+        ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers)
+        while ps.solve():
+            print("tick")
+        print("all done!")
+        return
+
     puzzle = puzzler.file.load(args.puzzle)
 
     by_label = dict()
@@ -983,6 +990,7 @@ def align_ui(args):
     if 'I1' in by_label:
         p = by_label['I1']
         if len(p.edges) == 2:
+            print(f"Warning: reversing piece 'I1'")
             p.edges = p.edges[::-1]
 
     labels = set(args.labels)
@@ -994,11 +1002,10 @@ def align_ui(args):
     if args.expected:
         expected = read_expected_tab_matches(args.expected)
 
-    # approx (simplified polygon) only needed for immediate mode rendering
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, expected=expected)
+    ui = AlignTk(root, pieces, expected=expected, puzzle_path=args.puzzle)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 
@@ -1014,4 +1021,5 @@ def add_parser(commands):
     parser_align.add_argument("labels", nargs='*')
     parser_align.add_argument("-i", "--input", help="initialize solver")
     parser_align.add_argument("-e", "--expected", help="expected tab matches csv file")
+    parser_align.add_argument("-n", "--num-workers", help="number of workers for parallel solve", default=0, type=int)
     parser_align.set_defaults(func=align_ui)

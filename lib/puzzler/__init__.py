@@ -10,3 +10,5 @@ from . import potrace
 from . import puzzle
 from . import render
 from . import segment
+from . import worker
+from . import psolve

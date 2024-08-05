@@ -13,6 +13,7 @@ import re
 import scipy
 import time
 from dataclasses import dataclass
+import concurrent.futures
 
 def pairwise_circular(iterable):
     # https://stackoverflow.com/questions/36917042/pairwise-circular-python-for-loop
@@ -43,13 +44,14 @@ class Geometry:
 
 class BorderSolver:
 
-    def __init__(self, pieces):
+    def __init__(self, pieces, puzzle_path = None):
         self.pieces = pieces
         self.pred = dict()
         self.succ = dict()
         self.corners = []
         self.edges = []
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
+        self.puzzle_path = puzzle_path
 
         for p in self.pieces.values():
             n = len(p.edges)
@@ -208,6 +210,13 @@ class BorderSolver:
             sources = [(*score, src) for src, score in sources.items()]
             sources.sort(key=operator.itemgetter(0))
             rescore[dst] = sources
+
+        print(f"{rescore=}")
+
+        xx = set(self.corners + self.edges)
+        yy = set(rescore.keys())
+
+        print(f"{xx=}\n{yy=}\n{xx-yy=}")
 
         # put border candidate pieces in ascending order of MSE for
         # best fit, hopefully insuring that the false edge pieces get
@@ -410,7 +419,25 @@ class BorderSolver:
     def score_matches(self):
 
         borders = self.corners + self.edges
-        return {dst: self.score_edge_piece(dst, borders) for dst in borders}
+
+        if self.puzzle_path:
+            scores = dict()
+            with concurrent.futures.ProcessPoolExecutor(
+                    max_workers=10, initializer=puzzler.worker.initializer, initargs=(self.puzzle_path,)) as executor:
+                future_to_dst = {executor.submit(puzzler.worker.score_edge_piece, dst, borders):dst for dst in borders}
+                for future in concurrent.futures.as_completed(future_to_dst):
+                    dst = future_to_dst[future]
+                    try:
+                        data = future.result()
+                    except Exception as exc:
+                        print("UHOH!")
+                    else:
+                        scores[dst] = data
+
+        else:
+            scores = {dst: self.score_edge_piece(dst, borders) for dst in borders}
+
+        return scores
 
     def score_edge_piece(self, dst, sources):
 
@@ -476,6 +503,57 @@ class BorderSolver:
             tab_pred = i
 
         return (edge_pred, tab_pred), (edge_succ, tab_succ)
+
+class EdgeScorer:
+
+    def __init__(self, pieces):
+        self.pieces = pieces
+        self.raftinator = puzzler.raft.Raftinator(pieces)
+
+    def score_edge_piece(self, dst, sources):
+
+        dst_label, dst_desc = dst
+
+        dst_piece = self.pieces[dst_label]
+
+        scores = dict()
+        for src_label, src_desc in sources.items():
+
+            # while the fit might be excellent, this would prove
+            # topologically difficult
+            if src_label == dst_label:
+                continue
+
+            src_piece = self.pieces[src_label]
+
+            # tabs have to be complementary (one indent and one
+            # outdent)
+            if dst_piece.tabs[dst_desc[1]].indent == src_piece.tabs[src_desc[1]].indent:
+                continue
+            
+            mse = self.score_edge_pair(dst_label, dst_desc, src_label, src_desc)
+            scores[src_label] = (mse, dst_desc, src_desc)
+
+        return scores
+                
+    def score_edge_pair(self, dst_label, dst_desc, src_label, src_desc):
+
+        r = self.raftinator
+            
+        Feature = puzzler.raft.Feature
+        edge_pair = (Feature(dst_label, 'edge', dst_desc[0]), Feature(src_label, 'edge', src_desc[0]))
+        tab_pair = (Feature(dst_label, 'tab', dst_desc[1]), Feature(src_label, 'tab', src_desc[1]))
+
+        dst_raft = r.factory.make_raft_for_piece(dst_label)
+        src_raft = r.factory.make_raft_for_piece(src_label)
+
+        src_coord = r.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
+        raft = r.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
+
+        seams = r.get_seams_for_raft(raft)
+        raft = r.aligner.refine_edge_alignment_within_raft(raft, seams, edge_pair)
+                    
+        return r.get_total_error_for_raft_and_seams(raft)
 
 class OverlappingPieces:
 
@@ -813,7 +891,7 @@ class FrontierExplorer:
 
 class PuzzleSolver:
 
-    def __init__(self, pieces, *, expected=None):
+    def __init__(self, pieces, *, expected=None, puzzle_path=None):
         self.pieces = pieces
         self.geometry = None
         self.constraints = None
@@ -825,6 +903,7 @@ class PuzzleSolver:
         self.seams = []
         self.expected_tab_matches = expected
         self.start_time = time.monotonic()
+        self.puzzle_path = puzzle_path
 
     def solve(self):
         if self.geometry:
@@ -860,7 +939,7 @@ class PuzzleSolver:
 
     def solve_border(self):
         
-        bs = BorderSolver(self.pieces)
+        bs = BorderSolver(self.pieces, self.puzzle_path)
 
         t0 = time.monotonic()
 
@@ -978,32 +1057,13 @@ class PuzzleSolver:
         
         fits.sort(key=operator.itemgetter(0))
 
-        if self.use_raftinator:
-            
-            for i, f in enumerate(fits[:20]):
-                r, mse, src_label, feature_pairs = f
-                dst = ','.join(str(i[0]) for i in feature_pairs)
-                src = ','.join(str(i[1]) for i in feature_pairs)
-                print(f"{i:2d}: {src_label:4s} {mse=:5.1f} {src=} {dst=}")
+        for i, f in enumerate(fits[:20]):
+            r, mse, src_label, feature_pairs = f
+            dst = ','.join(str(i[0]) for i in feature_pairs)
+            src = ','.join(str(i[1]) for i in feature_pairs)
+            print(f"{i:2d}: {src_label:4s} {mse=:5.1f} {src=} {dst=}")
 
-            _, _, src_label, feature_pairs = fits[0]
-
-        else:
-
-            for i, f in enumerate(fits[:10]):
-                r, mse, src_label, src_coords, src_tabs, corner = f
-                angle = src_coords.angle * (180. / math.pi)
-                print(f"{i}: {src_label:3s} angle={angle:+6.1f} {r=:.3f} {mse=:5.1f} {src_tabs=} {corner=}")
-
-            _, _, src_label, coords, src_tabs, corner = fits[0]
-
-            for src_tab_no, dst in zip(src_tabs, corner):
-                self.constraints.append(TabConstraint((src_label, src_tab_no), dst))
-
-            feature_pairs = [
-                (Feature(corner[0][0], 'tab', corner[0][1]), Feature(src_label, 'tab', src_tabs[0])),
-                (Feature(corner[1][0], 'tab', corner[1][1]), Feature(src_label, 'tab', src_tabs[1]))
-            ]
+        _, _, src_label, feature_pairs = fits[0]
 
         dst_raft = puzzler.raft.Raft(self.geometry.coords)
         src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
@@ -1298,27 +1358,3 @@ def to_json(solver):
     o['corners'] = format_corners(solver.corners)
 
     return json.JSONEncoder(indent=0).encode(o)
-
-class SolveWorker:
-
-    state = dict()
-
-    def score_edge_piece(puzzle_path, dst, sources):
-
-        bs = SolveWorker.get_border_solver(puzzle_path)
-        return bs.score_edge_piece(dst, sources)
-
-    def get_border_solver(puzzle_path):
-
-        state = SolveWorker.state
-
-        if state.get('path') != puzzle_path:
-            SolveWorker.state = state = {'path': puzzle_path, 'puzzle': puzzler.file.load(puzzle_path)}
-
-        if bs := state.get('bs'):
-            return bs
-
-        pieces = {i.label: i for i in state['puzzle'].pieces}
-        bs = state['bs'] = BorderSolver(pieces)
-
-        return bs
