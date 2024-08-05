@@ -76,6 +76,10 @@ class BorderSolver:
                     len1 = np.linalg.norm(l1.pts[1] - l1.pts[0])
                     p.edges.pop(1 if len0 > len1 else 0)
                     n = 1
+                elif cross > 0:
+                    # are the edges in the right order?
+                    print(f"CORNER: edges of corner {p.label} in wrong order, reversing them")
+                    p.edges = [p.edges[1], p.edges[0]]
 
             (pred, succ) = self.compute_edge_info(p)
             self.pred[p.label] = pred
@@ -195,17 +199,86 @@ class BorderSolver:
 
         return size
 
+    def link_pieces_revised(self, scores):
+
+        rescore = dict()
+        for dst, sources in scores.items():
+            # source is a dict, flatten it into a list so
+            # we can sort it by MSE
+            sources = [(*score, src) for src, score in sources.items()]
+            sources.sort(key=operator.itemgetter(0))
+            rescore[dst] = sources
+
+        # put border candidate pieces in ascending order of MSE for
+        # best fit, hopefully insuring that the false edge pieces get
+        # processed after the true edge pieces
+        candidates = sorted(set(self.corners + self.edges), key=lambda x: rescore[x][0])
+
+        all_pairs = dict()
+        pairs = dict()
+        used = set()
+
+        for dst in candidates:
+
+            best_src = rescore[dst][0]
+            best = best_src[-1]
+
+            all_pairs[dst] = best
+            
+            print(f"{dst:4s} <- {best:4s} (mse={best_src[0]:.3f})")
+
+            if best in used:
+                print(f"best match for {dst} is {best} and it has already been used :O")
+                continue
+
+            used.add(best)
+            pairs[dst] = best
+
+        if False:
+            with open('temp/rescores.json', 'w') as f:
+                o = dict()
+                o['scores'] = rescore
+                o['pairs'] = pairs
+                o['all_pairs'] = all_pairs
+                o['corners'] = self.corners
+                o['edges'] = self.edges
+                o['candidates'] = candidates
+                o['pred'] = self.pred
+                o['succ'] = self.succ
+                f.write(json.dumps(o, indent=4))
+    
+        print(f"{pairs=}")
+
+        retval = []
+        visited = set()
+        curr = min(self.corners)  # arbitrary, just make it deterministic
+        while curr not in visited:
+            retval.append(curr)
+            visited.add(curr)
+            curr = pairs[curr]
+
+        if curr != retval[0]:
+            raise ValueError(f"When following edge loop didn't circle back to start!")
+
+        n = len(retval)
+        k = len(pairs) - n
+        print(f"Found edge solution of length {n}, which omits {k} edge pieces")
+
+        return retval[::-1]
+    
     def link_pieces(self, scores):
 
         print(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
         # print(f"{scores=}")
+
+        return self.link_pieces_revised(scores)
 
         expected_pairs = dict()
 
         # define expected pairs for the 1026 piece puzzle
         # automagically so we can identify problems as they occur when
         # attemping to solve it programmatically
-        if True and len(self.pieces) == 1026:
+        if False and len(self.pieces) == 1026:
             for i in range(1,38):
                 expected_pairs[f"A{i}"] = f"A{i+1}"
                 expected_pairs[f"AA{i+1}"] = f"AA{i}"
