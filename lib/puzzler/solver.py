@@ -20,19 +20,6 @@ def pairwise_circular(iterable):
     first = next(b, None)
     return zip(a, itertools.chain(b, (first,)))
 
-@dataclass
-class BorderConstraint:
-    """BorderConstraint associates an edge, identified by a (label, edge_no) tuple,
-with an axis"""
-    edge: "tuple[str,int]"
-    axis: int
-
-@dataclass
-class TabConstraint:
-    """TabConstraint associates a pair of tabs, each identified by a (piece_label, tab_no) tuple"""
-    a: "tuple[str,int]"
-    b: "tuple[str,int]"
-
 Coord = puzzler.align.Coord
 
 @dataclass
@@ -90,34 +77,6 @@ class BorderSolver:
                 self.corners.append(p.label)
             elif n == 1:
                 self.edges.append(p.label)
-
-    def init_constraints(self, border):
-
-        # assuming a rectangular puzzle, the edges are as shown:
-        #
-        #    +<--- 2 ---+
-        #    |          ^
-        #    3          |
-        #    |          1
-        #    v          |
-        #    +--- 0 --->+
-        #
-        #  0 and 3 are fixed, coincident to the X and Y axes
-        #  1 and 2 are floating, parallel to their respective axes
-
-        axis = 3
-        constraints = []
-        for label in border:
-
-            constraints.append(BorderConstraint((label, self.succ[label][0]), axis))
-            if label in self.corners:
-                axis = (axis + 1) % 4
-                constraints.append(BorderConstraint((label, self.pred[label][0]), axis))
-
-        for a, b in pairwise_circular(border):
-            constraints.append(TabConstraint((a, self.pred[a][1]), (b, self.succ[b][1])))
-
-        return constraints
 
     def init_placement(self, border):
 
@@ -873,7 +832,6 @@ class PuzzleSolver:
     def __init__(self, pieces, *, expected=None, puzzle_path=None):
         self.pieces = pieces
         self.geometry = None
-        self.constraints = None
         self.frontiers = None
         self.corners = []
         self.distance_query_cache = puzzler.align.DistanceQueryCache()
@@ -946,13 +904,9 @@ class PuzzleSolver:
         # print(f"{border=}")
         bs.estimate_puzzle_size(border)
 
-        self.constraints = bs.init_constraints(border)
         self.geometry = bs.init_placement(border)
 
         print(f"puzzle_size: width={self.geometry.width:.1f} height={self.geometry.height:.1f}")
-
-        # print(f"{self.constraints=}")
-        # print(f"{self.geometry=}")
 
         self.update_adjacency()
 
@@ -1215,26 +1169,6 @@ def from_json(pieces, s):
         xy = tuple(o['xy'])
         return Coord(angle, xy)
 
-    def parse_constraints(o):
-        if o is None:
-            return None
-
-        return [parse_constraint(i) for i in o]
-
-    def parse_constraint(o):
-
-        if o['kind'] == 'edge':
-            edge = tuple(o['edge'])
-            axis = o['axis']
-            return BorderConstraint(edge, axis)
-
-        if o['kind'] == 'tab':
-            a = tuple(o['a'])
-            b = tuple(o['b'])
-            return TabConstraint(a, b)
-
-        assert False
-
     def parse_frontiers(o):
         if o is None:
             return None
@@ -1260,13 +1194,11 @@ def from_json(pieces, s):
     assert set(pieces.keys()) == set(o['pieces'])
 
     geometry = parse_geometry(o['geometry'])
-    constraints = parse_constraints(o['constraints'])
     frontiers = parse_frontiers(o['frontiers'])
     corners = parse_corners(o['corners'])
 
     solver = PuzzleSolver(pieces)
     solver.geometry = geometry
-    solver.constraints = constraints
     solver.frontiers = frontiers
     solver.corners = corners
 
@@ -1296,20 +1228,6 @@ def to_json(solver):
     def format_coord(t):
         return {'angle':t.angle, 'xy':t.xy.tolist()}
 
-    def format_constraints(constraints):
-        if constraints is None:
-            return None
-        return [format_constraint(i) for i in constraints]
-
-    def format_constraint(c):
-        if isinstance(c, BorderConstraint):
-            return {'kind':'edge', 'edge': list(c.edge), 'axis':c.axis}
-        
-        if isinstance(c, TabConstraint):
-            return {'kind':'tab', 'a':list(c.a), 'b':list(c.b)}
-
-        assert False
-
     def format_frontiers(frontiers):
 
         return frontiers
@@ -1333,7 +1251,6 @@ def to_json(solver):
     o = dict()
     o['pieces'] = format_pieces(solver.pieces)
     o['geometry'] = format_geometry(solver.geometry)
-    o['constraints'] = format_constraints(solver.constraints)
     o['frontiers'] = format_frontiers(solver.frontiers)
     o['corners'] = format_corners(solver.corners)
 
