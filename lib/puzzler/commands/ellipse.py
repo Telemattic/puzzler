@@ -851,6 +851,30 @@ def feature_view(args):
     root.wm_resizable(0, 0)
     root.mainloop()
 
+def clean_edges(label, edges):
+
+    if len(edges) < 2:
+        return edges
+    
+    assert len(edges) == 2
+    e0, e1 = edges
+    l0, l1 = e0.line, e1.line
+    v0 = puzzler.math.unit_vector(l0.pts[1] - l0.pts[0])
+    v1 = puzzler.math.unit_vector(l1.pts[1] - l1.pts[0])
+    cross = np.cross(v0, v1)
+    if np.abs(cross) < 0.9:
+        print(f"HACK: piece {label} has {len(edges)} edges, but doesn't look like a corner, only keeping longest edge")
+        len0 = np.linalg.norm(l0.pts[1] - l0.pts[0])
+        len1 = np.linalg.norm(l1.pts[1] - l1.pts[0])
+        edges.pop(1 if len0 > len1 else 0)
+        n = 1
+    elif cross > 0:
+        # are the edges in the right order?
+        print(f"CORNER: edges of corner {label} in wrong order, reversing them")
+        edges = [e1, e0]
+
+    return edges
+                    
 def feature_update(args):
 
     verbose = False
@@ -875,9 +899,11 @@ def feature_update(args):
 
         # print(" tabs:", ', '.join(f"{t.ellipse.semi_major/t.ellipse.semi_minor:.3f}" for t in piece.tabs))
                 
-        piece.edges = []
+        edges = []
         for edge in sorted(ec.edges, key=operator.itemgetter('fit_indexes')):
-            piece.edges.append(puzzler.feature.Edge(edge['fit_indexes'], edge['line']))
+            edges.append(puzzler.feature.Edge(edge['fit_indexes'], edge['line']))
+
+        piece.edges = clean_edges(piece.label, edges)
             
     puzzler.file.save(args.puzzle, puzzle)
 
