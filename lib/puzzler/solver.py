@@ -211,8 +211,6 @@ class BorderSolver:
             sources.sort(key=operator.itemgetter(0))
             rescore[dst] = sources
 
-        print(f"{rescore=}")
-
         xx = set(self.corners + self.edges)
         yy = set(rescore.keys())
 
@@ -1117,8 +1115,9 @@ class PuzzleSolver:
 
     def score_pockets(self):
 
-        pocket_finder = puzzler.commands.quads.PocketFinder(self.pieces)
-        pockets = pocket_finder.find_pockets(puzzler.raft.Raft(self.geometry.coords)) #, self.frontiers)
+        raft = puzzler.raft.Raft(self.geometry.coords)
+        pocket_finder = puzzler.commands.quads.PocketFinder(self.pieces, raft)
+        pockets = pocket_finder.find_pockets_on_frontiers()
 
         fits = []
         for pocket in pockets:

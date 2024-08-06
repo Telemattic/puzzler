@@ -264,22 +264,26 @@ class PocketFinder:
 
             return None
 
-    def __init__(self, pieces):
+    def __init__(self, pieces, raft):
         self.pieces = pieces
+        self.raft = raft
+        self.helper = PocketFinder.Helper(pieces, raft.coords)
 
-    def find_pockets(self, raft, frontiers = None):
+    def find_pockets_on_frontiers(self, frontiers = None):
 
-        helper = PocketFinder.Helper(self.pieces, raft.coords)
         if frontiers is None:
-            frontiers = puzzler.raft.RaftFeaturesComputer(self.pieces).compute_frontiers(raft.coords)
+            fc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+            frontiers = fc.compute_frontiers(self.raft.coords)
 
         pockets = []
         for tab in self.get_tabs_on_frontiers(frontiers):
-            pockets += self.get_pockets_for_tab(helper, tab)
+            pockets += self.get_pockets_for_tab(tab)
 
         return set(pockets)
 
-    def get_pockets_for_tab(self, helper, tab):
+    def get_pockets_for_tab(self, tab):
+
+        helper = self.helper
 
         vt = helper.get_tab_unit_vector(tab)
         vl = np.array((vt[1], -vt[0]))
@@ -481,7 +485,7 @@ def try_triples(pieces, quad, num_refine):
 
         triple_raft = remove_piece_from_raft(good_raft, drop_label)
 
-        pockets = PocketFinder(pieces).find_pockets(triple_raft)
+        pockets = PocketFinder(pieces, triple_raft).find_pockets_on_frontiers()
         assert len(pockets) == 1
 
         pocket = pockets.pop()

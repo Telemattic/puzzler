@@ -1,5 +1,6 @@
 import puzzler
 import concurrent.futures
+import numpy as np
 import operator
 
 class Worker:
@@ -11,6 +12,7 @@ class Worker:
         self.puzzle_path = puzzle_path
         self.pieces = {i.label: i for i in puzzle.pieces}
         self.edge_scorer = None # let it be created lazily
+        self.raftinator = puzzler.raft.Raftinator(self.pieces)
 
     def score_edge(self, dst, sources):
 
@@ -36,6 +38,47 @@ class Worker:
         fits.sort(key=operator.itemgetter(0))
         return fits[0][1:]
 
+    def refine_raft(self, raft):
+
+        r = self.raftinator
+
+        seams = r.get_seams_for_raft(raft)
+        axis_features = self.get_axis_features(raft)
+        return r.aligner.refine_alignment_within_raft(raft, seams, axis_features)
+
+    def get_axis_features(self, raft):
+
+        rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+            
+        border = None
+        for frontier in rfc.compute_frontiers(raft.coords):
+            if all(i.kind == 'edge' for i in frontier):
+                border = frontier
+                break
+
+        if border is None:
+            return None
+
+        axes = rfc.split_frontier_into_axes(border, raft.coords)
+
+        # convert from a dict to an array
+        axes = [axes.get(i, []) for i in range(4)]
+
+        fh = puzzler.raft.FeatureHelper(self.pieces, raft.coords)
+
+        # rotate the array so that the "natural" axis 0 is first
+        for i, axis in enumerate(axes):
+            if len(axis) == 0:
+                continue
+            vec = fh.get_edge_unit_vector(axis[0])
+            if np.dot(vec, np.array((-1, 0))) > .8:
+                break
+
+        if i < 4:
+            axes = axes[i:] + axes[:i]
+
+        return axes
+    
 WORKER = None
 
 def worker_initialize(puzzle_path):
@@ -46,16 +89,13 @@ def worker_initialize(puzzle_path):
     return None
 
 def worker_score_edge(dst, sources):
-
-    # print(f"worker_score_edge: {dst=} {sources=}")
     return WORKER.score_edge(dst, sources)
 
 def worker_score_pocket(raft, pocket, pieces):
+    return WORKER.score_pocket(raft, pocket, pieces)
 
-    # print(f"worker_score_pocket: {raft=} {pocket=} {pieces=}")
-    ret = WORKER.score_pocket(raft, pocket, pieces)
-    print(f"worker_score_pocket: {ret}")
-    return ret
+def worker_refine_raft(raft):
+    return WORKER.refine_raft(raft)
 
 # parallel solver
 
@@ -95,7 +135,7 @@ class ParallelSolver:
 
     def solve_border(self, timeout):
 
-        for job, kind in self.wait_first_completed(timeout):
+        for job, (kind, args) in self.wait_first_completed(timeout):
 
             if kind == SCORE_EDGE:
                 self.edge_scored(job.result())
@@ -119,13 +159,13 @@ class ParallelSolver:
 
         self.raft = puzzler.raft.Raft(geom.coords)
 
-        pf = puzzler.commands.quads.PocketFinder(self.pieces)
-        for pocket in pf.find_pockets(puzzler.raft.Raft(self.raft.coords)):
+        pf = puzzler.commands.quads.PocketFinder(self.pieces, self.raft)
+        for pocket in pf.find_pockets_on_frontiers():
             self.score_pocket_async(pocket)
         
     def solve_field(self, timeout):
 
-        for job, kind in self.wait_first_completed(timeout):
+        for job, (kind, args) in self.wait_first_completed(timeout):
 
             if kind == SCORE_POCKET:
                 self.pocket_scored(job.result())
@@ -150,7 +190,7 @@ class ParallelSolver:
 
     def score_edge_async(self, dst, sources) -> None:
         f = self.executor.submit(worker_score_edge, dst, sources)
-        self.jobs[f] = SCORE_EDGE
+        self.jobs[f] = (SCORE_EDGE, (dst, sources))
 
     def edge_scored(self, s) -> None:
         dst, scores = s
@@ -158,13 +198,22 @@ class ParallelSolver:
 
     def score_pocket_async(self, pocket) -> None:
 
+        print(f"score_pocket_async: {pocket}")
+
         score_raft = puzzler.raft.Raft({i: self.raft.coords[i] for i in pocket.pieces})
         pieces = set(self.pieces) - set(self.raft.coords)
 
         f = self.executor.submit(worker_score_pocket, score_raft, pocket, pieces)
-        self.jobs[f] = SCORE_POCKET
+        self.jobs[f] = (SCORE_POCKET, (score_raft, pocket, pieces))
 
     def pocket_scored(self, p) -> None:
+
+        if p is None:
+            return
+
+        label, fp = p
+        s = self.raftinator.format_feature_pairs(fp)
+        print(f"pocket_scored: {label:4s} {s}")
 
         self.placement.append(p)
         self.raft = self.place_piece(self.raft, p)
@@ -174,18 +223,24 @@ class ParallelSolver:
 
     def refine_raft_async(self) -> None:
 
-        f = self.executor.submit(worker_refine_raft, self.raft)
-        self.futures[f] = REFINE_RAFT
+        r = self.raft
+        print(f"refine_raft_async: {len(r.coords)} pieces, {len(self.placement)} of which are new")
+
+        f = self.executor.submit(worker_refine_raft, r)
+        self.jobs[f] = (REFINE_RAFT, r)
         self.refine_job = f
+        self.placement = []
 
     def raft_refined(self, r: Raft) -> None:
+
+        print(f"raft_refined: {len(r.coords)} pieces, {len(self.placement)} new pieces to place")
 
         # add to this refined raft all the pieces that were placed
         # subsequently to the job being created
         for p in self.placement:
-            raft = self.place_piece(raft, p)
+            r = self.place_piece(r, p)
         self.placement = []
-        self.raft = raft
+        self.raft = r
 
     def place_piece(self, dst_raft, placement):
 
@@ -198,4 +253,13 @@ class ParallelSolver:
             dst_raft, src_raft, feature_pairs)
 
     def find_pockets_for_piece(self, label):
-        raise NotImplementedError("find_pockets_for_piece")
+
+        fc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+        tabs = fc.compute_frontier_tabs_for_piece(self.raft.coords, label)
+
+        pockets = []
+        if tabs:
+            pf = puzzler.commands.quads.PocketFinder(self.pieces, self.raft)
+            pockets = pf.find_pockets_on_frontiers([tabs])
+
+        return pockets

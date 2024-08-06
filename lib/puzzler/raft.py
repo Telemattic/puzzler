@@ -34,6 +34,7 @@ class Feature(NamedTuple):
         return self.piece + x + str(self.index)
 
 Frontier = Sequence[Feature]
+Features = Sequence[Feature]
 Frontiers = Sequence[Frontier]
 
 FeaturePair = Tuple[Feature,Feature]
@@ -150,12 +151,25 @@ class RaftFeaturesComputer:
 
         return [self.compute_frontier_for_boundary(i) for i in self.compute_boundaries(coords)]
 
+    def compute_frontier_tabs_for_piece(self, coords: Coords, label: str) -> Features:
+
+        closest = puzzler.solver.ClosestPieces(
+            self.pieces, coords, None, self.distance_query_cache)
+
+        features = []
+        for a, b in closest(label).get('none', []):
+            for f in self.compute_ordered_features_for_segment(label, a, b):
+                if f.kind == 'tab':
+                    features.append(f)
+
+        return features
+
     def compute_boundaries(self, coords: Coords) -> Boundaries:
         
         closest = puzzler.solver.ClosestPieces(
             self.pieces, coords, None, self.distance_query_cache)
         adjacency = dict((i, closest(i)) for i in coords)
-        
+
         bc = puzzler.solver.BoundaryComputer(self.pieces)
         return bc.find_boundaries_from_adjacency(adjacency)
 
@@ -494,6 +508,7 @@ class RaftAligner:
 
         pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
 
+        fixed_piece = None
         axes = [None] * 4
 
         if axis_features is None:

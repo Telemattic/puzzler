@@ -977,7 +977,7 @@ def align_ui(args):
     if args.num_workers:
         ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers)
         while ps.solve():
-            print("tick")
+            pass
         print("all done!")
         return
 
