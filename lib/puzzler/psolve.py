@@ -2,6 +2,7 @@ import puzzler
 import concurrent.futures
 import numpy as np
 import operator
+from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Tuple
 
 class Worker:
 
@@ -101,23 +102,47 @@ def worker_refine_raft(raft):
 
 Raft = puzzler.raft.Raft
 
-SCORE_EDGE = 0
-SCORE_POCKET = 1
-REFINE_RAFT = 2
+class Job(NamedTuple):
+    job_no: int
+    future: concurrent.futures.Future
+    args: Tuple
+    callback: Any
+
+class JobManager:
+
+    def __init__(self, puzzle_path, max_workers):
+        self.executor = concurrent.futures.ProcessPoolExecutor(
+            max_workers=max_workers, initializer=worker_initialize, initargs=(puzzle_path,))
+        self.jobs = dict()
+        self.job_no = 0
+
+    def submit_job(self, args, func, callback):
+        f = self.executor.submit(func, *args)
+        self.job_no += 1
+        self.jobs[f] = Job(self.job_no, f, args, callback)
+        return self.job_no
+
+    def wait_first_completed(self, timeout):
+        done, not_done = concurrent.futures.wait(
+            self.jobs, timeout=timeout, return_when=concurrent.futures.FIRST_COMPLETED)
+        return [self.jobs.pop(f) for f in done]
+
+    def num_jobs(self):
+        return len(self.jobs)
 
 class ParallelSolver:
 
     def __init__(self, puzzle_path, max_workers):
+        
+        self.job_manager = JobManager(puzzle_path, max_workers)
         
         puzzle = puzzler.file.load(puzzle_path)
         
         self.puzzle_path = puzzle_path
         self.raft = None
         self.refine_job = None
-        self.jobs = dict()
+        self.pocket_jobs = dict()
         self.pieces = {i.label: i for i in puzzle.pieces}
-        self.executor = concurrent.futures.ProcessPoolExecutor(
-            max_workers=max_workers, initializer=worker_initialize, initargs=(puzzle_path,))
         self.edge_scores = dict()
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
         self.placement = []
@@ -135,15 +160,10 @@ class ParallelSolver:
 
     def solve_border(self, timeout):
 
-        for job, (kind, args) in self.wait_first_completed(timeout):
+        for job in self.job_manager.wait_first_completed(timeout):
+            job.callback(job)
 
-            if kind == SCORE_EDGE:
-                self.edge_scored(job.result())
-
-            else:
-                raise ValueError("bad job")
-
-        if not self.jobs:
+        if 0 == self.job_manager.num_jobs():
             self.finish_border()
 
         return True
@@ -165,55 +185,48 @@ class ParallelSolver:
         
     def solve_field(self, timeout):
 
-        for job, (kind, args) in self.wait_first_completed(timeout):
+        for job in self.job_manager.wait_first_completed(timeout):
+            job.callback(job)
 
-            if kind == SCORE_POCKET:
-                self.pocket_scored(job.result())
-                    
-            elif kind == REFINE_RAFT:
-                self.raft_refined(job.result())
-                self.refine_job = None
-
-            else:
-                raise ValueError("bad job")
-
-        if self.refine_job is None and len(self.placement) >= 20:
+        if not self.refine_job and len(self.placement) >= 20:
             self.refine_raft_async()
 
-        return len(self.jobs) != 0
-
-    def wait_first_completed(self, timeout):
-
-        done, not_done = concurrent.futures.wait(
-            self.jobs, timeout=timeout, return_when=concurrent.futures.FIRST_COMPLETED)
-        return [(j, self.jobs.pop(j)) for j in done]
+        return 0 != self.job_manager.num_jobs()
 
     def score_edge_async(self, dst, sources) -> None:
-        f = self.executor.submit(worker_score_edge, dst, sources)
-        self.jobs[f] = (SCORE_EDGE, (dst, sources))
 
-    def edge_scored(self, s) -> None:
-        dst, scores = s
+        args = (dst, sources)
+        self.job_manager.submit_job(args, worker_score_edge, self.edge_scored)
+
+    def edge_scored(self, job) -> None:
+        dst, scores = job.future.result()
         self.edge_scores[dst] = scores
 
     def score_pocket_async(self, pocket) -> None:
 
-        print(f"score_pocket_async: {pocket}")
+        if pocket in self.pocket_jobs:
+            job_no = self.pocket_jobs[pocket]
+            print(f"score_pocket_async[----]: {pocket} already submitted as job {job_no}, skipping")
+            return
 
         score_raft = puzzler.raft.Raft({i: self.raft.coords[i] for i in pocket.pieces})
         pieces = set(self.pieces) - set(self.raft.coords)
+        args = (score_raft, pocket, pieces)
+        
+        job_no = self.job_manager.submit_job(args, worker_score_pocket, self.pocket_scored)
+        print(f"score_pocket_async[{job_no}]: {pocket}")
+        self.pocket_jobs[pocket] = job_no
 
-        f = self.executor.submit(worker_score_pocket, score_raft, pocket, pieces)
-        self.jobs[f] = (SCORE_POCKET, (score_raft, pocket, pieces))
+    def pocket_scored(self, job) -> None:
 
-    def pocket_scored(self, p) -> None:
-
+        p = job.future.result()
         if p is None:
+            print(f"pocket_scored[{job.job_no}]: None?")
             return
 
         label, fp = p
         s = self.raftinator.format_feature_pairs(fp)
-        print(f"pocket_scored: {label:4s} {s}")
+        print(f"pocket_scored[{job.job_no}]: {label:4s} {s}")
 
         self.placement.append(p)
         self.raft = self.place_piece(self.raft, p)
@@ -224,16 +237,20 @@ class ParallelSolver:
     def refine_raft_async(self) -> None:
 
         r = self.raft
-        print(f"refine_raft_async: {len(r.coords)} pieces, {len(self.placement)} of which are new")
-
-        f = self.executor.submit(worker_refine_raft, r)
-        self.jobs[f] = (REFINE_RAFT, r)
-        self.refine_job = f
+        job_no = self.job_manager.submit_job((r,), worker_refine_raft, self.raft_refined)
+        n_refine = len(r.coords)
+        n_new = len(self.placement)
+        
+        self.refine_job = True
         self.placement = []
+        
+        print(f"refine_raft_async[{job_no}]: {n_refine} pieces, {n_new} of which are new")
 
-    def raft_refined(self, r: Raft) -> None:
+    def raft_refined(self, job) -> None:
 
-        print(f"raft_refined: {len(r.coords)} pieces, {len(self.placement)} new pieces to place")
+        r = job.future.result()
+
+        print(f"raft_refined[{job.job_no}]: {len(r.coords)} pieces, {len(self.placement)} new pieces to place")
 
         # add to this refined raft all the pieces that were placed
         # subsequently to the job being created
