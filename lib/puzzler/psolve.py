@@ -17,6 +17,12 @@ class Worker:
         self.edge_scorer = None # let it be created lazily
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
 
+        # HACK: 100.json
+        if 'I1' in self.pieces:
+            p = self.pieces['I1']
+            if len(p.edges) == 2:
+                p.edges = puzzler.commands.ellipse.clean_edges(p.label, p.edges)
+
     def score_edge(self, dst, sources):
 
         if self.edge_scorer is None:

@@ -13,7 +13,6 @@ import re
 import scipy
 import time
 from dataclasses import dataclass
-import concurrent.futures
 
 def pairwise_circular(iterable):
     # https://stackoverflow.com/questions/36917042/pairwise-circular-python-for-loop
@@ -417,25 +416,7 @@ class BorderSolver:
     def score_matches(self):
 
         borders = self.corners + self.edges
-
-        if self.puzzle_path:
-            scores = dict()
-            with concurrent.futures.ProcessPoolExecutor(
-                    max_workers=10, initializer=puzzler.worker.initializer, initargs=(self.puzzle_path,)) as executor:
-                future_to_dst = {executor.submit(puzzler.worker.score_edge_piece, dst, borders):dst for dst in borders}
-                for future in concurrent.futures.as_completed(future_to_dst):
-                    dst = future_to_dst[future]
-                    try:
-                        data = future.result()
-                    except Exception as exc:
-                        print("UHOH!")
-                    else:
-                        scores[dst] = data
-
-        else:
-            scores = {dst: self.score_edge_piece(dst, borders) for dst in borders}
-
-        return scores
+        return {dst: self.score_edge_piece(dst, borders) for dst in borders}
 
     def score_edge_piece(self, dst, sources):
 

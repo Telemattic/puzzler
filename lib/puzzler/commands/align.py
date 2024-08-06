@@ -971,6 +971,30 @@ def read_expected_tab_matches(path):
             expected[dst] = src
 
     return expected
+
+def cross_check_expected_and_pieces(expected, pieces):
+
+    piece_tabs = set()
+    for p in pieces.values():
+        for i in range(len(p.tabs)):
+            piece_tabs.add(puzzler.raft.Feature(p.label, 'tab', i))
+
+    dst_tabs = set(expected.keys())
+    src_tabs = set(expected.values())
+
+    assert dst_tabs == src_tabs
+
+    if piece_tabs != dst_tabs or dst_tabs != src_tabs:
+        print(f"WARNING: {len(piece_tabs)=} {len(dst_tabs)=} {len(src_tabs)=}")
+        a, b = piece_tabs, dst_tabs
+        c = a & b
+        print(f"    no. common tabs: {len(c)}")
+        if a != c:
+            s = ', '.join(str(i) for i in (a-c))
+            print(f"    tabs not referenced in expected: {s}")
+        if b != c:
+            s = ', '.join(str(i) for i in (b-c))
+            print(f"    unknown tabs in expected: {s}")
     
 def align_ui(args):
 
@@ -989,11 +1013,11 @@ def align_ui(args):
     for p in puzzle.pieces:
         by_label[p.label] = p
 
+    # HACK: 100.json
     if 'I1' in by_label:
         p = by_label['I1']
         if len(p.edges) == 2:
-            print(f"Warning: reversing piece 'I1'")
-            p.edges = p.edges[::-1]
+            p.edges = puzzler.commands.ellipse.clean_edges(p.label, p.edges)
 
     labels = set(args.labels)
 
@@ -1003,6 +1027,7 @@ def align_ui(args):
     expected = None
     if args.expected:
         expected = read_expected_tab_matches(args.expected)
+        cross_check_expected_and_pieces(expected, by_label)
 
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
