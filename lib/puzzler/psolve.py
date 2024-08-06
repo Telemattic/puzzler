@@ -187,7 +187,7 @@ class ParallelSolver:
         
         print(f"puzzle_size: width={geom.width:.1f} height={geom.height:.1f}")
 
-        self.raft = puzzler.raft.Raft(geom.coords)
+        self.raft = puzzler.raft.Raft(geom.coords, geom.size)
 
         pf = puzzler.commands.quads.PocketFinder(self.pieces, self.raft)
         for pocket in pf.find_pockets_on_frontiers():
@@ -223,7 +223,7 @@ class ParallelSolver:
             print(f"score_pocket_async[----]: {pocket} already submitted as job {job_no}, skipping")
             return
 
-        score_raft = puzzler.raft.Raft({i: self.raft.coords[i] for i in pocket.pieces})
+        score_raft = puzzler.raft.Raft({i: self.raft.coords[i] for i in pocket.pieces}, None)
         pieces = set(self.pieces) - set(self.raft.coords)
         args = (score_raft, pocket, pieces)
         

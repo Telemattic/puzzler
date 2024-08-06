@@ -41,11 +41,13 @@ FeaturePair = Tuple[Feature,Feature]
 FeaturePairs = Sequence[FeaturePair]
 
 AxisFeatures = Mapping[int,Frontier]
+Size = Tuple[float,float]
 
 @dataclass
 class Raft:
 
     coords: Coords
+    size: Optional[Size] = None
 
 @dataclass
 class RaftAlignment:
@@ -66,7 +68,7 @@ class RaftFactory:
     def make_raft_for_piece(self, src: str) -> Raft:
         
         coords = {src: Coord(0.,(0.,0.))}
-        return Raft(coords)
+        return Raft(coords, None)
 
     @staticmethod
     def transform_coords(coords: Coords, xform: Coord) -> Coords:
@@ -80,7 +82,7 @@ class RaftFactory:
         src_raft = alignment.src
 
         coords = dst_raft.coords | self.transform_coords(src_raft.coords, alignment.src_coord)
-        return Raft(coords)
+        return Raft(coords, dst_raft.size)
 
 class RaftFeatures(NamedTuple):
     tabs: Frontiers
@@ -431,7 +433,7 @@ class RaftAligner:
         seams = self.seamstress.trim_seams(
             self.seamstress.seams_between_rafts(dst_raft, src_raft, src_raft_coord))
 
-        raise ValueError("oops, not implemented")
+        raise NotImplementedError("refine_alignment_between_rafts")
 
     def refine_edge_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam], edges: FeaturePair, verbose=False) -> Raft:
 
@@ -494,7 +496,7 @@ class RaftAligner:
                 coord = Coord(body.angle, body.center)
             coords[piece] = coord
 
-        return Raft(coords)
+        return Raft(coords, None)
     
     def refine_alignment_within_raft(
             self,
@@ -566,7 +568,9 @@ class RaftAligner:
                 coord = Coord(body.angle, body.center)
             coords[piece] = coord
 
-        return Raft(coords)
+        size = (axes[1].value, axes[2].value) if axis_features else None
+
+        return Raft(coords, size)
 
 class RaftSeamstress:
 

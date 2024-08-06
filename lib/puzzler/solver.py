@@ -21,12 +21,12 @@ def pairwise_circular(iterable):
     return zip(a, itertools.chain(b, (first,)))
 
 Coord = puzzler.align.Coord
+Size = puzzler.raft.Size
 
 @dataclass
 class Geometry:
-    width: float
-    height: float
     coords: "dict[str,Coord]"
+    size: Size
 
 class BorderSolver:
 
@@ -126,10 +126,9 @@ class BorderSolver:
         icp.solve()
 
         coords = {k: Coord(v.angle, v.center) for k, v in bodies.items()}
-        width = axes[1].value
-        height = axes[2].value
+        size = (axes[1].value, axes[2].value)
 
-        return Geometry(width, height, coords)
+        return Geometry(coords, size)
     
     def estimate_puzzle_size(self, border):
 
@@ -897,7 +896,7 @@ class PuzzleSolver:
             coords['A22'] = Coord()
             coords['A23'] = scores['A22']['A23'][1]
             print(f"{coords=} {scores['A22']['A23']}")
-            self.geometry = Geometry(0., 0., coords)
+            self.geometry = Geometry(coords, (0., 0.))
             return
         
         border = bs.link_pieces(scores)
@@ -906,7 +905,8 @@ class PuzzleSolver:
 
         self.geometry = bs.init_placement(border)
 
-        print(f"puzzle_size: width={self.geometry.width:.1f} height={self.geometry.height:.1f}")
+        width, height = self.geometry.size
+        print(f"puzzle_size: {width=:.1f} {height=:.1f}")
 
         self.update_adjacency()
 
@@ -967,7 +967,7 @@ class PuzzleSolver:
             if i < 4:
                 axes = axes[i:] + axes[:i]
 
-            return None
+            return axes
 
         if self.geometry is None:
             return
@@ -998,7 +998,7 @@ class PuzzleSolver:
 
         _, _, src_label, feature_pairs = fits[0]
 
-        dst_raft = puzzler.raft.Raft(self.geometry.coords)
+        dst_raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
         src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
         new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
             dst_raft, src_raft, feature_pairs)
@@ -1032,6 +1032,7 @@ class PuzzleSolver:
             refined_raft = new_raft
 
         self.geometry.coords = refined_raft.coords
+        self.geometry.size = refined_raft.size
 
         self.update_adjacency()
 
@@ -1050,7 +1051,7 @@ class PuzzleSolver:
 
     def score_pockets(self):
 
-        raft = puzzler.raft.Raft(self.geometry.coords)
+        raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
         pocket_finder = puzzler.commands.quads.PocketFinder(self.pieces, raft)
         pockets = pocket_finder.find_pockets_on_frontiers()
 
@@ -1074,15 +1075,15 @@ class PuzzleSolver:
     @functools.lru_cache(maxsize=128)
     def score_pocket(self, pocket):
 
-        fitter = puzzler.commands.quads.PocketFitter(
-            self.pieces, puzzler.raft.Raft(self.geometry.coords), pocket, 1)
+        pocket_raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
+        pf = puzzler.commands.quads.PocketFitter(self.pieces, pocket_raft, pocket, 1)
 
         fits = []
         
         for src_label in self.pieces:
             if src_label in self.geometry.coords:
                 continue
-            for mse, feature_pairs in fitter.measure_fit(src_label):
+            for mse, feature_pairs in pf.measure_fit(src_label):
                 fits.append((mse[-1], src_label, feature_pairs))
 
         return sorted(fits, key=operator.itemgetter(0))
@@ -1113,18 +1114,20 @@ class PuzzleSolver:
                 if distance > radii[i]:
                     continue
                 # print(f"{labels[i]} - {labels[k]} # {distance=:.1f}")
-                rows.append({'dst_label':dst[0], 'dst_tab_no':dst[1], 'src_label':src[0], 'src_tab_no':src[1], 'distance':distance})
+                rows.append({'dst_piece':dst[0], 'dst_tab_no':dst[1], 'src_piece':src[0], 'src_tab_no':src[1], 'distance':distance})
 
         with open(path, 'w', newline='') as f:
-            field_names = 'dst_label dst_tab_no src_label src_tab_no distance'.split()
-            writer = csv.DictWriter(f, field_names)
+            field_names = 'dst_piece dst_tab_no src_piece src_tab_no'.split()
+            # ignore: don't complain that 'distance' isn't being output
+            writer = csv.DictWriter(f, field_names, extrasaction='ignore')
             writer.writeheader()
             writer.writerows(rows)
                 
     def update_adjacency(self):
 
         coords = self.geometry.coords
-        axes_opt = (0., self.geometry.width, self.geometry.height, 0.)
+        width, height = self.geometry.size
+        axes_opt = (0., width, height, 0.)
         closest_pieces = ClosestPieces(self.pieces, coords, axes_opt, self.distance_query_cache)
         adjacency = dict((i, closest_pieces(i)) for i in self.geometry.coords)
         
@@ -1156,13 +1159,12 @@ def from_json(pieces, s):
         if o is None:
             return None
         
-        width = o['width']
-        height = o['height']
+        size = tuple(o['size'])
         coords = dict()
         for k, v in o['coords'].items():
             coords[k] = parse_affine_transform(v)
 
-        return Geometry(width, height, coords)
+        return Geometry(coords, size)
 
     def parse_affine_transform(o):
         angle = o['angle']
@@ -1221,9 +1223,7 @@ def to_json(solver):
         coords = dict((k, format_coord(v))
                       for k, v in geometry.coords.items())
 
-        return {'width':geometry.width,
-                'height':geometry.height,
-                'coords':coords}
+        return {'size':geometry.size, 'coords':coords}
 
     def format_coord(t):
         return {'angle':t.angle, 'xy':t.xy.tolist()}

@@ -600,7 +600,7 @@ class AlignTk:
         for p, c in self.solver.geometry.coords.items():
             coords[p] = puzzler.raft.Coord(c.angle, c.xy)
 
-        raft = puzzler.raft.Raft(coords)
+        raft = puzzler.raft.Raft(coords, self.solver.geometry.size)
         mse = raftinator.get_total_error_for_raft_and_seams(raft)
             
         raft2 = raftinator.refine_alignment_within_raft(raft)

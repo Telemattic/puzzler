@@ -319,7 +319,8 @@ class PocketFitter:
         self.raftinator = puzzler.raft.Raftinator(pieces)
         self.num_refine = num_refine
 
-        pocket_raft = puzzler.raft.Raft({i: dst_raft.coords[i].copy() for i in pocket.pieces})
+        pocket_coords = {i: dst_raft.coords[i].copy() for i in pocket.pieces}
+        pocket_raft = puzzler.raft.Raft(pocket_coords, None)
         self.dst_raft = self.raftinator.refine_alignment_within_raft(pocket_raft)
 
         dst_tab_a = None
@@ -441,7 +442,7 @@ def try_triples(pieces, quad, num_refine):
     def remove_piece_from_raft(raft, label):
         coords = raft.coords.copy()
         coords.pop(label)
-        new_raft = puzzler.raft.Raft(coords)
+        new_raft = puzzler.raft.Raft(coords, None)
         return raftinator.refine_alignment_within_raft(new_raft)
 
     def make_feature_pair(a, b):
