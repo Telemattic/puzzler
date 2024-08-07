@@ -581,6 +581,14 @@ class AlignTk:
             else:
                 self.var_solve_continuous.set(0)
 
+    def do_refine(self):
+        print("refine!")
+        self.solver.refine()
+        self.update_coords()
+
+        self.scenegraph = None
+        self.render()
+
     def update_coords(self):
         
         g = self.solver.geometry
@@ -618,6 +626,14 @@ class AlignTk:
     def load_solver(self, path):
         self.solver = puzzler.solver.load_json(path, self.solver.pieces)
         self.update_coords()
+
+        if False:
+            pieces = self.solver.pieces
+            raft = puzzler.raft.Raft(self.solver.geometry.coords, self.solver.geometry.size)
+
+            pf = puzzler.commands.quads.PocketFinder(pieces, raft)
+            for pocket in pf.find_pockets_on_frontiers():
+                print(f"load_solver: {pocket}")
         
         self.scenegraph = None
         self.render()
@@ -687,6 +703,9 @@ class AlignTk:
 
         b2 = ttk.Button(self.controls, text='Tab Alignment', command=self.do_tab_alignment)
         b2.grid(column=1, row=0, sticky=W)
+
+        b3 = ttk.Button(self.controls, text='Refine', command=self.do_refine)
+        b3.grid(column=2, row=0, sticky=W)
 
         self.var_render_frontier = IntVar(value=0)
         b4 = ttk.Checkbutton(self.controls, text="Frontier",
@@ -998,15 +1017,6 @@ def cross_check_expected_and_pieces(expected, pieces):
     
 def align_ui(args):
 
-    if args.num_workers:
-        ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers)
-        while ps.solve():
-            pass
-        n_pieces = len(ps.pieces)
-        n_placed = len(ps.raft.coords) if ps.raft else 0
-        print(f"all done! {n_pieces=} {n_placed=}")
-        return
-
     puzzle = puzzler.file.load(args.puzzle)
 
     by_label = dict()
@@ -1028,6 +1038,15 @@ def align_ui(args):
     if args.expected:
         expected = read_expected_tab_matches(args.expected)
         cross_check_expected_and_pieces(expected, by_label)
+
+    if args.num_workers:
+        ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers, expected)
+        while ps.solve():
+            pass
+        n_pieces = len(ps.pieces)
+        n_placed = len(ps.raft.coords) if ps.raft else 0
+        print(f"all done! {n_pieces=} {n_placed=}")
+        return
 
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 

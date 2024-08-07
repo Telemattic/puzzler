@@ -808,8 +808,15 @@ class FrontierExplorer:
         for i, curr_dir in enumerate(dirs):
             p1, v2 = dirs[i-1]
             p3, v4 = curr_dir
-            t = np.cross(p3 - p1, v4) / np.cross(v2, v4)
-            u = np.cross(p3 - p1, v2) / np.cross(v2, v4)
+            t = np.cross(p3 - p1, v4)
+            u = np.cross(p3 - p1, v2)
+            d = np.cross(v2, v4)
+            if d != 0.:
+                t /= d
+                u /= d
+            else:
+                t = 0.
+                u = 0.
             scores.append((np.dot(v2, v4), t, u))
             
         return [(scores[i], tabs[i-1], tabs[i]) for i in range(len(tabs))]
@@ -1049,6 +1056,74 @@ class PuzzleSolver:
         t_process = time.monotonic() - self.start_time
         print(f"solve_field: wall: {t_start=:.1f} {t_finish=:.1f} elapsed: {t_process=:.1f} {t_score=:.1f} {t_seams=:.1f} {t_axis=:.1f} {t_refine=:.1f}\n")
 
+    def refine(self):
+
+        def get_axis_features(raft):
+
+            rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+            
+            border = None
+            for frontier in rfc.compute_frontiers(raft.coords):
+                if all(i.kind == 'edge' for i in frontier):
+                    border = frontier
+                    break
+
+            if border is None:
+                return None
+
+            axes = rfc.split_frontier_into_axes(border, raft.coords)
+
+            # convert from a dict to an array
+            axes = [axes.get(i, []) for i in range(4)]
+
+            fh = puzzler.raft.FeatureHelper(self.pieces, raft.coords)
+
+            # rotate the array so that the "natural" axis 0 is first
+            for i, axis in enumerate(axes):
+                if len(axis) == 0:
+                    continue
+                vec = fh.get_edge_unit_vector(axis[0])
+                if np.dot(vec, np.array((-1, 0))) > .8:
+                    break
+
+            if i < 4:
+                axes = axes[i:] + axes[:i]
+
+            return axes
+
+        if self.geometry is None:
+            return
+
+        new_raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
+
+        do_refine = True
+
+        if do_refine:
+
+            seams = self.raftinator.get_seams_for_raft(new_raft)
+
+            axis_features = get_axis_features(new_raft)
+
+            refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
+                new_raft, seams, axis_features)
+
+        else:
+
+            refined_raft = new_raft
+
+        self.geometry.coords = refined_raft.coords
+        self.geometry.size = refined_raft.size
+
+        self.update_adjacency()
+
+        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+        
+        path = self.next_path('matches_' + ts, 'csv')
+        self.save_tab_matches(path)
+        
+        path = self.next_path('solver_' + ts, 'json')
+        save_json(path, self)
+
     def score_pockets(self):
 
         raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
@@ -1196,13 +1271,14 @@ def from_json(pieces, s):
     assert set(pieces.keys()) == set(o['pieces'])
 
     geometry = parse_geometry(o['geometry'])
-    frontiers = parse_frontiers(o['frontiers'])
-    corners = parse_corners(o['corners'])
+    # frontiers = parse_frontiers(o['frontiers'])
+    # corners = parse_corners(o['corners'])
 
     solver = PuzzleSolver(pieces)
     solver.geometry = geometry
-    solver.frontiers = frontiers
-    solver.corners = corners
+    # solver.frontiers = frontiers
+    # solver.corners = corners
+    solver.update_adjacency()
 
     return solver
 

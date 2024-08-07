@@ -1,6 +1,7 @@
 import puzzler
 import concurrent.futures
-import datetime
+from datetime import datetime
+import json
 import numpy as np
 import operator
 import os
@@ -45,7 +46,7 @@ class Worker:
             return None
         
         fits.sort(key=operator.itemgetter(0))
-        return fits[0][1:]
+        return fits[0]
 
     def refine_raft(self, raft):
 
@@ -96,21 +97,21 @@ def worker_initialize(puzzle_path):
     return None
 
 def worker_score_edge(dst, sources):
-    t_start = datetime.datetime.now()
+    t_start = datetime.now()
     result = WORKER.score_edge(dst, sources)
-    t_finish = datetime.datetime.now()
+    t_finish = datetime.now()
     return {'result':result, 't_start':t_start, 't_finish':t_finish, 'pid':os.getpid()}
 
 def worker_score_pocket(raft, pocket, pieces):
-    t_start = datetime.datetime.now()
+    t_start = datetime.now()
     result = WORKER.score_pocket(raft, pocket, pieces)
-    t_finish = datetime.datetime.now()
+    t_finish = datetime.now()
     return {'result':result, 't_start':t_start, 't_finish':t_finish, 'pid':os.getpid()}
 
 def worker_refine_raft(raft):
-    t_start = datetime.datetime.now()
+    t_start = datetime.now()
     result = WORKER.refine_raft(raft)
-    t_finish = datetime.datetime.now()
+    t_finish = datetime.now()
     return {'result':result, 't_start':t_start, 't_finish':t_finish, 'pid':os.getpid()}
 
 # parallel solver
@@ -126,7 +127,7 @@ class JobManager:
         self.job_no = 0
 
     def submit_job(self, args, func, callback):
-        t_submit = datetime.datetime.now()
+        t_submit = datetime.now()
         f = self.executor.submit(func, *args)
         self.job_no += 1
         self.jobs[f] = {'job_no': self.job_no, 'args': args, 'callback': callback, 't_submit':t_submit}
@@ -142,7 +143,7 @@ class JobManager:
 
 class ParallelSolver:
 
-    def __init__(self, puzzle_path, max_workers):
+    def __init__(self, puzzle_path, max_workers, expected=None):
         
         self.job_manager = JobManager(puzzle_path, max_workers)
         
@@ -156,6 +157,7 @@ class ParallelSolver:
         self.edge_scores = dict()
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
         self.placement = []
+        self.expected = expected
         self.start_solve()
 
     def solve(self, timeout=None):
@@ -184,8 +186,9 @@ class ParallelSolver:
         
         border = bs.link_pieces(self.edge_scores)
         geom = bs.init_placement(border)
-        
-        print(f"puzzle_size: width={geom.width:.1f} height={geom.height:.1f}")
+
+        width, height = geom.size
+        print(f"puzzle_size: width={width:.1f} height={height:.1f}")
 
         self.raft = puzzler.raft.Raft(geom.coords, geom.size)
 
@@ -193,6 +196,10 @@ class ParallelSolver:
         for pocket in pf.find_pockets_on_frontiers():
             self.score_pocket_async(pocket)
         
+        path = self.next_path()
+        self.save(path)
+        print(f"finish_border[-]: initial raft saved to {path}")
+
     def solve_field(self, timeout):
 
         for job in self.job_manager.wait_first_completed(timeout):
@@ -220,7 +227,7 @@ class ParallelSolver:
 
         if pocket in self.pocket_jobs:
             job_no = self.pocket_jobs[pocket]
-            print(f"score_pocket_async[----]: {pocket} already submitted as job {job_no}, skipping")
+            print(f"score_pocket_async[-]: {pocket} already submitted as job {job_no}, skipping")
             return
 
         score_raft = puzzler.raft.Raft({i: self.raft.coords[i] for i in pocket.pieces}, None)
@@ -239,15 +246,29 @@ class ParallelSolver:
             print(f"pocket_scored[{job_no}]: None?")
             return
 
-        label, fp = result
-        s = self.raftinator.format_feature_pairs(fp)
-        print(f"pocket_scored[{job_no}]: {label:4s} {s}")
+        mse, label, feature_pairs = result
+        s = self.raftinator.format_feature_pairs(feature_pairs)
+        print(f"pocket_scored[{job_no}]: {label:4s} {mse=:.3f} {s}")
+        if label in self.raft.coords:
+            print(f"pocket_scored[{job_no}]: {label} has already been placed, skipping")
+            return
 
-        self.placement.append(result)
-        self.raft = self.place_piece(self.raft, result)
+        if mse > 20:
+            print(f"pocket_scored[{job_no}]: {label} placed with high error, rejecting")
+            return
+
+        if self.expected and any(self.expected.get(dst, '') != src for dst, src in feature_pairs):
+            print(f"pocket_scored[{job_no}]: WARNING: known bad fit for {label}: {s}")
+
+        self.placement.append((label, feature_pairs))
+        self.raft = self.place_piece(self.raft, (label, feature_pairs))
 
         for pocket in self.find_pockets_for_piece(label):
             self.score_pocket_async(pocket)
+
+        path = self.next_path()
+        self.save(path)
+        print(f"pocket_scored[{job_no}]: updated raft saved to {path}")
 
     def refine_raft_async(self) -> None:
 
@@ -276,11 +297,18 @@ class ParallelSolver:
         self.placement = []
         self.raft = r
 
+        path = self.next_path()
+        self.save(path)
+        print(f"raft_refined[{job_no}]: updated raft saved to {path}")
+
     def place_piece(self, dst_raft, placement):
 
         src_label, feature_pairs = placement
         
         r = self.raftinator
+
+        if src_label in dst_raft.coords:
+            raise ValueError("place_piece")
 
         src_raft = r.factory.make_raft_for_piece(src_label)
         return r.align_and_merge_rafts_with_feature_pairs(
@@ -297,3 +325,28 @@ class ParallelSolver:
             pockets = pf.find_pockets_on_frontiers([tabs])
 
         return pockets
+
+    def save(self, path):
+
+        r = self.raft
+        coords = {k: {'angle':v.angle, 'xy':v.xy.tolist()} for k, v in r.coords.items()}
+        pieces = sorted(self.pieces.keys())
+
+        o = {'pieces': pieces, 'geometry': {'size': r.size, 'coords': coords}}
+
+        with open(path, 'w') as f:
+            f.write(json.JSONEncoder(indent=0).encode(o))
+
+    @staticmethod
+    def next_path():
+
+        fname = datetime.now().strftime('psolve_%Y%m%d-%H%M%S')
+        ext = 'json'
+
+        dname = r'C:\temp\puzzler\align'
+        i = 0
+        while True:
+            path = os.path.join(dname, f"{fname}_{i:02d}.{ext}")
+            if not os.path.exists(path):
+                return path
+            i += 1
