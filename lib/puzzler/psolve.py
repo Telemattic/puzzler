@@ -5,6 +5,7 @@ import json
 import numpy as np
 import operator
 import os
+import scipy.spatial.distance
 from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Tuple
 
 class Worker:
@@ -138,6 +139,16 @@ class JobManager:
             self.jobs, timeout=timeout, return_when=concurrent.futures.FIRST_COMPLETED)
         return [self.jobs.pop(f) | f.result() for f in done]
 
+    def wait_for_specific_job(self, job_no):
+        for k, v in self.jobs:
+            if v['job_no'] == job_no:
+                f = k
+                break
+        else:
+            raise KeyError("no such job")
+
+        return self.jobs.pop(f) | f.result()
+
     def num_jobs(self):
         return len(self.jobs)
 
@@ -151,13 +162,14 @@ class ParallelSolver:
         
         self.puzzle_path = puzzle_path
         self.raft = None
-        self.refine_job = None
+        self.refine_job = 0
         self.pocket_jobs = dict()
         self.pieces = {i.label: i for i in puzzle.pieces}
         self.edge_scores = dict()
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
         self.placement = []
         self.expected = expected
+        self.generation = dict()
         self.start_solve()
 
     def solve(self, timeout=None):
@@ -192,6 +204,8 @@ class ParallelSolver:
 
         self.raft = puzzler.raft.Raft(geom.coords, geom.size)
 
+        self.generation = {i: 0 for i in self.raft.coords}
+        
         pf = puzzler.commands.quads.PocketFinder(self.pieces, self.raft)
         for pocket in pf.find_pockets_on_frontiers():
             self.score_pocket_async(pocket)
@@ -205,7 +219,11 @@ class ParallelSolver:
         for job in self.job_manager.wait_first_completed(timeout):
             job['callback'](job)
 
-        if not self.refine_job and len(self.placement) >= 20:
+        # start a refinement job if we've placed a bunch of pieces and
+        # haven't refined their placement, *or* if we've run out of
+        # work and have at least one piece without a refined placement
+        thresh = 1 if self.job_manager.num_jobs() == 0 else 20
+        if 0 == self.refine_job and len(self.placement) >= thresh:
             self.refine_raft_async()
 
         return 0 != self.job_manager.num_jobs()
@@ -230,6 +248,11 @@ class ParallelSolver:
             print(f"score_pocket_async[-]: {pocket} already submitted as job {job_no}, skipping")
             return
 
+        g = 1 + max(self.generation[i] for i in pocket.pieces)
+        if g > 3:
+            print(f"score_pocket_async[-]: {pocket} would be generation {g}, skipping")
+            return
+
         score_raft = puzzler.raft.Raft({i: self.raft.coords[i] for i in pocket.pieces}, None)
         pieces = set(self.pieces) - set(self.raft.coords)
         args = (score_raft, pocket, pieces)
@@ -246,29 +269,35 @@ class ParallelSolver:
             print(f"pocket_scored[{job_no}]: None?")
             return
 
+        pocket = job['args'][1]
+
         mse, label, feature_pairs = result
         s = self.raftinator.format_feature_pairs(feature_pairs)
-        print(f"pocket_scored[{job_no}]: {label:4s} {mse=:.3f} {s}")
+        print(f"pocket_scored[{job_no}]: {label} {mse=:.3f} {s}")
+        
+        if self.expected and any(self.expected.get(dst, '') != src for dst, src in feature_pairs):
+            print(f"pocket_scored[{job_no}]: WARNING: known bad fit for {label}: {s}")
+
         if label in self.raft.coords:
             print(f"pocket_scored[{job_no}]: {label} has already been placed, skipping")
             return
 
         if mse > 20:
-            print(f"pocket_scored[{job_no}]: {label} placed with high error, rejecting")
+            print(f"pocket_scored[{job_no}]: WARNING: {label} placed with high error, rejecting")
             return
-
-        if self.expected and any(self.expected.get(dst, '') != src for dst, src in feature_pairs):
-            print(f"pocket_scored[{job_no}]: WARNING: known bad fit for {label}: {s}")
 
         self.placement.append((label, feature_pairs))
         self.raft = self.place_piece(self.raft, (label, feature_pairs))
 
+        self.check_raft_well_formed(self.raft)
+        
         for pocket in self.find_pockets_for_piece(label):
             self.score_pocket_async(pocket)
 
         path = self.next_path()
         self.save(path)
-        print(f"pocket_scored[{job_no}]: updated raft saved to {path}")
+        print(f"pocket_scored[{job_no}]: {label} is generation {self.generation[label]}")
+        print(f"pocket_scored[{job_no}]: updated raft saved to {os.path.basename(path)}")
 
     def refine_raft_async(self) -> None:
 
@@ -277,7 +306,7 @@ class ParallelSolver:
         n_refine = len(r.coords)
         n_new = len(self.placement)
         
-        self.refine_job = True
+        self.refine_job = job_no
         self.placement = []
         
         print(f"refine_raft_async[{job_no}]: {n_refine} pieces, {n_new} of which are new")
@@ -290,16 +319,61 @@ class ParallelSolver:
         r = result
         print(f"raft_refined[{job_no}]: {len(r.coords)} pieces, {len(self.placement)} new pieces to place")
 
+        # only the pieces that had their coordinates refined should be
+        # considered generation 0, everything else is at least
+        # generation 1, and potentially higher
+        self.generation = {i: 0 for i in r.coords}
+
         # add to this refined raft all the pieces that were placed
         # subsequently to the job being created
         for p in self.placement:
             r = self.place_piece(r, p)
+            
+        n_placed = len(self.placement)
         self.placement = []
+        
+        self.refine_job = 0
         self.raft = r
 
+        new_pockets = 0
+        pf = puzzler.commands.quads.PocketFinder(self.pieces, self.raft)
+        for pocket in pf.find_pockets_on_frontiers():
+            if pocket not in self.pocket_jobs:
+                self.score_pocket_async(pocket)
+                new_pockets += 1
+        
         path = self.next_path()
         self.save(path)
-        print(f"raft_refined[{job_no}]: updated raft saved to {path}")
+        print(f"raft_refined[{job_no}]: submitted {new_pockets} new pockets")
+        print(f"raft_refined[{job_no}]: updated raft saved to {os.path.basename(path)}")
+
+        if n_placed >= 20:
+            self.refine_raft_async()
+
+        self.check_raft_well_formed(self.raft)
+
+    def check_raft_well_formed(self, raft):
+
+        labels = []
+        xy = []
+        for l, c in raft.coords.items():
+            labels.append(l)
+            xy.append(c.xy)
+        xy = np.array(xy)
+
+        d = scipy.spatial.distance.cdist(xy, xy)
+        for i in range(len(xy)):
+            d[i,i] = 10000.
+            
+        # print(f"{xy.shape=} {d.shape=} {np.argmin(d)=}")
+        i, j = np.unravel_index(np.argmin(d, axis=None), d.shape)
+
+        dist = d[i,j]
+        a, b = labels[i], labels[j]
+        # print(f"check_raft_well_formed: {a} and {b} are {dist:.1f} units apart")
+
+        if dist < min(self.pieces[a].radius, self.pieces[b].radius):
+            print(f"WARNING: pieces {a} and {b} are {dist:.1f} units apart!!!")
 
     def place_piece(self, dst_raft, placement):
 
@@ -309,6 +383,8 @@ class ParallelSolver:
 
         if src_label in dst_raft.coords:
             raise ValueError("place_piece")
+
+        self.generation[src_label] = 1 + max(self.generation[i.piece] for i, j in feature_pairs)
 
         src_raft = r.factory.make_raft_for_piece(src_label)
         return r.align_and_merge_rafts_with_feature_pairs(
