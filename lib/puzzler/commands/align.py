@@ -389,12 +389,12 @@ class CanvasHitTester:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces, *, expected=None, puzzle_path=None):
+    def __init__(self, parent, pieces):
         
         self.pieces = pieces
 
         pieces_dict = {i.piece.label: i.piece for i in pieces}
-        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, expected=expected, puzzle_path=puzzle_path)
+        self.solver = puzzler.solver.PuzzleSolver(pieces_dict)
 
         self.draggable = None
         self.selection = None
@@ -1051,7 +1051,7 @@ def align_ui(args):
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, expected=expected, puzzle_path=args.puzzle)
+    ui = AlignTk(root, pieces)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 

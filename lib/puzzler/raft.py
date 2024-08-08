@@ -111,6 +111,39 @@ class RaftFeaturesComputer:
 
         return RaftFeatures(tabs, axes)
 
+    def get_axis_features(self, coords):
+
+        rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+            
+        border = None
+        for frontier in rfc.compute_frontiers(coords):
+            if all(i.kind == 'edge' for i in frontier):
+                border = frontier
+                break
+
+        if border is None:
+            return None
+
+        axes = rfc.split_frontier_into_axes(border, coords)
+
+        # convert from a dict to an array
+        axes = [axes.get(i, []) for i in range(4)]
+
+        fh = FeatureHelper(self.pieces, coords)
+
+        # rotate the array so that the "natural" axis 0 is first
+        for i, axis in enumerate(axes):
+            if len(axis) == 0:
+                continue
+            vec = fh.get_edge_unit_vector(axis[0])
+            if np.dot(vec, np.array((-1, 0))) > .8:
+                break
+
+        if i < 4:
+            axes = axes[i:] + axes[:i]
+
+        return axes
+    
     def split_frontier_into_axes(self, frontier: Frontier, coords: Coords) -> Frontiers:
 
         edges = []

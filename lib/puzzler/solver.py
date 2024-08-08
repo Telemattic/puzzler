@@ -30,14 +30,13 @@ class Geometry:
 
 class BorderSolver:
 
-    def __init__(self, pieces, puzzle_path = None):
+    def __init__(self, pieces):
         self.pieces = pieces
         self.pred = dict()
         self.succ = dict()
         self.corners = []
         self.edges = []
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
-        self.puzzle_path = puzzle_path
 
         for p in self.pieces.values():
             n = len(p.edges)
@@ -845,7 +844,7 @@ class FrontierExplorer:
 
 class PuzzleSolver:
 
-    def __init__(self, pieces, *, expected=None, puzzle_path=None):
+    def __init__(self, pieces):
         self.pieces = pieces
         self.geometry = None
         self.frontiers = None
@@ -854,9 +853,7 @@ class PuzzleSolver:
         self.use_raftinator = True
         self.raftinator = puzzler.raft.Raftinator(pieces)
         self.seams = []
-        self.expected_tab_matches = expected
         self.start_time = time.monotonic()
-        self.puzzle_path = puzzle_path
 
     def solve(self):
         if self.geometry:
@@ -892,32 +889,18 @@ class PuzzleSolver:
 
     def solve_border(self):
         
-        bs = BorderSolver(self.pieces, self.puzzle_path)
-
-        t0 = time.monotonic()
+        bs = BorderSolver(self.pieces)
 
         scores = bs.score_matches()
 
-        t_score = time.monotonic() - t0
-
-        print(f"solve_border: {t_score=:.1f}")
-
+        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+        
         if True:
-            ts = datetime.now().strftime('%Y%m%d-%H%M%S')
             path = self.next_path('border_match_scores_' + ts, 'tab')
             print(f"Saving border score data to {path}")
             self.save_border_scores(path, scores)
 
-        if False:
-            coords = dict()
-            coords['A22'] = Coord()
-            coords['A23'] = scores['A22']['A23'][1]
-            print(f"{coords=} {scores['A22']['A23']}")
-            self.geometry = Geometry(coords, (0., 0.))
-            return
-        
         border = bs.link_pieces(scores)
-        # print(f"{border=}")
         bs.estimate_puzzle_size(border)
 
         self.geometry = bs.init_placement(border)
@@ -927,11 +910,8 @@ class PuzzleSolver:
 
         self.update_adjacency()
 
-        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-
-        if False:
-            path = self.next_path('matches_' + ts, 'csv')
-            self.save_tab_matches(path)
+        path = self.next_path('matches_' + ts, 'csv')
+        self.save_tab_matches(path)
         
         path = self.next_path('solver_' + ts, 'json')
         save_json(path, self)
@@ -949,43 +929,6 @@ class PuzzleSolver:
 
     def solve_field(self):
 
-        t_start = time.monotonic() - self.start_time
-
-        Feature = puzzler.raft.Feature
-
-        def get_axis_features(raft):
-
-            rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
-            
-            border = None
-            for frontier in rfc.compute_frontiers(raft.coords):
-                if all(i.kind == 'edge' for i in frontier):
-                    border = frontier
-                    break
-
-            if border is None:
-                return None
-
-            axes = rfc.split_frontier_into_axes(border, raft.coords)
-
-            # convert from a dict to an array
-            axes = [axes.get(i, []) for i in range(4)]
-
-            fh = puzzler.raft.FeatureHelper(self.pieces, raft.coords)
-
-            # rotate the array so that the "natural" axis 0 is first
-            for i, axis in enumerate(axes):
-                if len(axis) == 0:
-                    continue
-                vec = fh.get_edge_unit_vector(axis[0])
-                if np.dot(vec, np.array((-1, 0))) > .8:
-                    break
-
-            if i < 4:
-                axes = axes[i:] + axes[:i]
-
-            return axes
-
         if self.geometry is None:
             return
 
@@ -994,11 +937,7 @@ class PuzzleSolver:
 
         self.distance_query_cache.purge()
 
-        t0 = time.monotonic()
-
         fits = self.score_pockets()
-
-        t_score = time.monotonic() - t0
 
         if not fits:
             # UI sentinel -- there is no more progress to be made
@@ -1020,109 +959,32 @@ class PuzzleSolver:
         new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
             dst_raft, src_raft, feature_pairs)
 
-        do_refine = len(new_raft.coords) % 20 == 0
-
-        if do_refine:
-
-            t0 = time.monotonic()
-
-            seams = self.raftinator.get_seams_for_raft(new_raft)
-
-            t_seams = time.monotonic() - t0
+        self.update_raft(new_raft)
         
-            t0 = time.monotonic()
-
-            axis_features = get_axis_features(new_raft)
-
-            t_axis = time.monotonic() - t0
-
-            t0 = time.monotonic()
-
-            refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
-                new_raft, seams, axis_features)
-
-            t_refine = time.monotonic() - t0
-
-        else:
-
-            t_seams = t_axis = t_refine = 0.
-            refined_raft = new_raft
-
-        self.geometry.coords = refined_raft.coords
-        self.geometry.size = refined_raft.size
-
-        self.update_adjacency()
-
-        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-        
-        path = self.next_path('matches_' + ts, 'csv')
-        self.save_tab_matches(path)
-        
-        path = self.next_path('solver_' + ts, 'json')
-        save_json(path, self)
-
-        t_finish = time.monotonic() - self.start_time
-        
-        t_process = time.monotonic() - self.start_time
-        print(f"solve_field: wall: {t_start=:.1f} {t_finish=:.1f} elapsed: {t_process=:.1f} {t_score=:.1f} {t_seams=:.1f} {t_axis=:.1f} {t_refine=:.1f}\n")
+        if len(new_raft.coords) % 20 == 0:
+            self.refine()
 
     def refine(self):
-
-        def get_axis_features(raft):
-
-            rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
-            
-            border = None
-            for frontier in rfc.compute_frontiers(raft.coords):
-                if all(i.kind == 'edge' for i in frontier):
-                    border = frontier
-                    break
-
-            if border is None:
-                return None
-
-            axes = rfc.split_frontier_into_axes(border, raft.coords)
-
-            # convert from a dict to an array
-            axes = [axes.get(i, []) for i in range(4)]
-
-            fh = puzzler.raft.FeatureHelper(self.pieces, raft.coords)
-
-            # rotate the array so that the "natural" axis 0 is first
-            for i, axis in enumerate(axes):
-                if len(axis) == 0:
-                    continue
-                vec = fh.get_edge_unit_vector(axis[0])
-                if np.dot(vec, np.array((-1, 0))) > .8:
-                    break
-
-            if i < 4:
-                axes = axes[i:] + axes[:i]
-
-            return axes
 
         if self.geometry is None:
             return
 
         new_raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
 
-        do_refine = True
+        seams = self.raftinator.get_seams_for_raft(new_raft)
 
-        if do_refine:
+        rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+        axis_features = rfc.get_axis_features(new_raft.coords)
+        
+        refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
+            new_raft, seams, axis_features)
 
-            seams = self.raftinator.get_seams_for_raft(new_raft)
+        self.update_raft(refined_raft)
 
-            axis_features = get_axis_features(new_raft)
+    def update_raft(self, raft):
 
-            refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
-                new_raft, seams, axis_features)
-
-        else:
-
-            refined_raft = new_raft
-
-        self.geometry.coords = refined_raft.coords
-        self.geometry.size = refined_raft.size
+        self.geometry.coords = raft.coords
+        self.geometry.size = raft.size
 
         self.update_adjacency()
 
@@ -1256,38 +1118,14 @@ def from_json(pieces, s):
         xy = tuple(o['xy'])
         return Coord(angle, xy)
 
-    def parse_frontiers(o):
-        if o is None:
-            return None
-
-        return [parse_frontier(i) for i in o]
-
-    def parse_frontier(o):
-        return [(a, tuple(b)) for a, b in o]
-
-    def parse_corners(o):
-
-        if o is None:
-            return None
-
-        return [parse_corner(i) for i in o]
-
-    def parse_corner(o):
-
-        return tuple((a,b) for a, b in o)
-
     o = json.loads(s)
 
     assert set(pieces.keys()) == set(o['pieces'])
 
     geometry = parse_geometry(o['geometry'])
-    # frontiers = parse_frontiers(o['frontiers'])
-    # corners = parse_corners(o['corners'])
 
     solver = PuzzleSolver(pieces)
     solver.geometry = geometry
-    # solver.frontiers = frontiers
-    # solver.corners = corners
     solver.update_adjacency()
 
     return solver
@@ -1314,30 +1152,8 @@ def to_json(solver):
     def format_coord(t):
         return {'angle':t.angle, 'xy':t.xy.tolist()}
 
-    def format_frontiers(frontiers):
-
-        return frontiers
-
-        if frontiers is None:
-            return None
-
-        return [format_frontier(i) for i in frontiers]
-
-    def format_frontier(f):
-
-        return str(f)
-
-    def format_corners(corners):
-
-        if corners is None:
-            return None
-
-        return corners
-
     o = dict()
     o['pieces'] = format_pieces(solver.pieces)
     o['geometry'] = format_geometry(solver.geometry)
-    o['frontiers'] = format_frontiers(solver.frontiers)
-    o['corners'] = format_corners(solver.corners)
 
     return json.JSONEncoder(indent=0).encode(o)

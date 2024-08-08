@@ -54,42 +54,10 @@ class Worker:
         r = self.raftinator
 
         seams = r.get_seams_for_raft(raft)
-        axis_features = self.get_axis_features(raft)
+        rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+        axis_features = rfc.get_axis_features(raft.coords)
         return r.aligner.refine_alignment_within_raft(raft, seams, axis_features)
 
-    def get_axis_features(self, raft):
-
-        rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
-            
-        border = None
-        for frontier in rfc.compute_frontiers(raft.coords):
-            if all(i.kind == 'edge' for i in frontier):
-                border = frontier
-                break
-
-        if border is None:
-            return None
-
-        axes = rfc.split_frontier_into_axes(border, raft.coords)
-
-        # convert from a dict to an array
-        axes = [axes.get(i, []) for i in range(4)]
-
-        fh = puzzler.raft.FeatureHelper(self.pieces, raft.coords)
-
-        # rotate the array so that the "natural" axis 0 is first
-        for i, axis in enumerate(axes):
-            if len(axis) == 0:
-                continue
-            vec = fh.get_edge_unit_vector(axis[0])
-            if np.dot(vec, np.array((-1, 0))) > .8:
-                break
-
-        if i < 4:
-            axes = axes[i:] + axes[:i]
-
-        return axes
-    
 WORKER = None
 
 def worker_initialize(puzzle_path):
@@ -151,6 +119,62 @@ class JobManager:
 
     def num_jobs(self):
         return len(self.jobs)
+
+class Solver:
+
+    def solve_border(self):
+
+        scores = self.score_edges()
+        border = self.link_border(scores)
+        raft = self.construct_border_raft(border)
+        return self.refine_raft(raft)
+
+    def score_edges(self):
+
+        pred, succ = self.identify_edges()
+        return {self.score_edge(dst, succ.items()) for dst in pred.items()}
+
+    def identify_edges(self):
+        pass
+
+    def score_edge(self, dst, sources):
+        return (dst[0], self.edge_scorer.score_edge_piece(dst, sources))
+
+    def link_edges(self, scores):
+        return EdgeLinker(self.pieces).link_edges(scores)
+
+    def construct_border_raft(self, border):
+        return BorderConstructor(self.pieces).construct_border_raft(border)
+
+    def iter_field(self, raft):
+
+        for p in self.score_pockets(raft):
+            raft = self.place_piece(raft, p)
+        return self.refine_raft(raft)
+
+    def score_pockets(self, raft):
+
+        return [self.score_pocket(raft, p) for p in self.find_pockets(raft)]
+
+    def find_pockets(self, raft):
+
+        return PocketFinder(self.pieces, self.raft).find_pockets_on_frontiers()
+
+    def score_pocket(self, raft, pocket):
+
+        return self.pocket_scorer.score_pocket(raft, pocket)
+
+    def place_piece(self, raft, placement):
+
+        src_label, feature_pairs = placement
+        return PiecePlacer(self.places).place_piece(raft, src_label, feature_pairs)
+
+    def refine_raft(self, raft):
+        r = self.raftinator
+
+        seams = r.get_seams_for_raft(raft)
+        axis_features = self.get_axis_features(raft)
+        return r.aligner.refine_alignment_within_raft(raft, seams, axis_features)
 
 class ParallelSolver:
 
