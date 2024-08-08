@@ -23,11 +23,6 @@ def pairwise_circular(iterable):
 Coord = puzzler.align.Coord
 Size = puzzler.raft.Size
 
-@dataclass
-class Geometry:
-    coords: "dict[str,Coord]"
-    size: Size
-
 class BorderSolver:
 
     def __init__(self, pieces):
@@ -127,7 +122,7 @@ class BorderSolver:
         coords = {k: Coord(v.angle, v.center) for k, v in bodies.items()}
         size = (axes[1].value, axes[2].value)
 
-        return Geometry(coords, size)
+        return puzzler.raft.Raft(coords, size)
     
     def link_pieces(self, scores):
 
@@ -647,7 +642,7 @@ class PuzzleSolver:
 
     def __init__(self, pieces):
         self.pieces = pieces
-        self.geometry = None
+        self.raft = None
         self.frontiers = None
         self.corners = []
         self.distance_query_cache = puzzler.align.DistanceQueryCache()
@@ -657,7 +652,7 @@ class PuzzleSolver:
         self.start_time = time.monotonic()
 
     def solve(self):
-        if self.geometry:
+        if self.raft:
             self.solve_field()
         else:
             self.solve_border()
@@ -703,9 +698,9 @@ class PuzzleSolver:
 
         border = bs.link_pieces(scores)
 
-        self.geometry = bs.init_placement(border)
+        self.raft = bs.init_placement(border)
 
-        width, height = self.geometry.size
+        width, height = self.raft.size
         print(f"puzzle_size: {width=:.1f} {height=:.1f}")
 
         self.update_adjacency()
@@ -729,7 +724,7 @@ class PuzzleSolver:
 
     def solve_field(self):
 
-        if self.geometry is None:
+        if self.raft is None:
             return
 
         if not self.corners:
@@ -754,7 +749,7 @@ class PuzzleSolver:
 
         _, _, src_label, feature_pairs = fits[0]
 
-        dst_raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
+        dst_raft = self.raft
         src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
         new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
             dst_raft, src_raft, feature_pairs)
@@ -766,10 +761,10 @@ class PuzzleSolver:
 
     def refine(self):
 
-        if self.geometry is None:
+        if self.raft is None:
             return
 
-        new_raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
+        new_raft = self.raft
 
         seams = self.raftinator.get_seams_for_raft(new_raft)
 
@@ -783,8 +778,7 @@ class PuzzleSolver:
 
     def update_raft(self, raft):
 
-        self.geometry.coords = raft.coords
-        self.geometry.size = raft.size
+        self.raft = raft
 
         self.update_adjacency()
 
@@ -798,7 +792,7 @@ class PuzzleSolver:
 
     def score_pockets(self):
 
-        raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
+        raft = self.raft
         pocket_finder = puzzler.commands.quads.PocketFinder(self.pieces, raft)
         pockets = pocket_finder.find_pockets_on_frontiers()
 
@@ -822,13 +816,13 @@ class PuzzleSolver:
     @functools.lru_cache(maxsize=128)
     def score_pocket(self, pocket):
 
-        pocket_raft = puzzler.raft.Raft(self.geometry.coords, self.geometry.size)
+        pocket_raft = self.raft
         pf = puzzler.commands.quads.PocketFitter(self.pieces, pocket_raft, pocket, 1)
 
         fits = []
         
         for src_label in self.pieces:
-            if src_label in self.geometry.coords:
+            if src_label in self.raft.coords:
                 continue
             for mse, feature_pairs in pf.measure_fit(src_label):
                 fits.append((mse[-1], src_label, feature_pairs))
@@ -840,7 +834,7 @@ class PuzzleSolver:
         tab_xy = []
         radii = []
         labels = []
-        for k, v in self.geometry.coords.items():
+        for k, v in self.raft.coords.items():
             p = self.pieces[k]
             centers = np.array([t.ellipse.center for t in p.tabs])
             radii  += [t.ellipse.semi_major for t in p.tabs]
@@ -872,11 +866,11 @@ class PuzzleSolver:
                 
     def update_adjacency(self):
 
-        coords = self.geometry.coords
-        width, height = self.geometry.size
+        coords = self.raft.coords
+        width, height = self.raft.size
         axes_opt = (0., width, height, 0.)
         closest_pieces = ClosestPieces(self.pieces, coords, axes_opt, self.distance_query_cache)
-        adjacency = dict((i, closest_pieces(i)) for i in self.geometry.coords)
+        adjacency = dict((i, closest_pieces(i)) for i in self.raft.coords)
         
         frontiers = BoundaryComputer(self.pieces).find_boundaries_from_adjacency(adjacency)
         
@@ -902,7 +896,7 @@ def load_json(path, pieces):
 
 def from_json(pieces, s):
 
-    def parse_geometry(o):
+    def parse_raft(o):
         if o is None:
             return None
         
@@ -911,7 +905,7 @@ def from_json(pieces, s):
         for k, v in o['coords'].items():
             coords[k] = parse_affine_transform(v)
 
-        return Geometry(coords, size)
+        return puzzler.raft.Raft(coords, size)
 
     def parse_affine_transform(o):
         angle = o['angle']
@@ -922,10 +916,10 @@ def from_json(pieces, s):
 
     assert set(pieces.keys()) == set(o['pieces'])
 
-    geometry = parse_geometry(o['geometry'])
+    raft = parse_raft(o['raft'])
 
     solver = PuzzleSolver(pieces)
-    solver.geometry = geometry
+    solver.raft = raft
     solver.update_adjacency()
 
     return solver
@@ -940,20 +934,20 @@ def to_json(solver):
     def format_pieces(pieces):
         return sorted(pieces.keys())
 
-    def format_geometry(geometry):
-        if geometry is None:
+    def format_raft(raft):
+        if raft is None:
             return None
 
         coords = dict((k, format_coord(v))
-                      for k, v in geometry.coords.items())
+                      for k, v in raft.coords.items())
 
-        return {'size':geometry.size, 'coords':coords}
+        return {'size':raft.size, 'coords':coords}
 
     def format_coord(t):
         return {'angle':t.angle, 'xy':t.xy.tolist()}
 
     o = dict()
     o['pieces'] = format_pieces(solver.pieces)
-    o['geometry'] = format_geometry(solver.geometry)
+    o['raft'] = format_raft(solver.raft)
 
     return json.JSONEncoder(indent=0).encode(o)

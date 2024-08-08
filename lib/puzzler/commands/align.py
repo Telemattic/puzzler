@@ -591,13 +591,13 @@ class AlignTk:
 
     def update_coords(self):
         
-        g = self.solver.geometry
-        if not g:
+        r = self.solver.raft
+        if not r:
             return
 
         if not self.var_refine_raft_alignment.get():
             for p in self.pieces:
-                if c := g.coords.get(p.piece.label):
+                if c := r.coords.get(p.piece.label):
                     p.coords = c
             return
 
@@ -605,10 +605,10 @@ class AlignTk:
         raftinator = puzzler.raft.Raftinator(pieces)
 
         coords = dict()
-        for p, c in self.solver.geometry.coords.items():
+        for p, c in r.coords.items():
             coords[p] = puzzler.raft.Coord(c.angle, c.xy)
 
-        raft = puzzler.raft.Raft(coords, self.solver.geometry.size)
+        raft = puzzler.raft.Raft(coords, r.size)
         mse = raftinator.get_total_error_for_raft_and_seams(raft)
             
         raft2 = raftinator.refine_alignment_within_raft(raft)
@@ -621,20 +621,12 @@ class AlignTk:
 
         for p in self.pieces:
             if c := raft2.coords.get(p.piece.label):
-                g.coords[p.piece.label] = p.coords = Coord(c.angle, c.xy)
+                r.coords[p.piece.label] = p.coords = Coord(c.angle, c.xy)
 
     def load_solver(self, path):
         self.solver = puzzler.solver.load_json(path, self.solver.pieces)
         self.update_coords()
 
-        if False:
-            pieces = self.solver.pieces
-            raft = puzzler.raft.Raft(self.solver.geometry.coords, self.solver.geometry.size)
-
-            pf = puzzler.commands.quads.PocketFinder(pieces, raft)
-            for pocket in pf.find_pockets_on_frontiers():
-                print(f"load_solver: {pocket}")
-        
         self.scenegraph = None
         self.render()
 
