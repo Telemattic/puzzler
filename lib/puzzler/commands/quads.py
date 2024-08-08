@@ -259,7 +259,7 @@ class PocketFinder:
                     continue
                 neighbor_coord = self.coords[neighbor]
                 nvec = puzzler.math.unit_vector(neighbor_coord.xy - coord.xy)
-                if np.sum(nvec * vec) > .9:
+                if np.sum(nvec * vec) > .95:
                     return str(neighbor)
 
             return None
