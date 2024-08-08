@@ -38,11 +38,6 @@ class BorderSolver:
             if n == 0:
                 continue
 
-            # HACK: drop incorrectly labeled border pieces
-            if False and len(self.pieces) == 1026 and not re.fullmatch(r"([A-Z]+(1|38))|((A|AA)\d+)", p.label):
-                print(f"HACK: Skipping {p.label}, not actually a border piece!")
-                continue
-
             # HACK: reject pieces with too many edges that aren't clearly corner pieces
             if True and n > 1:
                 assert n == 2
@@ -145,6 +140,7 @@ class BorderSolver:
         pairs = dict()
         used = set()
 
+        skipped = set()
         for dst in candidates:
 
             best_src = rescore[dst][0]
@@ -152,10 +148,11 @@ class BorderSolver:
 
             all_pairs[dst] = best
             
-            print(f"{dst:4s} <- {best:4s} (mse={best_src[0]:.3f})")
+            # print(f"{dst:4s} <- {best:4s} (mse={best_src[0]:.3f})")
 
             if best in used:
-                print(f"best match for {dst} is {best} and it has already been used :O")
+                # print(f"best match for {dst} is {best} and it has already been used :O")
+                skipped.add(dst)
                 continue
 
             used.add(best)
@@ -174,7 +171,7 @@ class BorderSolver:
                 o['succ'] = self.succ
                 f.write(json.dumps(o, indent=4))
     
-        print(f"{pairs=}")
+        # print(f"{pairs=}")
 
         retval = []
         visited = set()
@@ -188,7 +185,7 @@ class BorderSolver:
             raise ValueError(f"When following edge loop didn't circle back to start!")
 
         n = len(retval)
-        k = len(pairs) - n
+        k = len(skipped) + len(pairs) - len(retval)
         print(f"Found edge solution of length {n}, which omits {k} edge pieces")
 
         axis_no = 3

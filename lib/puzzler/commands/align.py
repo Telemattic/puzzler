@@ -1033,10 +1033,9 @@ def align_ui(args):
 
     if args.num_workers:
         ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers, expected)
-        while ps.solve():
-            pass
+        raft = ps.solve()
         n_pieces = len(ps.pieces)
-        n_placed = len(ps.raft.coords) if ps.raft else 0
+        n_placed = len(raft.coords) if raft else 0
         print(f"all done! {n_pieces=} {n_placed=}")
         return
 
