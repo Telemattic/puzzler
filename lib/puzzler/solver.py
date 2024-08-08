@@ -168,11 +168,6 @@ class BorderSolver:
             sources.sort(key=operator.itemgetter(0))
             rescore[dst] = sources
 
-        xx = set(self.corners + self.edges)
-        yy = set(rescore.keys())
-
-        print(f"{xx=}\n{yy=}\n{xx-yy=}")
-
         # put border candidate pieces in ascending order of MSE for
         # best fit, hopefully insuring that the false edge pieces get
         # processed after the true edge pieces
@@ -227,6 +222,21 @@ class BorderSolver:
         n = len(retval)
         k = len(pairs) - n
         print(f"Found edge solution of length {n}, which omits {k} edge pieces")
+
+        axis_no = 3
+        axes = [0] * 4
+        for i in retval:
+            if len(self.pieces[i].edges) == 2:
+                axis_no = (axis_no + 1) % 4
+            axes[axis_no] += 1
+
+        # rotate to an assumed landscape orientation
+        print(f"pieces on each axis: {axes}")
+        
+        w, h = axes[:2]
+        if w * 1.1 < h:
+            print("rotating to landscape orientation")
+            retval = retval[w:] + retval[:w]
 
         return retval[::-1]
     
