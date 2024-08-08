@@ -457,18 +457,8 @@ class RaftAligner:
         i = np.argmin(dist)
         return label[i]
 
-    def refine_alignment_between_rafts(self, alignment: RaftAlignment) -> RaftAlignment:
-
-        dst_raft = alignment.dst
-        src_raft = alignment.src
-        src_raft_coord = alignment.src_coord
-
-        seams = self.seamstress.trim_seams(
-            self.seamstress.seams_between_rafts(dst_raft, src_raft, src_raft_coord))
-
-        raise NotImplementedError("refine_alignment_between_rafts")
-
-    def refine_edge_alignment_within_raft(self, raft: Raft, seams: Sequence[Seam], edges: FeaturePair, verbose=False) -> Raft:
+    def refine_edge_alignment_within_raft(
+            self, raft: Raft, seams: Sequence[Seam], edges: FeaturePair, verbose=False) -> Raft:
 
         if len(raft.coords) != 2:
             raise ValueError("expected raft with exactly two pieces")
@@ -531,6 +521,62 @@ class RaftAligner:
 
         return Raft(coords, None)
     
+    def refine_alignment_between_rafts(self, alignment: RaftAlignment) -> RaftAlignment:
+
+        dst_raft = alignment.dst
+        src_raft = alignment.src
+        src_raft_coord = alignment.src_coord
+
+        seamstress = RaftSeamstress(self.pieces)
+        seams = seamstress.trim_seams(
+            seamstress.seams_between_rafts(dst_raft, src_raft, src_raft_coord))
+
+        global_src_points = []
+        global_dst_points = []
+        global_dst_normals = []
+
+        for i in seams:
+            assert i.dst.piece in dst_raft.coords
+            assert i.src.piece in src_raft.coords
+
+            src_piece = self.pieces[i.src.piece]
+            src_points = src_piece.points[i.src.indices]
+            src_coord = src_raft.coords[i.src.piece]
+            
+            dst_piece = self.pieces[i.dst.piece]
+            dst_points = dst_piece.points[i.dst.indices]
+            dst_coord = dst_raft.coords[i.dst.piece]
+            
+            dst_normals = puzzler.align.NormalsComputer()(dst_piece.points, i.dst.indices)
+
+            global_src_points.append(src_coord.xform.apply_v2(src_points))
+            global_dst_points.append(dst_coord.xform.apply_v2(dst_points))
+            global_dst_normals.append(dst_coord.xform.apply_n2(dst_normals))
+
+        global_src_points = np.vstack(global_src_points)
+        global_dst_points = np.vstack(global_dst_points)
+        global_dst_normals = np.vstack(global_dst_normals)
+
+        # print(f"{global_src_points.shape=} {global_dst_points.shape=} {global_dst_normals.shape=}")
+
+        icp = puzzler.icp.IteratedClosestPoint()
+        
+        dst_body = icp.make_rigid_body(0., (0., 0.), fixed=True)
+        src_body = icp.make_rigid_body(src_raft_coord.angle, src_raft_coord.xy, fixed=False)
+
+        icp.add_body_correspondence(src_body, global_src_points,
+                                    dst_body, global_dst_points, global_dst_normals)
+
+        icp.solve()
+
+        # print(f"old {src_raft_coord=}")
+
+        src_raft_coord = Coord(src_body.angle, src_body.center)
+
+        # print(f"new {src_raft_coord=}")
+
+        return RaftAlignment(dst_raft, src_raft, src_raft_coord)
+
     def refine_alignment_within_raft(
             self,
             raft: Raft,
@@ -905,8 +951,15 @@ class Raftinator:
             if self.verbose:
                 print(f"raftinator: {dst_raft=} {src_raft=} {i=} {j=}")
 
-            new_raft = self.align_and_merge_rafts_with_feature_pairs(
-                rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
+            if len(rafts[src_raft].coords) == 1:
+                src_coord = self.aligner.rough_align(
+                    rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
+                alignment = self.aligner.refine_alignment_between_rafts(
+                    RaftAlignment(rafts[dst_raft], rafts[src_raft], src_coord))
+                new_raft = self.factory.merge_rafts(alignment)
+            else:
+                new_raft = self.align_and_merge_rafts_with_feature_pairs(
+                    rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
 
             rafts.pop(dst_raft)
             rafts.pop(src_raft)

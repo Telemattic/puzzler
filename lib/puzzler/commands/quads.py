@@ -350,8 +350,15 @@ class PocketFitter:
             if len(feature_pairs) < 1:
                 continue
 
-            new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
-                self.dst_raft, src_raft, feature_pairs)
+            if True:
+                aligner = self.raftinator.aligner
+                src_coord = aligner.rough_align(self.dst_raft, src_raft, feature_pairs)
+                alignment = aligner.refine_alignment_between_rafts(
+                    puzzler.raft.RaftAlignment(self.dst_raft, src_raft, src_coord))
+                new_raft = self.raftinator.factory.merge_rafts(alignment)
+            else:
+                new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
+                    self.dst_raft, src_raft, feature_pairs)
 
             mse = self.compute_mse_with_refinement(new_raft)
             
