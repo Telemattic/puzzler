@@ -30,9 +30,6 @@ def main():
     puzzler.commands.browse.add_parser(commands)
     puzzler.commands.ellipse.add_parser(commands)
     puzzler.commands.align.add_parser(commands)
-    puzzler.commands.tabs.add_parser(commands)
-    puzzler.commands.normals.add_parser(commands)
-    puzzler.commands.match.add_parser(commands)
     puzzler.commands.quads.add_parser(commands)
     puzzler.commands.lint.add_parser(commands)
 

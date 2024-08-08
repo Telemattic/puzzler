@@ -4,8 +4,5 @@ from . import ellipse
 from . import init
 from . import points
 from . import scan
-from . import normals
-from . import match
-from . import tabs
 from . import quads
 from . import lint
