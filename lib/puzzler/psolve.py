@@ -132,7 +132,7 @@ class Solver:
     def score_edges(self):
 
         pred, succ = self.identify_edges()
-        return {self.score_edge(dst, succ.items()) for dst in pred.items()}
+        return {self.score_edge(dst, pred) for dst in succ.items()}
 
     def identify_edges(self):
         pass

@@ -382,52 +382,8 @@ class BorderSolver:
                 
     def score_matches(self):
 
-        borders = self.corners + self.edges
-        return {dst: self.score_edge_piece(dst, borders) for dst in borders}
-
-    def score_edge_piece(self, dst, sources):
-
-        dst_piece = self.pieces[dst]
-        dst_desc = self.succ[dst]
-
-        scores = dict()
-        for src in sources:
-
-            # while the fit might be excellent, this would prove
-            # topologically difficult
-            if src == dst:
-                continue
-
-            src_piece = self.pieces[src]
-            src_desc = self.pred[src]
-
-            # tabs have to be complementary (one indent and one
-            # outdent)
-            if dst_piece.tabs[dst_desc[1]].indent == src_piece.tabs[src_desc[1]].indent:
-                continue
-
-            scores[src] = (self.score_edge_pair(dst, dst_desc, src, src_desc), dst_desc, src_desc)
-
-        return scores
-                
-    def score_edge_pair(self, dst_label, dst_desc, src_label, src_desc):
-
-        r = self.raftinator
-            
-        Feature = puzzler.raft.Feature
-        edge_pair = (Feature(dst_label, 'edge', dst_desc[0]), Feature(src_label, 'edge', src_desc[0]))
-        tab_pair = (Feature(dst_label, 'tab', dst_desc[1]), Feature(src_label, 'tab', src_desc[1]))
-
-        dst_raft = r.factory.make_raft_for_piece(dst_label)
-        src_raft = r.factory.make_raft_for_piece(src_label)
-
-        src_coord = r.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
-        raft = r.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
-
-        seams = r.get_seams_for_raft(raft)
-        raft = r.aligner.refine_edge_alignment_within_raft(raft, seams, edge_pair)
-                    
-        return r.get_total_error_for_raft_and_seams(raft)
+        s = EdgeScorer(self.pieces)
+        return {dst[0]: s.score_edge_piece(dst, self.pred) for dst in self.succ.items()}
 
     def compute_edge_info(self, piece):
 
