@@ -129,36 +129,10 @@ class BorderSolver:
 
         return Geometry(coords, size)
     
-    def estimate_puzzle_size(self, border):
+    def link_pieces(self, scores):
 
-        axis = 3
-        size = np.zeros(4, dtype=float)
-        for label in border:
-            p = self.pieces[label]
-
-            pred_tab = p.tabs[self.pred[label][1]]
-            succ_tab = p.tabs[self.succ[label][1]]
-
-            pred_edge = p.edges[self.pred[label][0]]
-            succ_edge = p.edges[self.succ[label][0]]
-            
-            if len(p.edges) == 2:
-                size[axis] += puzzler.math.distance_to_line(
-                    pred_tab.ellipse.center, succ_edge.line.pts)
-                axis = (axis + 1) % 4
-                size[axis] += puzzler.math.distance_to_line(
-                    succ_tab.ellipse.center, pred_edge.line.pts)
-            else:
-                vec = puzzler.math.unit_vector(pred_edge.line.pts[1] - pred_edge.line.pts[0])
-                size[axis] += np.dot(vec, succ_tab.ellipse.center - pred_tab.ellipse.center)
-
-        with np.printoptions(precision=1):
-            print(f"estimate_puzzle_size: {size=}")
-
-        return size
-
-    def link_pieces_revised(self, scores):
-
+        print(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
+        
         rescore = dict()
         for dst, sources in scores.items():
             # source is a dict, flatten it into a list so
@@ -239,135 +213,6 @@ class BorderSolver:
 
         return retval[::-1]
     
-    def link_pieces(self, scores):
-
-        print(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
-        # print(f"{scores=}")
-
-        return self.link_pieces_revised(scores)
-
-        expected_pairs = dict()
-
-        # define expected pairs for the 1026 piece puzzle
-        # automagically so we can identify problems as they occur when
-        # attemping to solve it programmatically
-        if False and len(self.pieces) == 1026:
-            for i in range(1,38):
-                expected_pairs[f"A{i}"] = f"A{i+1}"
-                expected_pairs[f"AA{i+1}"] = f"AA{i}"
-            for i in range(0,26):
-                j = chr(i+ord('A'))
-                if i == 25:
-                    k = 'AA'
-                else:
-                    k = chr(i+1+ord('A'))
-                expected_pairs[f"{j}38"] = f"{k}38"
-                expected_pairs[f"{k}1"] = f"{j}1"
-    
-            assert set(expected_pairs.keys()) == set(expected_pairs.values())
-
-        # HACK: define pairs for the 1026 piece puzzle automagically
-        if False and len(self.pieces) == 1026:
-            print(f"HACK: forcing known border solution for puzzle")
-            retval = [min(self.corners)]
-            curr = expected_pairs[retval[0]]
-            while curr != retval[0]:
-                retval.append(curr)
-                curr = expected_pairs[curr]
-
-            return retval[::-1]
-
-        border = set(self.corners + self.edges)
-
-        pairs = dict()
-        all_pairs = dict()
-        used = set()
-        match_data = list()
-        for dst in self.corners + self.edges:
-
-            ss = scores[dst]
-            best = min(ss.keys(), key=lambda x: ss[x][0])
-
-            all_pairs[dst] = best
-
-            # print(f"{dst} <- {best} (mse={ss[best][0]})")
-
-            if expected_pairs:
-                
-                kind = None
-                details = ''
-                
-                sss = sorted([(v[0], k) for k, v in ss.items()])
-                expected = expected_pairs.get(dst)
-                if expected is None:
-                    kind = 'bad'
-                    details = "dst not a border piece!"
-                elif expected != best:
-                    kind = 'bad'
-                    details = "expected src not scored!"
-                    for i, (v, k) in enumerate(sss):
-                        if k == expected:
-                            details = f"found at position {i}, mse={v:.1f}"
-                else:
-                    kind = 'good'
-                
-                match_data.append({'dst': dst,
-                                   'src': best,
-                                   'mse': sss[0][0],
-                                   'kind': kind,
-                                   'expected': expected,
-                                   'details': details})
-
-            expected = expected_pairs.get(dst)
-            sss = sorted([(v[0], k) for k, v in ss.items()])
-            if expected_pairs and expected != best:
-                if expected in border:
-                    details = "not scored!"
-                    for i, (v, k) in enumerate(sss):
-                        if k == expected:
-                            details = f"found at position {i} mse={v:.1f}"
-                else:
-                    details = "not a border piece!"
-                print(f"{dst:4s} <- {best:4s} (mse={sss[0][0]:.1f}, expected {expected} {details})")
-                continue
-            
-            print(f"{dst:4s} <- {best:4s} (mse={sss[0][0]:.1f})")
-
-            if best in used:
-                print(f"best match match for {dst} is {best} and it has already been used!")
-                sss = sorted([(f"{v[0]:.1f}", k) for k, v in ss.items()])
-                # print(sss)
-                continue
-
-            # greedily assume the best fit will be available, if it
-            # isn't then we'll have to try harder (possibly *much*
-            # harder)
-            assert best not in used
-            used.add(best)
-            pairs[dst] = best
-
-        print(f"{pairs=}")
-
-        if match_data:
-            self.output_border_match_data(match_data, expected_pairs, all_pairs)
-
-        # make sure the border pieces form a single ring
-        visited = set()
-        curr = next(iter(pairs.keys()))
-        while curr not in visited:
-            visited.add(curr)
-            curr = pairs[curr]
-
-        assert visited == used == set(pairs.keys())
-
-        retval = [min(self.corners)] # ["H1"] if "H1" in self.corners else [self.corners[0]]
-        curr = pairs[retval[0]]
-        while curr != retval[0]:
-            retval.append(curr)
-            curr = pairs[curr]
-
-        return retval[::-1]
-
     def output_border_match_data(self, match_data, expected_pairs, actual_pairs):
         
         ts = datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -857,7 +702,6 @@ class PuzzleSolver:
             self.save_border_scores(path, scores)
 
         border = bs.link_pieces(scores)
-        bs.estimate_puzzle_size(border)
 
         self.geometry = bs.init_placement(border)
 
