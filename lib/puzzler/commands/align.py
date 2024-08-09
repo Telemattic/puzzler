@@ -731,25 +731,11 @@ class AlignTk:
         b5 = ttk.Button(cf2, text='Reset Layout', command=self.reset_layout)
         b5.grid(column=0, row=0, sticky=W)
 
-        b6 = ttk.Button(cf2, text='Show Tab Alignment', command=self.show_tab_alignment)
-        b6.grid(column=1, row=0, sticky=W)
-
-        self.var_show_tab_alignment = StringVar(value='')
-        e1 = ttk.Entry(cf2, width=16, textvariable=self.var_show_tab_alignment)
-        e1.grid(column=2, row=0)
-
-        b7 = ttk.Button(cf2, text='Show Edge Alignment', command=self.show_edge_alignment)
-        b7.grid(column=3, row=0)
-
-        self.var_show_edge_alignment = StringVar(value='')
-        e2 = ttk.Entry(cf2, width=16, textvariable=self.var_show_edge_alignment)
-        e2.grid(column=4, row=0)
-
         b8 = ttk.Button(cf2, text='Show Raft Alignment', command=self.show_raft_alignment)
         b8.grid(column=5, row=0)
 
         self.var_show_raft_alignment = StringVar(value='')
-        e3 = ttk.Entry(cf2, width=32, textvariable=self.var_show_raft_alignment)
+        e3 = ttk.Entry(cf2, width=64, textvariable=self.var_show_raft_alignment)
         e3.grid(column=6, row=0)
 
         self.var_refine_raft_alignment = IntVar(value=0)
@@ -800,121 +786,6 @@ class AlignTk:
         self.render_normals = None
         self.render_vertexes = None
         self.render_seams = None
-        self.render()
-
-    def show_edge_alignment(self):
-        s = self.var_show_edge_alignment.get().strip()
-        m = re.fullmatch(r"([a-zA-Z]+\d+):(\d+),(\d+)=([a-zA-Z]+\d+):(\d+),(\d+)", s)
-        if not m:
-            print(f"bad input: \"{s}\", should be <dst_label>:<edge>,<tab>=<src_label>:<edge>,<tab>")
-            return
-
-        dst_label, dst_desc = m[1], (int(m[2]), int(m[3]))
-        src_label, src_desc = m[4], (int(m[5]), int(m[6]))
-
-        print(f"{dst_label=} {dst_desc=} {src_label=} {src_desc=}")
-
-        pieces = dict([(i.piece.label, i) for i in self.pieces])
-        dst = pieces[dst_label]
-        src = pieces[src_label]
-
-        edge_aligner = puzzler.align.EdgeAligner(dst.piece)
-        edge_aligner.return_table = True
-
-        mse, src_coords, sfp, dfp = edge_aligner.compute_alignment(dst_desc, src.piece, src_desc)
-
-        print(f"edge_aligner: {mse=:.2f} {sfp=} {dfp=}")
-
-        t = edge_aligner.table
-        self.render_vertexes = dict()
-        self.render_vertexes[src_label] = t['src_vertex']
-
-        dst.coords = Coord(0., (0., 0.))
-        src.coords = Coord(src_coords.angle, src_coords.xy)
-
-        self.scenegraph = None
-        self.render()
-        
-    def show_tab_alignment(self):
-        s = self.var_show_tab_alignment.get().strip()
-        m = re.fullmatch(r"([a-zA-Z]+\d+):(\d+)=([a-zA-Z]+\d+):(\d+)", s)
-        if not m:
-            print(f"bad input: \"{s}\", should be <dst_label>:<dst_tab_no>=<src_label>:<src_tab_no>")
-            return
-        
-        dst_label = m[1]
-        dst_tab_no = int(m[2])
-        src_label = m[3]
-        src_tab_no = int(m[4])
-        
-        print(f"{dst_label=} {dst_tab_no=} {src_label=} {src_tab_no=}")
-
-        pieces = dict([(i.piece.label, i) for i in self.pieces])
-        dst = pieces[dst_label]
-        src = pieces[src_label]
-        
-        tab_aligner = puzzler.align.TabAligner(dst.piece)
-        tab_aligner.sample_interval = 10
-        tab_aligner.return_table = True
-
-        mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
-        print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
-
-        dst_corner_normals = tab_aligner.get_outside_normals(dst.piece, dfp[0], dfp[1])
-        src_corner_normals = src_coords.xform.apply_n2(tab_aligner.get_outside_normals(src.piece, sfp[0], sfp[1]))
-
-        corner_dp_0 = np.dot(dst_corner_normals[1], src_corner_normals[0])
-        corner_dp_1 = np.dot(dst_corner_normals[0], src_corner_normals[1])
-
-        with np.printoptions(precision=3):
-            print(f"  {dst_corner_normals=}")
-            print(f"  {src_corner_normals=}")
-            print(f"  {corner_dp_0=} {corner_dp_1=}")
-        
-        if False:
-            src_mid = tab_aligner.get_tab_midpoint(src.piece, src_tab_no)
-
-            mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
-            print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
-            
-            mse, src_coords, sfp, dfp = tab_aligner.refine_alignment(src.piece, src_coords, src_mid)
-            print(f"{mse=} {src_coords=} {sfp=} {dfp=}")
-
-        # mse, src_coords, sfp, dfp = tab_aligner.compute_alignment(dst_tab_no, src.piece, src_tab_no, refine=2)
-        # print(f"refine=2: {mse=} {src_coords=} {sfp=} {dfp=}")
-
-        t = tab_aligner.table
-        
-        self.render_vertexes = dict()
-        self.render_vertexes[src_label] = t['src_vertex']
-        self.render_vertexes[dst_label] = t['dst_vertex']
-        
-        self.render_normals = dict()
-        self.render_normals[dst_label] = list(zip(t['dst_vertex'], t['dst_normal']))
-        self.render_normals[src_label] = list(zip(t['src_vertex'], t['src_normal']))
-
-        def format_value(x):
-            if isinstance(x,str):
-                return x
-            if isinstance(x,int):
-                return str(x)
-            if isinstance(x,float):
-                return f"{x:.3f}"
-            if isinstance(x,np.ndarray):
-                with np.printoptions(precision=3):
-                    return str(x)
-            return str(x)
-
-        keys = list(t.keys())
-        n_rows = len(t[keys[0]])
-        print('vertex_no,',','.join(keys))
-        for i in range(n_rows):
-            print(i,',',','.join(format_value(t[k][i]) for k in keys))
-
-        dst.coords = Coord(0., (0., 0.))
-        src.coords = Coord(src_coords.angle, src_coords.xy)
-
-        self.scenegraph = None
         self.render()
 
     def show_raft_alignment(self):
