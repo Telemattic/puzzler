@@ -235,8 +235,14 @@ class ParallelSolver:
 
         src_raft = r.factory.make_raft_for_piece(src_label)
         
-        raft = r.align_and_merge_rafts_with_feature_pairs(
-            dst_raft, src_raft, feature_pairs)
+        if True:
+            src_coord = r.aligner.rough_align(dst_raft, src_raft, feature_pairs)
+            alignment = r.aligner.refine_alignment_between_rafts(
+                puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
+            raft = r.factory.merge_rafts(alignment)
+        else:
+            raft = r.align_and_merge_rafts_with_feature_pairs(
+                dst_raft, src_raft, feature_pairs)
     
         self.check_raft_well_formed(raft)
 

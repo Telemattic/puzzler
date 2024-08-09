@@ -72,9 +72,7 @@ class RaftFactory:
 
     @staticmethod
     def transform_coords(coords: Coords, xform: Coord) -> Coords:
-        def helper(coord):
-            return Coord.from_matrix(xform.matrix @ coord.matrix)
-        return dict((k, helper(v)) for k, v in coords.items())
+        return {k: Coord.compose(xform, v) for k, v in coords.items()}
 
     def merge_rafts(self, alignment: RaftAlignment) -> Raft:
 
@@ -672,19 +670,14 @@ class RaftSeamstress:
         overlaps = puzzler.solver.OverlappingPieces(self.pieces, dst_raft.coords)
 
         seams = []
-        for src_label, src_coord in src_raft.coords.items():
+        for src_label, src_coord_in_raft in src_raft.coords.items():
 
-            assert src_coord.angle == 0. and np.all(src_coord.xy == 0.)
-            # center of the src piece in the space of the aligned rafts
-            src_xy = src_raft_coord.xform.apply_v2(src_coord.xy)
+            src_coord = Coord.compose(src_raft_coord, src_coord_in_raft)
             src_piece = self.pieces[src_label]
             
-            for dst_label in overlaps(src_xy, src_piece.radius):
+            for dst_label in overlaps(src_coord.xy, src_piece.radius):
                 dst_coord = dst_raft.coords[dst_label]
-                # HACK: this should be the composed coordinate, but
-                # we've already validated that the src_raft is just an
-                # identity transform
-                seam = self.seam_between_pieces(dst_label, dst_coord, src_label, src_raft_coord)
+                seam = self.seam_between_pieces(dst_label, dst_coord, src_label, src_coord)
                 if seam is None:
                     continue
                 seams.append(seam)
@@ -951,7 +944,7 @@ class Raftinator:
             if self.verbose:
                 print(f"raftinator: {dst_raft=} {src_raft=} {i=} {j=}")
 
-            if len(rafts[src_raft].coords) == 1:
+            if True:
                 src_coord = self.aligner.rough_align(
                     rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
                 alignment = self.aligner.refine_alignment_between_rafts(

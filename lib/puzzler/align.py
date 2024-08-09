@@ -17,6 +17,9 @@ class Coord:
         angle = math.atan2(m[1,0], m[0,0])
         x, y = m[0,2], m[1,2]
         return Coord(angle, (x,y))
+
+    def compose(c1, c2):
+        return Coord.from_matrix(c1.matrix @ c2.matrix)
     
     def __repr__(self):
         return f"Coord({self._angle!r}, {self._xy!r})"
