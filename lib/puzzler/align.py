@@ -19,7 +19,10 @@ class Coord:
         return Coord(angle, (x,y))
 
     def compose(c1, c2):
-        return Coord.from_matrix(c1.matrix @ c2.matrix)
+        angle = math.fmod(c1.angle + c2.angle, 2. * math.pi)
+        # if angle >= math.pi:
+        #     angle -= 2. * math.pi
+        return Coord(angle, c1.xform.apply_v2(c2.xy))
     
     def __repr__(self):
         return f"Coord({self._angle!r}, {self._xy!r})"

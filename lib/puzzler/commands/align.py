@@ -820,12 +820,8 @@ class AlignTk:
             
         pieces = dict([(i.piece.label, i) for i in self.pieces])
 
-        # HACK: 2000.
-        dst_coord = Coord(0., (0., 0.))
         for label, coord in raft.coords.items():
-            curr_m = dst_coord.xform.matrix
-            prev_m = coord.matrix
-            pieces[label].coords = Coord.from_matrix(curr_m @ prev_m)
+            pieces[label].coords = coord
 
         pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
 
