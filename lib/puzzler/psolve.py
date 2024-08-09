@@ -64,62 +64,6 @@ def worker_score_pocket(raft, pocket, pieces):
 
 Raft = puzzler.raft.Raft
 
-class Solver:
-
-    def solve_border(self):
-
-        scores = self.score_edges()
-        border = self.link_border(scores)
-        raft = self.construct_border_raft(border)
-        return self.refine_raft(raft)
-
-    def score_edges(self):
-
-        pred, succ = self.identify_edges()
-        return {self.score_edge(dst, pred) for dst in succ.items()}
-
-    def identify_edges(self):
-        pass
-
-    def score_edge(self, dst, sources):
-        return (dst[0], self.edge_scorer.score_edge_piece(dst, sources))
-
-    def link_edges(self, scores):
-        return EdgeLinker(self.pieces).link_edges(scores)
-
-    def construct_border_raft(self, border):
-        return BorderConstructor(self.pieces).construct_border_raft(border)
-
-    def iter_field(self, raft):
-
-        for p in self.score_pockets(raft):
-            raft = self.place_piece(raft, p)
-        return self.refine_raft(raft)
-
-    def score_pockets(self, raft):
-
-        return [self.score_pocket(raft, p) for p in self.find_pockets(raft)]
-
-    def find_pockets(self, raft):
-
-        return PocketFinder(self.pieces, self.raft).find_pockets_on_frontiers()
-
-    def score_pocket(self, raft, pocket):
-
-        return self.pocket_scorer.score_pocket(raft, pocket)
-
-    def place_piece(self, raft, placement):
-
-        src_label, feature_pairs = placement
-        return PiecePlacer(self.places).place_piece(raft, src_label, feature_pairs)
-
-    def refine_raft(self, raft):
-        r = self.raftinator
-
-        seams = r.get_seams_for_raft(raft)
-        axis_features = self.get_axis_features(raft)
-        return r.aligner.refine_alignment_within_raft(raft, seams, axis_features)
-
 class ParallelSolver:
 
     def __init__(self, puzzle_path, max_workers, expected=None):
