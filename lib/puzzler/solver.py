@@ -287,7 +287,7 @@ class EdgeScorer:
         src_raft = r.factory.make_raft_for_piece(src_label)
 
         src_coord = r.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
-        raft = r.factory.merge_rafts(puzzler.raft.RaftAlignment(dst_raft, src_raft, src_coord))
+        raft = r.factory.merge_rafts(dst_raft, src_raft, src_coord)
 
         seams = r.get_seams_for_raft(raft)
         raft = r.aligner.refine_edge_alignment_within_raft(raft, seams, edge_pair)

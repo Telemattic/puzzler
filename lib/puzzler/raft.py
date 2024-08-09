@@ -49,16 +49,6 @@ class Raft:
     coords: Coords
     size: Optional[Size] = None
 
-@dataclass
-class RaftAlignment:
-
-    dst: Raft
-    src: Raft
-    # feature_pairs: Sequence[Tuple[int,int]]
-    src_coord: Coord
-    # error: float
-    # other_stuff_to_visualize_algorithm: Any
-
 class RaftFactory:
 
     def __init__(self, pieces: Pieces) -> None:
@@ -71,15 +61,12 @@ class RaftFactory:
         return Raft(coords, None)
 
     @staticmethod
-    def transform_coords(coords: Coords, xform: Coord) -> Coords:
+    def transform_coords(xform: Coord, coords: Coords) -> Coords:
         return {k: Coord.compose(xform, v) for k, v in coords.items()}
 
-    def merge_rafts(self, alignment: RaftAlignment) -> Raft:
+    def merge_rafts(self, dst_raft: Raft, src_raft: Raft, src_raft_coord: Coord) -> Raft:
 
-        dst_raft = alignment.dst
-        src_raft = alignment.src
-
-        coords = dst_raft.coords | self.transform_coords(src_raft.coords, alignment.src_coord)
+        coords = dst_raft.coords | self.transform_coords(src_raft_coord, src_raft.coords)
         return Raft(coords, dst_raft.size)
 
 class RaftFeatures(NamedTuple):
@@ -519,11 +506,8 @@ class RaftAligner:
 
         return Raft(coords, None)
     
-    def refine_alignment_between_rafts(self, alignment: RaftAlignment) -> RaftAlignment:
-
-        dst_raft = alignment.dst
-        src_raft = alignment.src
-        src_raft_coord = alignment.src_coord
+    def refine_alignment_between_rafts(
+            self, dst_raft: Raft, src_raft: Raft, src_raft_coord: Coord) -> Coord:
 
         seamstress = RaftSeamstress(self.pieces)
         seams = seamstress.trim_seams(
@@ -573,7 +557,7 @@ class RaftAligner:
 
         # print(f"new {src_raft_coord=}")
 
-        return RaftAlignment(dst_raft, src_raft, src_raft_coord)
+        return src_raft_coord
 
     def refine_alignment_within_raft(
             self,
@@ -874,7 +858,7 @@ class Raftinator:
     def align_and_merge_rafts_with_feature_pairs(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Raft:
         
         src_coord = self.aligner.rough_align(dst_raft, src_raft, feature_pairs)
-        return self.factory.merge_rafts(RaftAlignment(dst_raft, src_raft, src_coord))
+        return self.factory.merge_rafts(dst_raft, src_raft, src_coord)
 
     def refine_alignment_within_raft(self, raft: Raft, seams: Optional[Seams] = None) -> Raft:
 
@@ -947,9 +931,9 @@ class Raftinator:
             if True:
                 src_coord = self.aligner.rough_align(
                     rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
-                alignment = self.aligner.refine_alignment_between_rafts(
-                    RaftAlignment(rafts[dst_raft], rafts[src_raft], src_coord))
-                new_raft = self.factory.merge_rafts(alignment)
+                src_coord = self.aligner.refine_alignment_between_rafts(
+                    rafts[dst_raft], rafts[src_raft], wsrc_coord)
+                new_raft = self.factory.merge_rafts(rafts[dst_raft], rafts[src_raft], src_coord)
             else:
                 new_raft = self.align_and_merge_rafts_with_feature_pairs(
                     rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
