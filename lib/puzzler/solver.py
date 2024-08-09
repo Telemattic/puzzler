@@ -637,7 +637,7 @@ class FrontierExplorer:
 
 class PuzzleSolver:
 
-    def __init__(self, pieces):
+    def __init__(self, pieces, dirname = None):
         self.pieces = pieces
         self.raft = None
         self.frontiers = None
@@ -647,6 +647,7 @@ class PuzzleSolver:
         self.raftinator = puzzler.raft.Raftinator(pieces)
         self.seams = []
         self.start_time = time.monotonic()
+        self.dirname = dirname
 
     def solve(self):
         if self.raft:
@@ -688,7 +689,7 @@ class PuzzleSolver:
 
         ts = datetime.now().strftime('%Y%m%d-%H%M%S')
         
-        if True:
+        if self.dirname:
             path = self.next_path('border_match_scores_' + ts, 'tab')
             print(f"Saving border score data to {path}")
             self.save_border_scores(path, scores)
@@ -702,19 +703,15 @@ class PuzzleSolver:
 
         self.update_adjacency()
 
-        path = self.next_path('matches_' + ts, 'csv')
-        self.save_tab_matches(path)
-        
-        path = self.next_path('solver_' + ts, 'json')
-        save_json(path, self)
+        if self.dirname:
+            self.save_tab_matches(self.next_path('matches_' + ts, 'csv'))
+            save_json(self.next_path('solver_' + ts, 'json'), self)
 
-    @staticmethod
-    def next_path(fname, ext):
+    def next_path(self, fname, ext):
 
-        dname = r'C:\temp\puzzler\align'
         i = 0
         while True:
-            path = os.path.join(dname, f"{fname}_{i}.{ext}")
+            path = os.path.join(self.dirname, f"{fname}_{i}.{ext}")
             if not os.path.exists(path):
                 return path
             i += 1
@@ -779,13 +776,10 @@ class PuzzleSolver:
 
         self.update_adjacency()
 
-        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-        
-        path = self.next_path('matches_' + ts, 'csv')
-        self.save_tab_matches(path)
-        
-        path = self.next_path('solver_' + ts, 'json')
-        save_json(path, self)
+        if self.dirname:
+            ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+            self.save_tab_matches(self.next_path('matches_' + ts, 'csv'))
+            save_json(self.next_path('solver_' + ts, 'json'), self)
 
     def score_pockets(self):
 

@@ -389,12 +389,12 @@ class CanvasHitTester:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces):
+    def __init__(self, parent, pieces, directory):
         
         self.pieces = pieces
 
         pieces_dict = {i.piece.label: i.piece for i in pieces}
-        self.solver = puzzler.solver.PuzzleSolver(pieces_dict)
+        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, dirname=directory)
 
         self.draggable = None
         self.selection = None
@@ -899,7 +899,7 @@ def align_ui(args):
         cross_check_expected_and_pieces(expected, by_label)
 
     if args.num_workers:
-        ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers, expected)
+        ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers, expected, args.directory)
         raft = ps.solve()
         n_pieces = len(ps.pieces)
         n_placed = len(raft.coords) if raft else 0
@@ -909,7 +909,7 @@ def align_ui(args):
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces)
+    ui = AlignTk(root, pieces, args.directory)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 
@@ -926,4 +926,5 @@ def add_parser(commands):
     parser_align.add_argument("-i", "--input", help="initialize solver")
     parser_align.add_argument("-e", "--expected", help="expected tab matches csv file")
     parser_align.add_argument("-n", "--num-workers", help="number of workers for parallel solve", default=0, type=int)
+    parser_align.add_argument("-d", "--directory", help="directory to log output to")
     parser_align.set_defaults(func=align_ui)

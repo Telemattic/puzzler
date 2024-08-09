@@ -66,7 +66,7 @@ Raft = puzzler.raft.Raft
 
 class ParallelSolver:
 
-    def __init__(self, puzzle_path, max_workers, expected=None):
+    def __init__(self, puzzle_path, max_workers, expected=None, dirname=None):
         
         self.executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=max_workers, initializer=worker_initialize, initargs=(puzzle_path,))
@@ -77,6 +77,7 @@ class ParallelSolver:
         self.pieces = {i.label: i for i in puzzle.pieces}
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
         self.expected = expected
+        self.dirname = dirname
 
     def solve(self):
 
@@ -103,9 +104,7 @@ class ParallelSolver:
         width, height = raft.size
         print(f"puzzle_size: width={width:.1f} height={height:.1f}")
 
-        path = self.next_path()
-        self.save(path, raft)
-        print(f"initial raft saved to {path}")
+        self.maybe_save(raft)
 
         return raft
 
@@ -147,10 +146,8 @@ class ParallelSolver:
         n_placed = len(raft.coords) - n_init
 
         print(f"{n_placed} pieces placed, {len(raft.coords)} so far")
-        
-        path = self.next_path()
-        self.save(path, raft)
-        print(f"raft saved to {path}")
+
+        self.maybe_save(raft)
 
         return (raft, n_placed == 0)
 
@@ -190,10 +187,9 @@ class ParallelSolver:
     
         self.check_raft_well_formed(raft)
 
-        path = self.next_path()
-        self.save(path, raft)
+        print(f"place_piece: {src_label} placed")
         
-        print(f"place_piece: {src_label} placed, saved to {os.path.basename(path)}")
+        self.maybe_save(raft)
         
         return raft
 
@@ -241,6 +237,16 @@ class ParallelSolver:
         if dist < min(self.pieces[a].radius, self.pieces[b].radius):
             print(f"WARNING: pieces {a} and {b} are {dist:.1f} units apart!!!")
 
+    def maybe_save(self, raft):
+
+        if self.dirname is None:
+            return
+
+        path = self.next_path()
+        print(f"raft saved to {path}")
+
+        self.save(path, raft)
+
     def save(self, path, raft):
 
         coords = {k: {'angle':v.angle, 'xy':v.xy.tolist()} for k, v in raft.coords.items()}
@@ -251,16 +257,14 @@ class ParallelSolver:
         with open(path, 'w') as f:
             f.write(json.JSONEncoder(indent=0).encode(o))
 
-    @staticmethod
-    def next_path():
+    def next_path(self):
 
         fname = datetime.now().strftime('psolve_%Y%m%d-%H%M%S')
         ext = 'json'
 
-        dname = r'C:\temp\puzzler\align'
         i = 0
         while True:
-            path = os.path.join(dname, f"{fname}_{i:02d}.{ext}")
+            path = os.path.join(self.dirname, f"{fname}_{i:02d}.{ext}")
             if not os.path.exists(path):
                 return path
             i += 1
