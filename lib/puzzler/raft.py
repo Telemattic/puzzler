@@ -932,7 +932,7 @@ class Raftinator:
                 src_coord = self.aligner.rough_align(
                     rafts[dst_raft], rafts[src_raft], feature_pairs[i:j])
                 src_coord = self.aligner.refine_alignment_between_rafts(
-                    rafts[dst_raft], rafts[src_raft], wsrc_coord)
+                    rafts[dst_raft], rafts[src_raft], src_coord)
                 new_raft = self.factory.merge_rafts(rafts[dst_raft], rafts[src_raft], src_coord)
             else:
                 new_raft = self.align_and_merge_rafts_with_feature_pairs(
