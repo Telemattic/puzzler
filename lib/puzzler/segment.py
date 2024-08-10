@@ -171,6 +171,9 @@ class SegmenterTk:
         self.label_var = StringVar(value="A1")
         self.entry = ttk.Entry(self.controls, width=5, textvariable=self.label_var, font="Courier")
         self.entry.grid(column=1, row=0, sticky=(N, W))
+
+        b1 = ttk.Button(self.controls, text='Reset', command=self.do_reset)
+        b1.grid(column=2, row=0, sticky=(N, E))
         
         self.canvas = Canvas(self.frame, width=self.image_size[0], height=self.image_size[1],
                              background='blue', highlightthickness=0)
@@ -180,6 +183,10 @@ class SegmenterTk:
 
         self.canvas.bind("<Button-1>", self.do_label)
 
+        self.render()
+
+    def do_reset(self):
+        self.labels = [''] * len(self.rects)
         self.render()
             
     def do_label(self, event):
