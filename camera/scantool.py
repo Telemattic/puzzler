@@ -1,4 +1,6 @@
+import argparse
 import cv2 as cv
+import numpy as np
 import PIL.Image
 import PIL.ImageTk
 import threading
@@ -33,9 +35,9 @@ class CameraThread(threading.Thread):
 
 class ScantoolTk:
 
-    def __init__(self, parent):
+    def __init__(self, parent, camera_id):
 
-        self._init_camera()
+        self._init_camera(camera_id)
         self._init_ui(parent)
         self._init_threads(parent)
 
@@ -44,11 +46,11 @@ class ScantoolTk:
         root.bind("<<camera>>", self.camera_event)
         self.camera_thread.start()
 
-    def _init_camera(self):
+    def _init_camera(self, camera_id):
         self.camera = None
         
         print("Opening camera...")
-        cam = cv.VideoCapture(2, cv.CAP_MSMF)
+        cam = cv.VideoCapture(camera_id, cv.CAP_MSMF)
         assert cam.isOpened()
 
         w, h = 4656, 3496
@@ -104,25 +106,37 @@ class ScantoolTk:
         self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
 
         gray = cv.cvtColor(image_camera, cv.COLOR_BGR2GRAY)
+        hist = np.bincount(image_camera.ravel())
+        
         thresh = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
         thresh = cv.erode(thresh, kernel)
         thresh = cv.dilate(thresh, kernel)
 
+        image_binary = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)
+        
         if True:
-            contours, _ = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-            thresh = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)
-            cv.drawContours(thresh, contours, -1, (0,255,0), thickness=2, lineType=cv.LINE_AA)
+            contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)[0]
+            cv.drawContours(image_binary, contours, -1, (0,255,0), thickness=2, lineType=cv.LINE_AA)
             for c in contours:
                 r = cv.boundingRect(c)
-                if r[0] == 0 or r[1] == 0:
+                r = (r[0]-25, r[1]-25, r[2]+50, r[3]+50)
+                if r[0] < 0 or r[1] < 0:
                     continue
-                if r[0] + r[2] == thresh.shape[1] or r[1] + r[3] == thresh.shape[0]:
+                if r[0] + r[2] >= thresh.shape[1] or r[1] + r[3] >= thresh.shape[0]:
                     continue
-                cv.rectangle(thresh, r, (255,0,0), thickness=2)
+                cv.rectangle(image_binary, r, (255,0,0), thickness=2)
+
+        if True:
+            x_coords = np.arange(len(hist))
+            y_coords = 280 - (hist * 100) // np.max(hist)
+            pts = np.array(np.vstack((x_coords, y_coords)).T, dtype=np.int32)
+            # print(f"{x_coords=} {y_coords=} {pts=} {pts.shape=} {pts.dtype=}")
+            cv.polylines(image_binary, [pts], False, (255, 255, 0), thickness=2)
+            cv.polylines(image_binary, [np.array([(0, 280), (255,280)])], False, (255, 255, 0), thickness=2)
         
         dst_size = (400, 300)
-        self.image_binary = self.to_photo_image(cv.resize(thresh, dst_size))
+        self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
         self.canvas_binary.delete('all')
         self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
 
@@ -139,8 +153,12 @@ class ScantoolTk:
         return PIL.ImageTk.PhotoImage(image=image)
 
 def main():
+    parser = argparse.ArgumentParser(prog='scantool')
+    parser.add_argument("-c", "--camera", type=int, default=2)
+    args = parser.parse_args()
+        
     root = Tk()
-    ui = ScantoolTk(root)
+    ui = ScantoolTk(root, args.camera)
     root.title("PuZzLeR: scantool")
     root.mainloop()
 
