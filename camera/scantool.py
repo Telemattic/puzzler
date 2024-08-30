@@ -69,7 +69,7 @@ class ScantoolTk:
 
         self.canvas_camera = Canvas(self.frame, width=800, height=600,
                                     background='white', highlightthickness=0)
-        self.canvas_camera.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.canvas_camera.grid(column=0, row=0, columnspan=2, sticky=(N, W, E, S))
 
         self.canvas_detail = Canvas(self.frame, width=400, height=300,
                                     background='white', highlightthickness=0)
@@ -90,8 +90,7 @@ class ScantoolTk:
         dst_size = (800, 600)
         image_camera = cv.resize(image, dst_size)
         
-        image_camera = PIL.Image.frombuffer('RGB', dst_size, image_camera.tobytes(), 'raw', 'BGR', 0, 1)
-        self.image_camera = PIL.ImageTk.PhotoImage(image=image_camera)
+        self.image_camera = self.to_photo_image(image_camera)
         self.canvas_camera.delete('all')
         self.canvas_camera.create_image((0,0), image=self.image_camera, anchor=NW)
 
@@ -100,12 +99,44 @@ class ScantoolTk:
         src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
         image_detail = image[src_y:src_y+dst_h, src_x:src_x+dst_w]
 
-        # print(f"{image.shape=} {image_detail.shape=}")
-
-        image_detail = PIL.Image.frombuffer('RGB', (dst_w, dst_h), image_detail.tobytes(), 'raw', 'BGR', 0, 1)
-        self.image_detail = PIL.ImageTk.PhotoImage(image=image_detail)
+        self.image_detail = self.to_photo_image(image_detail)
         self.canvas_detail.delete('all')
         self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
+
+        gray = cv.cvtColor(image_camera, cv.COLOR_BGR2GRAY)
+        thresh = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
+        thresh = cv.erode(thresh, kernel)
+        thresh = cv.dilate(thresh, kernel)
+
+        if True:
+            contours, _ = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+            thresh = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)
+            cv.drawContours(thresh, contours, -1, (0,255,0), thickness=2, lineType=cv.LINE_AA)
+            for c in contours:
+                r = cv.boundingRect(c)
+                if r[0] == 0 or r[1] == 0:
+                    continue
+                if r[0] + r[2] == thresh.shape[1] or r[1] + r[3] == thresh.shape[0]:
+                    continue
+                cv.rectangle(thresh, r, (255,0,0), thickness=2)
+        
+        dst_size = (400, 300)
+        self.image_binary = self.to_photo_image(cv.resize(thresh, dst_size))
+        self.canvas_binary.delete('all')
+        self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
+
+    @staticmethod
+    def to_photo_image(image):
+        h, w = image.shape[:2]
+        if len(image.shape) == 3:
+            dst_mode = 'RGB'
+            src_mode = 'BGR'
+        else:
+            dst_mode = 'L'
+            src_mode = 'L'
+        image = PIL.Image.frombuffer(dst_mode, (w, h), image.tobytes(), 'raw', src_mode, 0, 1)
+        return PIL.ImageTk.PhotoImage(image=image)
 
 def main():
     root = Tk()
