@@ -86,24 +86,52 @@ class ScantoolTk:
         self.frame.event_generate("<<camera>>")
 
     def camera_event(self, event):
-        image = self.image_update
+        image_update = self.image_update
         self.image_update = None
 
         dst_size = (800, 600)
-        image_camera = cv.resize(image, dst_size)
+        image_camera = cv.resize(image_update, dst_size)
+
+        self.update_image_camera(self.maybe_detect_board(image_update))
+        self.update_image_detail(image_update)
+        self.update_image_binary(image_camera)
+
+    def maybe_detect_board(self, image):
+        if image.shape[:2] != (3000, 4000):
+            return cv.resize(image, (800, 600))
+        
+        aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_250)
+        square_length = 10.
+        marker_length = 5.
+        aruco_board = cv.aruco.CharucoBoard((20, 15), square_length, marker_length, aruco_dict)
+        detector = cv.aruco.CharucoDetector(aruco_board)
+        charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(image)
+
+        image = cv.resize(image, (800, 600))
+        if charuco_ids is None or len(charuco_ids) == 0:
+            return image
+        
+        cv.aruco.drawDetectedCornersCharuco(image, charuco_corners * 0.2, cornerColor=(0, 255, 255))
+        return image
+
+    def update_image_camera(self, image_camera):
         
         self.image_camera = self.to_photo_image(image_camera)
         self.canvas_camera.delete('all')
         self.canvas_camera.create_image((0,0), image=self.image_camera, anchor=NW)
 
-        src_h, src_w, _ = image.shape
+    def update_image_detail(self, image_full):
+
+        src_h, src_w, _ = image_full.shape
         dst_w, dst_h = (400, 300)
         src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
-        image_detail = image[src_y:src_y+dst_h, src_x:src_x+dst_w]
+        image_detail = image_full[src_y:src_y+dst_h, src_x:src_x+dst_w]
 
         self.image_detail = self.to_photo_image(image_detail)
         self.canvas_detail.delete('all')
         self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
+
+    def update_image_binary(self, image_camera):
 
         gray = cv.cvtColor(image_camera, cv.COLOR_BGR2GRAY)
         hist = np.bincount(image_camera.ravel())
