@@ -62,6 +62,7 @@ class ScantoolTk:
 
         print("Frame size:", (w,h))
         self.camera = cam
+        self.exposure = self.camera.get(cv.CAP_PROP_EXPOSURE)
 
     def _init_ui(self, parent):
         self.frame = ttk.Frame(parent, padding=5)
@@ -81,9 +82,17 @@ class ScantoolTk:
                                     background='white', highlightthickness=0)
         self.canvas_binary.grid(column=1, row=1, sticky=(N, W, E, S))
 
+        parent.bind("<Key>", self.key_event)
+
     def notify_camera_event(self, image):
         self.image_update = image
         self.frame.event_generate("<<camera>>")
+
+    def key_event(self, event):
+        if event.char and event.char in '<>':
+            self.exposure += 1 if event.char == '>' else -1
+            self.camera.set(cv.CAP_PROP_EXPOSURE, self.exposure)
+            print(f"exposure={self.exposure} ({event=})")
 
     def camera_event(self, event):
         image_update = self.image_update
@@ -97,21 +106,27 @@ class ScantoolTk:
         self.update_image_binary(image_camera)
 
     def maybe_detect_board(self, image):
+        self.charuco_corners = None
+        
         if image.shape[:2] != (3000, 4000):
             return cv.resize(image, (800, 600))
         
-        aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_250)
+        aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_100)
         square_length = 10.
         marker_length = 5.
-        aruco_board = cv.aruco.CharucoBoard((20, 15), square_length, marker_length, aruco_dict)
-        detector = cv.aruco.CharucoDetector(aruco_board)
+        aruco_board = cv.aruco.CharucoBoard((16, 12), square_length, marker_length, aruco_dict)
+        charuco_params = cv.aruco.CharucoParameters()
+        charuco_params.minMarkers = 0
+        detector = cv.aruco.CharucoDetector(aruco_board, charucoParams=charuco_params)
         charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(image)
 
         image = cv.resize(image, (800, 600))
         if charuco_ids is None or len(charuco_ids) == 0:
             return image
+
+        self.charuco_corners = charuco_corners
         
-        cv.aruco.drawDetectedCornersCharuco(image, charuco_corners * 0.2, cornerColor=(0, 255, 255))
+        self.draw_detected_corners(image, charuco_corners * .2, charuco_ids)
         return image
 
     def update_image_camera(self, image_camera):
@@ -127,6 +142,9 @@ class ScantoolTk:
         src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
         image_detail = image_full[src_y:src_y+dst_h, src_x:src_x+dst_w]
 
+        if self.charuco_corners is not None:
+            self.draw_detected_corners(image_detail, self.charuco_corners - (src_x, src_y))
+            
         self.image_detail = self.to_photo_image(image_detail)
         self.canvas_detail.delete('all')
         self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
@@ -135,8 +153,14 @@ class ScantoolTk:
 
         gray = cv.cvtColor(image_camera, cv.COLOR_BGR2GRAY)
         hist = np.bincount(image_camera.ravel())
-        
-        thresh = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
+
+        if False:
+            thresh = cv.adaptiveThreshold(gray, 255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 127, -16)
+        elif True:
+            thresh = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
+        else:
+            thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY+cv.THRESH_OTSU)[1]
+            
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
         thresh = cv.erode(thresh, kernel)
         thresh = cv.dilate(thresh, kernel)
@@ -156,17 +180,30 @@ class ScantoolTk:
                 cv.rectangle(image_binary, r, (255,0,0), thickness=2)
 
         if True:
-            x_coords = np.arange(len(hist))
-            y_coords = 280 - (hist * 100) // np.max(hist)
+            x0 = 20
+            y0 = 580
+            x_coords = x0 + np.arange(len(hist))
+            y_coords = y0 - (hist * 200) // np.max(hist)
             pts = np.array(np.vstack((x_coords, y_coords)).T, dtype=np.int32)
-            # print(f"{x_coords=} {y_coords=} {pts=} {pts.shape=} {pts.dtype=}")
+            cv.polylines(image_binary, [np.array([(x0, y0), (x0+255, y0)])], False, (192, 192, 0), thickness=2)
             cv.polylines(image_binary, [pts], False, (255, 255, 0), thickness=2)
-            cv.polylines(image_binary, [np.array([(0, 280), (255,280)])], False, (255, 255, 0), thickness=2)
         
         dst_size = (400, 300)
         self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
         self.canvas_binary.delete('all')
         self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
+
+    def draw_detected_corners(self, image, corners, ids = None, thickness=1, color=(0,255,255)):
+        # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
+        shift = 4
+        size = 3 << shift
+        for pts in np.array(corners * (1 << shift), dtype=np.int32):
+            x, y = pts[0]
+            cv.rectangle(image, (x-size, y-size), (x+size, y+size), color, thickness=thickness, lineType=cv.LINE_AA, shift=shift)
+        if ids is not None:
+            for pts, id in zip(corners, ids):
+                x, y = pts[0]
+                cv.putText(image, str(id[0]), (int(x)+5, int(y)-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color)
 
     @staticmethod
     def to_photo_image(image):
