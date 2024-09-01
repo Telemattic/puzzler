@@ -3,6 +3,7 @@ import cv2 as cv
 import numpy as np
 import PIL.Image
 import PIL.ImageTk
+import scipy
 import threading
 
 from tkinter import *
@@ -17,6 +18,106 @@ def find_candidate_pieces(image):
 
 def find_points_for_piece(subimage):
     pass
+
+class CameraCalibrator:
+
+    def __init__(self, charuco_board):
+        self.charuco_board = charuco_board
+
+    def get_ij_for_ids(self, ids):
+        n_cols, n_rows = self.charuco_board.getChessboardSize()
+        return [(k % (n_cols-1), k // (n_cols-1)) for k in ids]
+
+    def fill_missing_corners(self, src_xy, src_ij, min_ij, max_ij):
+
+        have_ij = set(src_ij)
+        fill_ij = []
+        for i in range(min_ij[0], max_ij[0]):
+            for j in range(min_ij[1], max_ij[1]):
+                if (i,j) not in have_ij:
+                    fill_ij.append((i,j))
+
+        interp = scipy.interpolate.RBFInterpolator(np.array(src_ij), src_xy, neighbors=100)
+        fill_xy = interp(np.array(fill_ij))
+
+        return fill_xy, fill_ij
+    
+    def compute_remaps(self, corners, ids, image_shape):
+
+        src_xy = np.squeeze(corners)
+        src_ij = self.get_ij_for_ids(np.squeeze(ids))
+
+        image_size = np.array(image_shape[:2][::-1])
+
+        # find the central corner
+        dist = np.linalg.norm(src_xy - image_size/2, axis=1)
+        central_corner_idx = np.argmin(dist)
+
+        center_ij = src_ij[central_corner_idx]
+        center_xy = src_xy[central_corner_idx]
+
+        square_size_px = 79
+
+        lookup = {ij: xy for ij, xy in zip(src_ij, src_xy)}
+        dists = []
+        for (i, j), xy0 in lookup.items():
+            xy1 = lookup.get((i-1, j))
+            if xy1 is not None:
+                dists.append(xy0 - xy1)
+
+        dists = np.linalg.norm(np.array(dists), axis=1)
+
+        square_size_px = np.median(dists)
+        
+        min_ij = np.int32(center_ij - np.ceil(center_xy / square_size_px))
+        max_ij = np.int32(center_ij + np.ceil((image_size - center_xy) / square_size_px)) + 1
+
+        min_xy = (min_ij - center_ij) * square_size_px + center_xy
+        max_xy = (max_ij - center_ij) * square_size_px + center_xy
+
+        fill_xy, fill_ij = self.fill_missing_corners(src_xy, src_ij, min_ij, max_ij)
+
+        points = ((np.arange(min_ij[0], max_ij[0]) - center_ij[0]) * square_size_px + center_xy[0],
+                  (np.arange(min_ij[1], max_ij[1]) - center_ij[1]) * square_size_px + center_xy[1])
+
+        values = np.full((len(points[0]), len(points[1]), 2), np.nan)
+
+        for ij, xy in zip(src_ij, src_xy):
+            values[tuple(ij-min_ij)] = xy
+
+        for ij, xy in zip(fill_ij, fill_xy):
+            values[tuple(ij-min_ij)] = xy
+
+        interp = scipy.interpolate.RegularGridInterpolator(points, values)
+
+        u_range = np.arange(0, image_shape[1], 1)
+        v_range = np.arange(0, image_shape[0], 1)
+        u, v = np.meshgrid(u_range, v_range)
+        u = u.ravel()
+        v = v.ravel()
+        remaps = interp((u, v))
+
+        assert len(u) == len(v) == len(remaps) == len(u_range)*len(v_range)
+
+        x_map = np.float32(remaps[:,0].reshape((len(v_range), len(u_range))))
+        y_map = np.float32(remaps[:,1].reshape((len(v_range), len(u_range))))
+
+        return x_map, y_map
+
+    def locate_charuco_corners(self, input_image):
+        charuco_dict = self.charuco_board.getDictionary()
+        
+        charuco_params = cv.aruco.CharucoParameters()
+        charuco_params.minMarkers = 0
+        
+        detector = cv.aruco.CharucoDetector(self.charuco_board, charucoParams=charuco_params)
+        charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(input_image)
+
+        return charuco_corners, charuco_ids
+        
+    def __call__(self, input_image):
+        corners, ids = self.locate_charuco_corners(input_image)
+        return compute_remaps(corners, ids, input_image.shape)
 
 class CameraThread(threading.Thread):
 
@@ -37,9 +138,18 @@ class ScantoolTk:
 
     def __init__(self, parent, camera_id):
 
+        self._init_charuco_board()
         self._init_camera(camera_id)
         self._init_ui(parent)
         self._init_threads(parent)
+
+    def _init_charuco_board(self):
+        chessboard_size = (16, 12)
+        square_length = 10.
+        marker_length = 5.
+        aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_100)
+        self.charuco_board = cv.aruco.CharucoBoard(
+            chessboard_size, square_length, marker_length, aruco_dict)
 
     def _init_threads(self, root):
         self.camera_thread = CameraThread(self.camera, self.notify_camera_event)
@@ -110,23 +220,22 @@ class ScantoolTk:
         
         if image.shape[:2] != (3000, 4000):
             return cv.resize(image, (800, 600))
-        
-        aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_100)
-        square_length = 10.
-        marker_length = 5.
-        aruco_board = cv.aruco.CharucoBoard((16, 12), square_length, marker_length, aruco_dict)
-        charuco_params = cv.aruco.CharucoParameters()
-        charuco_params.minMarkers = 0
-        detector = cv.aruco.CharucoDetector(aruco_board, charucoParams=charuco_params)
-        charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(image)
+
+        calibrator = CameraCalibrator(self.charuco_board)
+        charuco_corners, charuco_ids = calibrator.locate_charuco_corners(image)
 
         image = cv.resize(image, (800, 600))
         if charuco_ids is None or len(charuco_ids) == 0:
             return image
 
-        self.charuco_corners = charuco_corners
+        try:
+            calibrator.compute_remaps(charuco_corners, charuco_ids, image.shape)
+        except Exception as x:
+            print(x)
         
         self.draw_detected_corners(image, charuco_corners * .2, charuco_ids)
+        
+        self.charuco_corners = charuco_corners
         return image
 
     def update_image_camera(self, image_camera):
