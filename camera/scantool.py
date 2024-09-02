@@ -63,23 +63,19 @@ class CameraCalibrator:
         center_ij = src_ij[central_corner_idx]
         center_xy = src_xy[central_corner_idx]
 
-        square_size_px = 79
-
         lookup = {ij: xy for ij, xy in zip(src_ij, src_xy)}
         dists = []
         for (i, j), xy0 in lookup.items():
             xy1 = lookup.get((i-1, j))
             if xy1 is not None:
-                dists.append(xy0 - xy1)
-
-        dists = np.linalg.norm(np.array(dists), axis=1)
-
-        square_size_px = np.median(dists)
+                dists.append(xy1 - xy0)
+            
+        square_size_px = np.median(np.linalg.norm(dists, axis=1))
         
         min_ij = np.int32(center_ij - np.ceil(center_xy / square_size_px))
         max_ij = np.int32(center_ij + np.ceil((image_size - center_xy) / square_size_px)) + 1
 
-        # print(f"{square_size_px=:.2f} {image_size=} {center_xy=} {center_ij=} {min_ij=} {max_ij=}")
+        print(f"{square_size_px=:.2f} {image_size=} {center_xy=} {center_ij=} {min_ij=} {max_ij=}")
 
         min_xy = (min_ij - center_ij) * square_size_px + center_xy
         max_xy = (max_ij - center_ij) * square_size_px + center_xy
@@ -157,7 +153,7 @@ class ScantoolTk:
     def __init__(self, parent, camera_id):
 
         self._init_charuco_board()
-        self._init_camera(camera_id)
+        self._init_camera(camera_id, 4656, 3496)
         self._init_ui(parent)
         self._init_threads(parent)
 
@@ -176,35 +172,29 @@ class ScantoolTk:
         root.bind("<<camera>>", self.camera_event)
         self.camera_thread.start()
 
-    def _init_camera(self, camera_id):
+    def _init_camera(self, camera_id, target_w, target_h):
         self.camera = None
         
         print("Opening camera...")
-        start = time.monotonic()
-        cam = cv.VideoCapture(camera_id, cv.CAP_MSMF, params=[cv.CAP_PROP_FRAME_WIDTH, 4656, cv.CAP_PROP_FRAME_HEIGHT, 3496])
+        cam = cv.VideoCapture(camera_id, cv.CAP_MSMF, params=[cv.CAP_PROP_FRAME_WIDTH, target_w, cv.CAP_PROP_FRAME_HEIGHT, target_h])
         assert cam.isOpened()
-        elapsed = time.monotonic() - start
 
-        w = int(cam.get(cv.CAP_PROP_FRAME_WIDTH))
-        h = int(cam.get(cv.CAP_PROP_FRAME_HEIGHT))
-        mode = int(cam.get(cv.CAP_PROP_MODE)) 
-        print(f"Camera opened: {w}x{h}, {mode=} ({elapsed:.3f} seconds)")
+        def get_frame_size(cam):
+            return int(cam.get(cv.CAP_PROP_FRAME_WIDTH)), int(cam.get(cv.CAP_PROP_FRAME_HEIGHT))
+        
+        actual_w, actual_h = get_frame_size(cam)
+        print(f"Camera opened: {actual_w}x{actual_h}")
 
-        start = time.monotonic()
+        cam.set(cv.CAP_PROP_FRAME_WIDTH, target_w)
+        cam.set(cv.CAP_PROP_FRAME_HEIGHT, target_h)
 
-        w, h = 4656, 3496
-        cam.set(cv.CAP_PROP_FRAME_WIDTH, w)
-        cam.set(cv.CAP_PROP_FRAME_HEIGHT, h)
+        actual_w, actual_h = get_frame_size(cam)
 
-        w = int(cam.get(cv.CAP_PROP_FRAME_WIDTH))
-        h = int(cam.get(cv.CAP_PROP_FRAME_HEIGHT))
-        mode = int(cam.get(cv.CAP_PROP_MODE)) 
-
-        elapsed = time.monotonic() - start
-        print(f"Capture size set to {w}x{h}, {mode=} ({elapsed:.3f} seconds)")
+        print(f"Capture size set to {actual_w}x{actual_h}")
 
         self.camera = cam
         self.exposure = self.camera.get(cv.CAP_PROP_EXPOSURE)
+        self.frame_size = (actual_w, actual_h)
 
     def _init_ui(self, parent):
         self.frame = ttk.Frame(parent, padding=5)
@@ -212,15 +202,17 @@ class ScantoolTk:
         parent.grid_columnconfigure(0, weight=1)
         parent.grid_rowconfigure(0, weight=1)
 
-        self.canvas_camera = Canvas(self.frame, width=800, height=600,
+        w, h = self.frame_size
+
+        self.canvas_camera = Canvas(self.frame, width=w//4, height=h//4,
                                     background='white', highlightthickness=0)
         self.canvas_camera.grid(column=0, row=0, columnspan=2, sticky=(N, W, E, S))
 
-        self.canvas_detail = Canvas(self.frame, width=400, height=300,
+        self.canvas_detail = Canvas(self.frame, width=w//8, height=h//8,
                                     background='white', highlightthickness=0)
         self.canvas_detail.grid(column=0, row=1, sticky=(N, W, E, S))
 
-        self.canvas_binary = Canvas(self.frame, width=400, height=300,
+        self.canvas_binary = Canvas(self.frame, width=w//8, height=h//8,
                                     background='white', highlightthickness=0)
         self.canvas_binary.grid(column=1, row=1, sticky=(N, W, E, S))
 
@@ -231,23 +223,28 @@ class ScantoolTk:
 
         ttk.Button(self.controls, text='Calibrate', command=self.do_calibrate).grid(column=0, row=0)
 
+        self.var_correct = IntVar(value=1)
+        ttk.Checkbutton(self.controls, text='Correct', variable=self.var_correct).grid(column=1, row=0)
+
     def notify_camera_event(self, image):
         self.image_update = image
         self.frame.event_generate("<<camera>>")
 
     def do_calibrate(self):
         start = time.monotonic()
-        print("Correcting lens...")
+        print("Calibrating...")
         image = self.image_update
         self.remapper = None
 
         if image is None:
+            print("No image?!")
             return
         
         calibrator = CameraCalibrator(self.charuco_board)
         charuco_corners, charuco_ids = calibrator.locate_charuco_corners(image)
 
         if charuco_ids is None or len(charuco_ids) == 0:
+            print("Failed to locate corners.")
             return
         
         x_map, y_map = calibrator.compute_remaps(charuco_corners, charuco_ids, image.shape)
@@ -264,40 +261,16 @@ class ScantoolTk:
     def camera_event(self, event):
         image_update = self.image_update
 
-        if self.remapper is not None:
+        if self.remapper is not None and self.var_correct.get():
             image_update = self.remapper(image_update)
 
-        dst_size = (800, 600)
+        w, h = self.frame_size
+        dst_size = (w // 4, h // 4)
         image_camera = cv.resize(image_update, dst_size)
 
-        self.update_image_camera(image_camera) # self.maybe_detect_board(image_update))
+        self.update_image_camera(image_camera)
         self.update_image_detail(image_update)
         self.update_image_binary(image_camera)
-
-    def maybe_detect_board(self, image):
-        self.charuco_corners = None
-        resized_image = cv.resize(image, (800, 600))
-        
-        if image.shape[:2] != (3000, 4000):
-            return resized_image
-
-        calibrator = CameraCalibrator(self.charuco_board)
-        charuco_corners, charuco_ids = calibrator.locate_charuco_corners(image)
-
-        if charuco_ids is None or len(charuco_ids) == 0:
-            return resized_image
-
-        try:
-            x_map, y_map = calibrator.compute_remaps(charuco_corners, charuco_ids, image.shape)
-            print(f"{image.shape=} {x_map.shape=} {y_map.shape=}")
-            resized_image = cv.resize(ImageRemapper(x_map, y_map)(image), (800,600))
-        except Exception as x:
-            print(x)
-        
-        self.draw_detected_corners(resized_image, charuco_corners * .2, charuco_ids)
-        
-        self.charuco_corners = charuco_corners
-        return resized_image
 
     def update_image_camera(self, image_camera):
         
@@ -308,7 +281,7 @@ class ScantoolTk:
     def update_image_detail(self, image_full):
 
         src_h, src_w, _ = image_full.shape
-        dst_w, dst_h = (400, 300)
+        dst_w, dst_h = (src_w//8, src_h//8)
         src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
         image_detail = image_full[src_y:src_y+dst_h, src_x:src_x+dst_w]
 
@@ -358,7 +331,7 @@ class ScantoolTk:
             cv.polylines(image_binary, [np.array([(x0, y0), (x0+255, y0)])], False, (192, 192, 0), thickness=2)
             cv.polylines(image_binary, [pts], False, (255, 255, 0), thickness=2)
         
-        dst_size = (400, 300)
+        dst_size = (self.frame_size[0]//8, self.frame_size[1]//8)
         self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
         self.canvas_binary.delete('all')
         self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
