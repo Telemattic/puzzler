@@ -1,14 +1,21 @@
 import argparse
-import cv2 as cv
 import numpy as np
+import os
 import PIL.Image
 import PIL.ImageTk
 import scipy
 import threading
+import time
 
 from tkinter import *
 from tkinter import font
 from tkinter import ttk
+
+# https://github.com/opencv/opencv/issues/17687
+# https://docs.opencv.org/4.10.0/d4/d15/group__videoio__flags__base.html
+os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
+
+import cv2 as cv
 
 def make_binary_image(image):
     pass
@@ -72,6 +79,8 @@ class CameraCalibrator:
         min_ij = np.int32(center_ij - np.ceil(center_xy / square_size_px))
         max_ij = np.int32(center_ij + np.ceil((image_size - center_xy) / square_size_px)) + 1
 
+        # print(f"{square_size_px=:.2f} {image_size=} {center_xy=} {center_ij=} {min_ij=} {max_ij=}")
+
         min_xy = (min_ij - center_ij) * square_size_px + center_xy
         max_xy = (max_ij - center_ij) * square_size_px + center_xy
 
@@ -119,6 +128,15 @@ class CameraCalibrator:
         corners, ids = self.locate_charuco_corners(input_image)
         return compute_remaps(corners, ids, input_image.shape)
 
+class ImageRemapper:
+
+    def __init__(self, x_map, y_map):
+        self.x_map = x_map
+        self.y_map = y_map
+
+    def __call__(self, image, interpolation=cv.INTER_LINEAR):
+        return cv.remap(image, self.x_map, self.y_map, interpolation, borderValue=(255,255,0))
+
 class CameraThread(threading.Thread):
 
     def __init__(self, camera, callback):
@@ -150,6 +168,8 @@ class ScantoolTk:
         aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_100)
         self.charuco_board = cv.aruco.CharucoBoard(
             chessboard_size, square_length, marker_length, aruco_dict)
+        self.charuco_corners = None
+        self.remapper = None
 
     def _init_threads(self, root):
         self.camera_thread = CameraThread(self.camera, self.notify_camera_event)
@@ -160,8 +180,17 @@ class ScantoolTk:
         self.camera = None
         
         print("Opening camera...")
-        cam = cv.VideoCapture(camera_id, cv.CAP_MSMF)
+        start = time.monotonic()
+        cam = cv.VideoCapture(camera_id, cv.CAP_MSMF, params=[cv.CAP_PROP_FRAME_WIDTH, 4656, cv.CAP_PROP_FRAME_HEIGHT, 3496])
         assert cam.isOpened()
+        elapsed = time.monotonic() - start
+
+        w = int(cam.get(cv.CAP_PROP_FRAME_WIDTH))
+        h = int(cam.get(cv.CAP_PROP_FRAME_HEIGHT))
+        mode = int(cam.get(cv.CAP_PROP_MODE)) 
+        print(f"Camera opened: {w}x{h}, {mode=} ({elapsed:.3f} seconds)")
+
+        start = time.monotonic()
 
         w, h = 4656, 3496
         cam.set(cv.CAP_PROP_FRAME_WIDTH, w)
@@ -169,8 +198,11 @@ class ScantoolTk:
 
         w = int(cam.get(cv.CAP_PROP_FRAME_WIDTH))
         h = int(cam.get(cv.CAP_PROP_FRAME_HEIGHT))
+        mode = int(cam.get(cv.CAP_PROP_MODE)) 
 
-        print("Frame size:", (w,h))
+        elapsed = time.monotonic() - start
+        print(f"Capture size set to {w}x{h}, {mode=} ({elapsed:.3f} seconds)")
+
         self.camera = cam
         self.exposure = self.camera.get(cv.CAP_PROP_EXPOSURE)
 
@@ -194,10 +226,35 @@ class ScantoolTk:
 
         parent.bind("<Key>", self.key_event)
 
+        self.controls = ttk.Frame(self.frame, padding=5)
+        self.controls.grid(column=0, row=2, columnspan=2, sticky=(N, W, E, S))
+
+        ttk.Button(self.controls, text='Calibrate', command=self.do_calibrate).grid(column=0, row=0)
+
     def notify_camera_event(self, image):
         self.image_update = image
         self.frame.event_generate("<<camera>>")
 
+    def do_calibrate(self):
+        start = time.monotonic()
+        print("Correcting lens...")
+        image = self.image_update
+        self.remapper = None
+
+        if image is None:
+            return
+        
+        calibrator = CameraCalibrator(self.charuco_board)
+        charuco_corners, charuco_ids = calibrator.locate_charuco_corners(image)
+
+        if charuco_ids is None or len(charuco_ids) == 0:
+            return
+        
+        x_map, y_map = calibrator.compute_remaps(charuco_corners, charuco_ids, image.shape)
+        self.remapper = ImageRemapper(x_map, y_map)
+        elapsed = time.monotonic() - start
+        print(f"Calibration complete ({elapsed:.3f} seconds)")
+        
     def key_event(self, event):
         if event.char and event.char in '<>':
             self.exposure += 1 if event.char == '>' else -1
@@ -206,37 +263,41 @@ class ScantoolTk:
 
     def camera_event(self, event):
         image_update = self.image_update
-        self.image_update = None
+
+        if self.remapper is not None:
+            image_update = self.remapper(image_update)
 
         dst_size = (800, 600)
         image_camera = cv.resize(image_update, dst_size)
 
-        self.update_image_camera(self.maybe_detect_board(image_update))
+        self.update_image_camera(image_camera) # self.maybe_detect_board(image_update))
         self.update_image_detail(image_update)
         self.update_image_binary(image_camera)
 
     def maybe_detect_board(self, image):
         self.charuco_corners = None
+        resized_image = cv.resize(image, (800, 600))
         
         if image.shape[:2] != (3000, 4000):
-            return cv.resize(image, (800, 600))
+            return resized_image
 
         calibrator = CameraCalibrator(self.charuco_board)
         charuco_corners, charuco_ids = calibrator.locate_charuco_corners(image)
 
-        image = cv.resize(image, (800, 600))
         if charuco_ids is None or len(charuco_ids) == 0:
-            return image
+            return resized_image
 
         try:
-            calibrator.compute_remaps(charuco_corners, charuco_ids, image.shape)
+            x_map, y_map = calibrator.compute_remaps(charuco_corners, charuco_ids, image.shape)
+            print(f"{image.shape=} {x_map.shape=} {y_map.shape=}")
+            resized_image = cv.resize(ImageRemapper(x_map, y_map)(image), (800,600))
         except Exception as x:
             print(x)
         
-        self.draw_detected_corners(image, charuco_corners * .2, charuco_ids)
+        self.draw_detected_corners(resized_image, charuco_corners * .2, charuco_ids)
         
         self.charuco_corners = charuco_corners
-        return image
+        return resized_image
 
     def update_image_camera(self, image_camera):
         
