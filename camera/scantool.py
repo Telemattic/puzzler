@@ -26,6 +26,16 @@ def find_candidate_pieces(image):
 def find_points_for_piece(subimage):
     pass
 
+def draw_detected_corners(image, corners, ids = None, thickness=1, color=(0,255,255)):
+    # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
+    shift = 4
+    size = 3 << shift
+    for x, y in np.array(np.squeeze(corners) * (1 << shift), dtype=np.int32):
+        cv.rectangle(image, (x-size, y-size), (x+size, y+size), color, thickness=thickness, lineType=cv.LINE_AA, shift=shift)
+    if ids is not None:
+        for (x, y), id in zip(np.squeeze(corners), np.squeeze(ids)):
+            cv.putText(image, str(id), (int(x)+5, int(y)-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color)
+
 class CameraCalibrator:
 
     def __init__(self, charuco_board):
@@ -48,13 +58,10 @@ class CameraCalibrator:
         fill_xy = interp(np.array(fill_ij))
 
         return fill_xy, fill_ij
+
+    def find_bounds_ij(self, src_xy, src_ij, image):
     
-    def compute_remaps(self, corners, ids, image_shape):
-
-        src_xy = np.squeeze(corners)
-        src_ij = self.get_ij_for_ids(np.squeeze(ids))
-
-        image_size = np.array(image_shape[:2][::-1])
+        image_size = np.array(image.shape[:2][::-1])
 
         # find the central corner
         dist = np.linalg.norm(src_xy - image_size/2, axis=1)
@@ -70,22 +77,46 @@ class CameraCalibrator:
             if xy1 is not None:
                 dists.append(xy1 - xy0)
             
-        square_size_px = np.median(np.linalg.norm(dists, axis=1))
-        
-        min_ij = np.int32(center_ij - np.ceil(center_xy / square_size_px))
-        max_ij = np.int32(center_ij + np.ceil((image_size - center_xy) / square_size_px)) + 1
+        src_square_size_px = np.median(np.linalg.norm(dists, axis=1))
 
-        print(f"{square_size_px=:.2f} {image_size=} {center_xy=} {center_ij=} {min_ij=} {max_ij=}")
+        dpi = 600.
+        dst_square_size_px = dpi * self.charuco_board.getSquareLength() / 25.4
 
-        min_xy = (min_ij - center_ij) * square_size_px + center_xy
-        max_xy = (max_ij - center_ij) * square_size_px + center_xy
+        print(f"{src_square_size_px=:.1f} {dst_square_size_px=:.1f}")
+
+        min_ij = np.int32(center_ij - np.ceil(center_xy / src_square_size_px))
+        max_ij = np.int32(center_ij + np.ceil((image_size - center_xy) / src_square_size_px)) + 1
+
+        print(f"{min_ij=} {max_ij=}")
+
+        return min_ij, max_ij, center_ij, center_xy, src_square_size_px
+
+    def compute_remaps(self, corners, ids, image):
+
+        src_xy = np.squeeze(corners)
+        src_ij = self.get_ij_for_ids(np.squeeze(ids))
+
+        image_h, image_w = image.shape[:2]
+
+        min_ij, max_ij, center_ij, center_xy, square_size_px = self.find_bounds_ij(src_xy, src_ij, image)
+
+        print(f"{square_size_px=:.1f} dpi={2.54*square_size_px:.1f}")
 
         fill_xy, fill_ij = self.fill_missing_corners(src_xy, src_ij, min_ij, max_ij)
 
-        points = ((np.arange(min_ij[0], max_ij[0]) - center_ij[0]) * square_size_px + center_xy[0],
-                  (np.arange(min_ij[1], max_ij[1]) - center_ij[1]) * square_size_px + center_xy[1])
+        x, y = fill_xy[:,0], fill_xy[:,1]
+        indices = np.argwhere((0 < x) & (x < image_w) & (0 < y) & (y < image_h))
 
-        values = np.full((len(points[0]), len(points[1]), 2), np.nan)
+        if len(indices):
+
+            fill_xy[indices] = cv.cornerSubPix(
+                image, np.float32(fill_xy[indices]), (11, 11), (-1,-1),
+                (cv.TERM_CRITERIA_COUNT+cv.TERM_CRITERIA_EPS, 30, 0.1))
+
+        points_x = (np.arange(min_ij[0], max_ij[0]) - center_ij[0]) * square_size_px + center_xy[0]
+        points_y = (np.arange(min_ij[1], max_ij[1]) - center_ij[1]) * square_size_px + center_xy[1]
+
+        values = np.full((len(points_x), len(points_y), 2), np.nan)
 
         for ij, xy in zip(src_ij, src_xy):
             values[tuple(ij-min_ij)] = xy
@@ -93,10 +124,10 @@ class CameraCalibrator:
         for ij, xy in zip(fill_ij, fill_xy):
             values[tuple(ij-min_ij)] = xy
 
-        interp = scipy.interpolate.RegularGridInterpolator(points, values)
+        interp = scipy.interpolate.RegularGridInterpolator((points_x, points_y), values)
 
-        u_range = np.arange(0, image_shape[1], 1)
-        v_range = np.arange(0, image_shape[0], 1)
+        u_range = np.arange(0, image_w, 1)
+        v_range = np.arange(0, image_h, 1)
         u, v = np.meshgrid(u_range, v_range)
         u = u.ravel()
         v = v.ravel()
@@ -107,22 +138,26 @@ class CameraCalibrator:
         x_map = np.float32(remaps[:,0].reshape((len(v_range), len(u_range))))
         y_map = np.float32(remaps[:,1].reshape((len(v_range), len(u_range))))
 
-        return x_map, y_map
+        return {'x_map':x_map, 'y_map':y_map, 'src_ij':src_ij, 'src_xy':src_xy, 'fill_ij':fill_ij, 'fill_xy':fill_xy}
 
     def locate_charuco_corners(self, input_image):
         charuco_dict = self.charuco_board.getDictionary()
         
         charuco_params = cv.aruco.CharucoParameters()
         charuco_params.minMarkers = 0
+
+        detector_params = cv.aruco.DetectorParameters()
+        detector_params.cornerRefinementWinSize = 10
         
-        detector = cv.aruco.CharucoDetector(self.charuco_board, charucoParams=charuco_params)
+        detector = cv.aruco.CharucoDetector(
+            self.charuco_board, charucoParams=charuco_params, detectorParams=detector_params)
         charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(input_image)
 
         return charuco_corners, charuco_ids
         
     def __call__(self, input_image):
-        corners, ids = self.locate_charuco_corners(input_image)
-        return compute_remaps(corners, ids, input_image.shape)
+        corners, ids = self.locate_charuco_corners(image)
+        return compute_remaps(corners, ids, image)
 
 class ImageRemapper:
 
@@ -226,9 +261,17 @@ class ScantoolTk:
         self.var_correct = IntVar(value=1)
         ttk.Checkbutton(self.controls, text='Correct', variable=self.var_correct).grid(column=1, row=0)
 
+        f = ttk.LabelFrame(self.controls, text='Exposure')
+        f.grid(column=2, row=0)
+        self.var_exposure = IntVar(value=-6)
+        Scale(f, from_=-15, to=0, length=200, resolution=1, orient=HORIZONTAL, variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
+
     def notify_camera_event(self, image):
         self.image_update = image
         self.frame.event_generate("<<camera>>")
+
+    def do_exposure(self, arg):
+        self.camera.set(cv.CAP_PROP_EXPOSURE, self.var_exposure.get())
 
     def do_calibrate(self):
         start = time.monotonic()
@@ -247,10 +290,22 @@ class ScantoolTk:
             print("Failed to locate corners.")
             return
         
-        x_map, y_map = calibrator.compute_remaps(charuco_corners, charuco_ids, image.shape)
-        self.remapper = ImageRemapper(x_map, y_map)
+        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        data = calibrator.compute_remaps(charuco_corners, charuco_ids, gray)
+        self.remapper = ImageRemapper(data['x_map'], data['y_map'])
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
+
+        if False:
+            image = image.copy()
+            draw_detected_corners(image, data['src_xy'], ids=data['src_ij'])
+            draw_detected_corners(image, data['fill_xy'], ids=data['fill_ij'], color=(255,0,0))
+        else:
+            image = cv.resize(image, (1164,874))
+            draw_detected_corners(image, data['src_xy'] * .25, ids=data['src_ij'])
+            draw_detected_corners(image, data['fill_xy'] * .25, ids=data['fill_ij'], color=(255,0,0))
+            
+        cv.imwrite(r'C:\temp\scantool_calibrate.png', image)
         
     def key_event(self, event):
         if event.char and event.char in '<>':
@@ -260,6 +315,13 @@ class ScantoolTk:
 
     def camera_event(self, event):
         image_update = self.image_update
+
+        if False:
+            clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            b = clahe.apply(image_update[:,:,0])
+            g = clahe.apply(image_update[:,:,1])
+            r = clahe.apply(image_update[:,:,2])
+            image_update = np.dstack((b, g, r))
 
         if self.remapper is not None and self.var_correct.get():
             image_update = self.remapper(image_update)
@@ -335,18 +397,6 @@ class ScantoolTk:
         self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
         self.canvas_binary.delete('all')
         self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
-
-    def draw_detected_corners(self, image, corners, ids = None, thickness=1, color=(0,255,255)):
-        # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
-        shift = 4
-        size = 3 << shift
-        for pts in np.array(corners * (1 << shift), dtype=np.int32):
-            x, y = pts[0]
-            cv.rectangle(image, (x-size, y-size), (x+size, y+size), color, thickness=thickness, lineType=cv.LINE_AA, shift=shift)
-        if ids is not None:
-            for pts, id in zip(corners, ids):
-                x, y = pts[0]
-                cv.putText(image, str(id[0]), (int(x)+5, int(y)-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color)
 
     @staticmethod
     def to_photo_image(image):
