@@ -1,6 +1,8 @@
 import argparse
 import numpy as np
 import os
+import libcamera
+import picamera2
 import PIL.Image
 import PIL.ImageTk
 import scipy
@@ -35,6 +37,97 @@ def draw_detected_corners(image, corners, ids = None, thickness=1, color=(0,255,
     if ids is not None:
         for (x, y), id in zip(np.squeeze(corners), np.squeeze(ids)):
             cv.putText(image, str(id), (int(x)+5, int(y)-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color)
+
+class ICamera:
+    pass
+
+class OpenCVCamera(ICamera):
+
+    def __init__(self, camera_id, target_w, target_h):
+        print("Opening camera...")
+        params = [cv.CAP_PROP_FRAME_WIDTH, target_w, cv.CAP_PROP_FRAME_HEIGHT, target_h]
+        cam = cv.VideoCapture(camera_id, cv.CAP_MSMF, params=params)
+        assert cam.isOpened()
+
+        def get_frame_size(cam):
+            return int(cam.get(cv.CAP_PROP_FRAME_WIDTH)), int(cam.get(cv.CAP_PROP_FRAME_HEIGHT))
+        
+        actual_w, actual_h = get_frame_size(cam)
+        print(f"Camera opened: {actual_w}x{actual_h}")
+
+        cam.set(cv.CAP_PROP_FRAME_WIDTH, target_w)
+        cam.set(cv.CAP_PROP_FRAME_HEIGHT, target_h)
+
+        actual_w, actual_h = get_frame_size(cam)
+
+        print(f"Capture size set to {actual_w}x{actual_h}")
+
+        self._camera = cam
+        self._exposure = self.camera.get(cv.CAP_PROP_EXPOSURE)
+        self._frame_size = (actual_w, actual_h)
+
+    @property
+    def frame_size(self):
+        return self._frame_size
+
+    @property
+    def exposure(self):
+        return self._exposure
+
+    def set_exposure(self, x):
+        self._camera.set(cv.CAP_PROP_EXPOSURE, x)
+        self._exposure = x
+
+    def read(self):
+        ret, frame = self.camera.read()
+        assert ret
+        return frame
+
+class RPiCamera(ICamera):
+
+    def __init__(self):
+        print("Initializing camera...")
+        self._camera = picamera2.Picamera2()
+        config = self._camera.create_video_configuration(
+            main={'size':(4000, 3000), 'format':'RGB888'},
+            lores={'size':(640, 480), 'format':'BGR888'},
+            transform=libcamera.Transform(hflip=1, vflip=1),
+            display='lores')
+        self._camera.align_configuration(config)
+        print(f"{config=}")
+        self._camera.configure(config)
+
+        self._camera.start()
+        time.sleep(2)
+
+        actual_w, actual_h = config['main']['size']
+        self._frame_size = (actual_w, actual_h)
+        
+        print(f"Capture size set to {actual_w}x{actual_h}")
+        self._exposure = 0.
+
+    @property
+    def frame_size(self):
+        return self._frame_size
+
+    @property
+    def exposure(self):
+        return self._exposure
+
+    def set_exposure(self, x):
+        self._exposure = x
+        # oops! not implemented!
+
+    def read(self):
+        # see bricksort/camera/camera_focus.py for fancier request processing
+        request = self._camera.capture_request()
+        image = None
+        try:
+            image = request.make_array('main')
+        finally:
+            request.release()
+
+        return image
 
 class CameraCalibrator:
 
@@ -84,8 +177,14 @@ class CameraCalibrator:
 
         print(f"{src_square_size_px=:.1f} {dst_square_size_px=:.1f}")
 
+        print(f"{np.min(src_ij, axis=0)=}")
+        print(f"{np.max(src_ij, axis=0)=}")
+
         min_ij = np.int32(center_ij - np.ceil(center_xy / src_square_size_px))
         max_ij = np.int32(center_ij + np.ceil((image_size - center_xy) / src_square_size_px)) + 1
+
+        min_ij = np.minimum(np.min(src_ij, axis=0), min_ij)
+        max_ij = np.maximum(np.max(src_ij, axis=0)+1, max_ij)
 
         print(f"{min_ij=} {max_ij=}")
 
@@ -118,8 +217,14 @@ class CameraCalibrator:
 
         values = np.full((len(points_x), len(points_y), 2), np.nan)
 
+        print(f"{min_ij=} {max_ij=}\n{src_ij=}\n{fill_ij=}")
+
         for ij, xy in zip(src_ij, src_xy):
-            values[tuple(ij-min_ij)] = xy
+            try:
+                values[tuple(ij-min_ij)] = xy
+            except IndexError:
+                print(f"{ij=} {min_ij=} {tuple(ij-min_ij)=} {values.shape=}")
+                raise
 
         for ij, xy in zip(fill_ij, fill_xy):
             values[tuple(ij-min_ij)] = xy
@@ -178,9 +283,7 @@ class CameraThread(threading.Thread):
     def run(self):
 
         while True:
-            ret, frame = self.camera.read()
-            assert ret
-            
+            frame = self.camera.read()
             self.callback(frame)
 
 class ScantoolTk:
@@ -209,27 +312,10 @@ class ScantoolTk:
 
     def _init_camera(self, camera_id, target_w, target_h):
         self.camera = None
-        
-        print("Opening camera...")
-        cam = cv.VideoCapture(camera_id, cv.CAP_MSMF, params=[cv.CAP_PROP_FRAME_WIDTH, target_w, cv.CAP_PROP_FRAME_HEIGHT, target_h])
-        assert cam.isOpened()
-
-        def get_frame_size(cam):
-            return int(cam.get(cv.CAP_PROP_FRAME_WIDTH)), int(cam.get(cv.CAP_PROP_FRAME_HEIGHT))
-        
-        actual_w, actual_h = get_frame_size(cam)
-        print(f"Camera opened: {actual_w}x{actual_h}")
-
-        cam.set(cv.CAP_PROP_FRAME_WIDTH, target_w)
-        cam.set(cv.CAP_PROP_FRAME_HEIGHT, target_h)
-
-        actual_w, actual_h = get_frame_size(cam)
-
-        print(f"Capture size set to {actual_w}x{actual_h}")
-
-        self.camera = cam
-        self.exposure = self.camera.get(cv.CAP_PROP_EXPOSURE)
-        self.frame_size = (actual_w, actual_h)
+        if os.path.exists('/dev/video0'):
+            self.camera = RPiCamera()
+        else:
+            self.camera = OpenCVCamera(camera_id, target_w, target_h)
 
     def _init_ui(self, parent):
         self.frame = ttk.Frame(parent, padding=5)
@@ -237,7 +323,7 @@ class ScantoolTk:
         parent.grid_columnconfigure(0, weight=1)
         parent.grid_rowconfigure(0, weight=1)
 
-        w, h = self.frame_size
+        w, h = self.camera.frame_size
 
         self.canvas_camera = Canvas(self.frame, width=w//4, height=h//4,
                                     background='white', highlightthickness=0)
@@ -326,7 +412,7 @@ class ScantoolTk:
         if self.remapper is not None and self.var_correct.get():
             image_update = self.remapper(image_update)
 
-        w, h = self.frame_size
+        w, h = self.camera.frame_size
         dst_size = (w // 4, h // 4)
         image_camera = cv.resize(image_update, dst_size)
 
@@ -393,7 +479,7 @@ class ScantoolTk:
             cv.polylines(image_binary, [np.array([(x0, y0), (x0+255, y0)])], False, (192, 192, 0), thickness=2)
             cv.polylines(image_binary, [pts], False, (255, 255, 0), thickness=2)
         
-        dst_size = (self.frame_size[0]//8, self.frame_size[1]//8)
+        dst_size = (self.camera.frame_size[0]//8, self.camera.frame_size[1]//8)
         self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
         self.canvas_binary.delete('all')
         self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
