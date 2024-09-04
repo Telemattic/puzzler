@@ -28,7 +28,7 @@ def find_candidate_pieces(image):
 def find_points_for_piece(subimage):
     pass
 
-def draw_detected_corners(image, corners, ids = None, thickness=1, color=(0,255,255), size=3):
+def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
     shift = 4
     size = size << shift
@@ -177,16 +177,11 @@ class CameraCalibrator:
 
         print(f"{src_square_size_px=:.1f} {dst_square_size_px=:.1f}")
 
-        print(f"{np.min(src_ij, axis=0)=}")
-        print(f"{np.max(src_ij, axis=0)=}")
-
         min_ij = np.int32(center_ij - np.ceil(center_xy / src_square_size_px))
         max_ij = np.int32(center_ij + np.ceil((image_size - center_xy) / src_square_size_px)) + 1
 
         min_ij = np.minimum(np.min(src_ij, axis=0), min_ij)
         max_ij = np.maximum(np.max(src_ij, axis=0)+1, max_ij)
-
-        print(f"{min_ij=} {max_ij=}")
 
         return min_ij, max_ij, center_ij, center_xy, src_square_size_px
 
@@ -219,17 +214,14 @@ class CameraCalibrator:
 
         values = np.full((len(points_x), len(points_y), 2), np.nan)
 
-        print(f"{min_ij=} {max_ij=}\n{src_ij=}\n{fill_ij=}")
-
         for ij, xy in zip(src_ij, src_xy):
-            try:
-                values[tuple(ij-min_ij)] = xy
-            except IndexError:
-                print(f"{ij=} {min_ij=} {tuple(ij-min_ij)=} {values.shape=}")
-                raise
+            values[tuple(ij-min_ij)] = xy
 
         for ij, xy in zip(fill_ij, fill_xy):
             values[tuple(ij-min_ij)] = xy
+
+        with np.printoptions(precision=3):
+            print(f"{points_i=} {points_j=} {points_x=} {points_y=}")
 
         interp = scipy.interpolate.RegularGridInterpolator((points_x, points_y), values)
 
@@ -389,9 +381,9 @@ class ScantoolTk:
         draw_detected_corners(image_100, data['fill_xy'], ids=data['fill_ij'], color=(255,0,0), size=8, thickness=2)
         cv.imwrite(r'scantool_calibrate_100.png', image_100)
             
-        image_25 = cv.resize(image, (1164,874))
-        draw_detected_corners(image_25, data['src_xy'] * .25, ids=data['src_ij'])
-        draw_detected_corners(image_25, data['fill_xy'] * .25, ids=data['fill_ij'], color=(255,0,0))
+        image_25 = cv.resize(image, None, fx=.25, fy=.25)
+        draw_detected_corners(image_25, data['src_xy'] * .25, ids=data['src_ij'], size=8)
+        draw_detected_corners(image_25, data['fill_xy'] * .25, ids=data['fill_ij'], size=8, color=(0, 255, 255))
         cv.imwrite(r'scantool_calibrate_25.png', image_25)
         
     def key_event(self, event):
