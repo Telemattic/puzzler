@@ -28,10 +28,10 @@ def find_candidate_pieces(image):
 def find_points_for_piece(subimage):
     pass
 
-def draw_detected_corners(image, corners, ids = None, thickness=1, color=(0,255,255)):
+def draw_detected_corners(image, corners, ids = None, thickness=1, color=(0,255,255), size=3):
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
     shift = 4
-    size = 3 << shift
+    size = size << shift
     for x, y in np.array(np.squeeze(corners) * (1 << shift), dtype=np.int32):
         cv.rectangle(image, (x-size, y-size), (x+size, y+size), color, thickness=thickness, lineType=cv.LINE_AA, shift=shift)
     if ids is not None:
@@ -212,8 +212,10 @@ class CameraCalibrator:
                 image, np.float32(fill_xy[indices]), (11, 11), (-1,-1),
                 (cv.TERM_CRITERIA_COUNT+cv.TERM_CRITERIA_EPS, 30, 0.1))
 
-        points_x = (np.arange(min_ij[0], max_ij[0]) - center_ij[0]) * square_size_px + center_xy[0]
-        points_y = (np.arange(min_ij[1], max_ij[1]) - center_ij[1]) * square_size_px + center_xy[1]
+        points_i = np.arange(min_ij[0], max_ij[0])
+        points_j = np.arange(min_ij[1], max_ij[1])
+        points_x = (points_i - center_ij[0]) * square_size_px + center_xy[0]
+        points_y = (points_j - center_ij[1]) * square_size_px + center_xy[1]
 
         values = np.full((len(points_x), len(points_y), 2), np.nan)
 
@@ -382,16 +384,15 @@ class ScantoolTk:
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
 
-        if False:
-            image = image.copy()
-            draw_detected_corners(image, data['src_xy'], ids=data['src_ij'])
-            draw_detected_corners(image, data['fill_xy'], ids=data['fill_ij'], color=(255,0,0))
-        else:
-            image = cv.resize(image, (1164,874))
-            draw_detected_corners(image, data['src_xy'] * .25, ids=data['src_ij'])
-            draw_detected_corners(image, data['fill_xy'] * .25, ids=data['fill_ij'], color=(255,0,0))
+        image_100 = image.copy()
+        draw_detected_corners(image_100, data['src_xy'], ids=data['src_ij'], size=8, thickness=2)
+        draw_detected_corners(image_100, data['fill_xy'], ids=data['fill_ij'], color=(255,0,0), size=8, thickness=2)
+        cv.imwrite(r'scantool_calibrate_100.png', image_100)
             
-        cv.imwrite(r'C:\temp\scantool_calibrate.png', image)
+        image_25 = cv.resize(image, (1164,874))
+        draw_detected_corners(image_25, data['src_xy'] * .25, ids=data['src_ij'])
+        draw_detected_corners(image_25, data['fill_xy'] * .25, ids=data['fill_ij'], color=(255,0,0))
+        cv.imwrite(r'scantool_calibrate_25.png', image_25)
         
     def key_event(self, event):
         if event.char and event.char in '<>':
@@ -401,13 +402,6 @@ class ScantoolTk:
 
     def camera_event(self, event):
         image_update = self.image_update
-
-        if False:
-            clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-            b = clahe.apply(image_update[:,:,0])
-            g = clahe.apply(image_update[:,:,1])
-            r = clahe.apply(image_update[:,:,2])
-            image_update = np.dstack((b, g, r))
 
         if self.remapper is not None and self.var_correct.get():
             image_update = self.remapper(image_update)
