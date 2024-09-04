@@ -185,6 +185,59 @@ class CameraCalibrator:
 
         return min_ij, max_ij, center_ij, center_xy, src_square_size_px
 
+    def calibrate_camera(self, corners, ids, image):
+
+        img_xy = np.squeeze(corners)
+        obj_ij = self.get_ij_for_ids(np.squeeze(ids))
+
+        obj_xy = np.array(obj_ij) * self.charuco_board.getSquareLength()
+        obj_z = np.zeros((len(obj_xy), 1), obj_xy.dtype)
+        obj_xyz = np.hstack((obj_xy, obj_z), dtype=np.float32)
+
+        object_points = [obj_xyz]
+        image_points = [img_xy]
+        image_size = (image.shape[1], image.shape[0])
+        
+        ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv.calibrateCamera(
+            object_points, image_points, image_size, None, None)
+
+        with np.printoptions(precision=3):
+            print(f"{ret=}")
+            print(f"{camera_matrix=}")
+            print(f"{dist_coeffs=}")
+            print(f"{rvecs=}")
+            print(f"{tvecs=}")
+
+        new_camera_matrix, roi = cv.getOptimalNewCameraMatrix(
+            camera_matrix, dist_coeffs, image_size, 1, image_size)
+
+        with np.printoptions(precision=3):
+            print(f"{new_camera_matrix=}")
+            print(f"{roi=}")
+
+        # see opencv-4.10.0/modules/core/include/opencv2/core/hal/interface.h
+        CV_32FC1 = 5
+        CV_16UC2 = 10
+        CV_16SC2 = 11
+
+        x_map, y_map = cv.initUndistortRectifyMap(
+            camera_matrix, dist_coeffs, None, new_camera_matrix, image_size, CV_16SC2)
+
+        return {
+            'x_map': x_map,
+            'y_map': y_map,
+            'src_ij': obj_ij,
+            'src_xy': img_xy,
+            'fill_ij': [],
+            'fill_xy': np.zeros((0,2), img_xy.dtype),
+            'new_camera_matrix': new_camera_matrix,
+            'roi': roi,
+            'camera_matrix': camera_matrix,
+            'dist_coeffs': dist_coeffs,
+            'rvecs': rvecs,
+            'tvecs': tvecs,
+        }
+            
     def compute_remaps(self, corners, ids, image):
 
         src_xy = np.squeeze(corners)
@@ -220,9 +273,6 @@ class CameraCalibrator:
         for ij, xy in zip(fill_ij, fill_xy):
             values[tuple(ij-min_ij)] = xy
 
-        with np.printoptions(precision=3):
-            print(f"{points_i=} {points_j=} {points_x=} {points_y=}")
-
         interp = scipy.interpolate.RegularGridInterpolator((points_x, points_y), values)
 
         u_range = np.arange(0, image_w, 1)
@@ -237,7 +287,7 @@ class CameraCalibrator:
         x_map = np.float32(remaps[:,0].reshape((len(v_range), len(u_range))))
         y_map = np.float32(remaps[:,1].reshape((len(v_range), len(u_range))))
 
-        return {'x_map':x_map, 'y_map':y_map, 'src_ij':src_ij, 'src_xy':src_xy, 'fill_ij':fill_ij, 'fill_xy':fill_xy}
+        return {'x_map':x_map, 'y_map':y_map, 'roi':None, 'src_ij':src_ij, 'src_xy':src_xy, 'fill_ij':fill_ij, 'fill_xy':fill_xy}
 
     def locate_charuco_corners(self, input_image):
         charuco_dict = self.charuco_board.getDictionary()
@@ -254,18 +304,20 @@ class CameraCalibrator:
 
         return charuco_corners, charuco_ids
         
-    def __call__(self, input_image):
-        corners, ids = self.locate_charuco_corners(image)
-        return compute_remaps(corners, ids, image)
-
 class ImageRemapper:
 
-    def __init__(self, x_map, y_map):
+    def __init__(self, x_map, y_map, roi=None):
         self.x_map = x_map
         self.y_map = y_map
+        self.roi = roi
+
+        print(f"{x_map.dtype=} {y_map.dtype=} {roi=}")
 
     def __call__(self, image, interpolation=cv.INTER_LINEAR):
-        return cv.remap(image, self.x_map, self.y_map, interpolation, borderValue=(255,255,0))
+        image = cv.remap(image, self.x_map, self.y_map, interpolation, borderValue=(255,255,0))
+        if self.roi is not None:
+            cv.rectangle(image, self.roi, (0,255,255), thickness=2)
+        return image
 
 class CameraThread(threading.Thread):
 
@@ -369,10 +421,14 @@ class ScantoolTk:
         if charuco_ids is None or len(charuco_ids) == 0:
             print("Failed to locate corners.")
             return
-        
-        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-        data = calibrator.compute_remaps(charuco_corners, charuco_ids, gray)
-        self.remapper = ImageRemapper(data['x_map'], data['y_map'])
+
+        if False:
+            gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+            data = calibrator.compute_remaps(charuco_corners, charuco_ids, gray)
+        else:
+            data = calibrator.calibrate_camera(charuco_corners, charuco_ids, image)
+            
+        self.remapper = ImageRemapper(data['x_map'], data['y_map'], data['roi'])
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
 
