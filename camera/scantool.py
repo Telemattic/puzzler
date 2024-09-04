@@ -1,8 +1,6 @@
 import argparse
 import numpy as np
 import os
-import libcamera
-import picamera2
 import PIL.Image
 import PIL.ImageTk
 import scipy
@@ -63,7 +61,7 @@ class OpenCVCamera(ICamera):
         print(f"Capture size set to {actual_w}x{actual_h}")
 
         self._camera = cam
-        self._exposure = self.camera.get(cv.CAP_PROP_EXPOSURE)
+        self._exposure = self._camera.get(cv.CAP_PROP_EXPOSURE)
         self._frame_size = (actual_w, actual_h)
 
     @property
@@ -79,13 +77,15 @@ class OpenCVCamera(ICamera):
         self._exposure = x
 
     def read(self):
-        ret, frame = self.camera.read()
+        ret, frame = self._camera.read()
         assert ret
         return frame
 
 class RPiCamera(ICamera):
 
     def __init__(self):
+        import libcamera
+        import picamera2
         print("Initializing camera...")
         self._camera = picamera2.Picamera2()
         config = self._camera.create_video_configuration(
