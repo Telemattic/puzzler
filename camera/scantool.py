@@ -139,7 +139,7 @@ class CameraCalibrator:
         n_cols, n_rows = self.charuco_board.getChessboardSize()
         return [(k % (n_cols-1), k // (n_cols-1)) for k in ids]
 
-    def solve_pnp(self, object_points, image_points, camera_matrix, dist_coeffs):
+    def get_euler_angles(self, object_points, image_points, camera_matrix, dist_coeffs):
 
         ret, rvec, tvec = cv.solvePnP(
             object_points, image_points, camera_matrix, dist_coeffs)
@@ -198,7 +198,7 @@ class CameraCalibrator:
             print(f"{new_camera_matrix=}")
             print(f"{roi=}")
 
-        return CalibratedCamera(camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi)
+        return CalibratedCamera(camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvecs[0], tvecs[0])
 
     def make_image_remapper(self, props):
 
@@ -275,19 +275,21 @@ class CameraCalibrator:
             self.charuco_board, charucoParams=charuco_params, detectorParams=detector_params)
         charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(input_image)
 
-        if charuco_corners is None or len(charuco_corners) == 0:
+        if charuco_corners is None or len(charuco_corners) < 2:
             return None, None
 
         return np.squeeze(charuco_corners), self.get_ij_for_ids(np.squeeze(charuco_ids))
         
 class CalibratedCamera:
 
-    def __init__(self, camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi):
+    def __init__(self, camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvec, tvec):
         self.camera_matrix = camera_matrix
         self.dist_coeffs = dist_coeffs
         self.new_camera_matrix = new_camera_matrix
         self.image_size = image_size
         self.roi = roi
+        self.rvec = rvec
+        self.tvec = tvec
 
         # see opencv-4.10.0/modules/core/include/opencv2/core/hal/interface.h
         CV_32FC1 = 5
@@ -384,20 +386,23 @@ class ScantoolTk:
         self.var_detect_corners = IntVar(value=1)
         ttk.Checkbutton(self.controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
 
+        self.var_fix_perspective = IntVar(value=0)
+        ttk.Checkbutton(self.controls, text='Fix Perspective', variable=self.var_fix_perspective).grid(column=3, row=0)
+
         f = ttk.LabelFrame(self.controls, text='Exposure')
-        f.grid(column=3, row=0)
-        self.var_exposure = IntVar(value=-6)
-        Scale(f, from_=-15, to=0, length=200, resolution=1, orient=HORIZONTAL, variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
+        f.grid(column=4, row=0)
+        self.var_exposure = DoubleVar(value=-6)
+        Scale(f, from_=-15, to=0, length=200, resolution=.25, orient=HORIZONTAL, variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
 
         self.var_pitch_yaw_roll = StringVar(value="pyr")
-        ttk.Label(self.controls, textvar=self.var_pitch_yaw_roll).grid(column=4, row=0)
+        ttk.Label(self.controls, textvar=self.var_pitch_yaw_roll).grid(column=5, row=0)
 
     def notify_camera_event(self, image):
         self.image_update = image
         self.frame.event_generate("<<camera>>")
 
     def do_exposure(self, arg):
-        self.camera.set(cv.CAP_PROP_EXPOSURE, self.var_exposure.get())
+        self.camera.set_exposure(self.var_exposure.get())
 
     def do_calibrate(self):
         start = time.monotonic()
@@ -423,8 +428,8 @@ class ScantoolTk:
 
     def key_event(self, event):
         if event.char and event.char in '<>':
-            self.exposure += 1 if event.char == '>' else -1
-            self.camera.set(cv.CAP_PROP_EXPOSURE, self.exposure)
+            self.exposure += .25 if event.char == '>' else -.25
+            self.camera.set_exposure(self.exposure)
             print(f"exposure={self.exposure} ({event=})")
 
     def camera_event(self, event):
@@ -450,17 +455,74 @@ class ScantoolTk:
             object_points = calibrator.get_object_points_for_ij(ids)
             camera_matrix = self.remapper.camera_matrix
             dist_coeffs = self.remapper.dist_coeffs
-            angles = calibrator.solve_pnp(object_points, corners, camera_matrix, dist_coeffs)
+            angles = calibrator.get_euler_angles(object_points, corners, camera_matrix, dist_coeffs)
             if angles is not None:
                 pitch, yaw, roll = angles
                 self.var_pitch_yaw_roll.set(f"{pitch=:6.2f} {yaw=:6.2f} {roll=:6.2f}")
             else:
                 self.var_pitch_yaw_roll.set("pitch= yaw= roll=")
 
+        if self.var_fix_perspective.get() and self.remapper is not None:
+            self.var_fix_perspective.set(0)
+            self.fix_perspective(image_camera)
+
         self.update_image_camera(image_camera)
         self.update_image_detail(image_update)
         self.update_image_binary(image_binary)
 
+    def fix_perspective(self, image):
+        camera_matrix = self.remapper.camera_matrix
+        
+        R1 = cv.Rodrigues(self.remapper.rvec)[0]
+        t1 = self.remapper.tvec
+
+        R2 = np.eye(3)
+        t2 = self.remapper.tvec
+
+        with np.printoptions(precision=3):
+            print(f"{R1=}")
+            print(f"{t1=}")
+            print(f"{R2=}")
+            print(f"{t2=}")
+
+        # computeC2MC1
+        R_1to2 = R2 @ R1.T
+        t_1to2 = R2 @ (-R1.T @ t1) + t2
+
+        with np.printoptions(precision=3):
+            print(f"{R_1to2=}")
+            print(f"{t_1to2=}")
+
+        normal1 = R1 @ np.array((0, 0, 1)).reshape(3,1)
+        origin = np.zeros((3,1))
+        origin1 = R1 @ origin + t1
+        d_inv1 = 1. / np.squeeze(normal1).dot(np.squeeze(origin1))
+
+        with np.printoptions(precision=3):
+            print(f"{normal1=}")
+            print(f"{origin1=}")
+            print(f"{d_inv1=}")
+
+        # computeHomography
+        homography_euclidean = R_1to2 + d_inv1 * t_1to2 * normal1.T
+        homography = camera_matrix @ homography_euclidean @ np.linalg.inv(camera_matrix)
+
+        with np.printoptions(precision=3):
+            print(f"{homography_euclidean=}")
+            print(f"{homography=}")
+
+        homography_euclidean /= homography_euclidean[2,2]
+        homography /= homography[2,2]
+        
+        with np.printoptions(precision=3):
+            print(f"normalized {homography_euclidean=}")
+            print(f"normalized {homography=}")
+
+        image_size = (image.shape[1], image.shape[0])
+        warped = cv.warpPerspective(image, homography, image_size)
+        cv.imwrite('scantool_A.png', image)
+        cv.imwrite('scantool_B.png', warped)
+        
     def update_image_camera(self, image_camera):
         
         self.image_camera = self.to_photo_image(image_camera)
@@ -513,7 +575,7 @@ class ScantoolTk:
 
         if True:
             x0 = 20
-            y0 = 580
+            y0 = image_binary.shape[0] - 20
             x_coords = x0 + np.arange(len(hist))
             y_coords = y0 - (hist * 200) // np.max(hist)
             pts = np.array(np.vstack((x_coords, y_coords)).T, dtype=np.int32)
