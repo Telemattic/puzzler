@@ -1,4 +1,5 @@
 import argparse
+import csv
 import math
 import numpy as np
 import os
@@ -36,6 +37,34 @@ def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,2
     if ids is not None:
         for (x, y), id in zip(np.squeeze(corners), np.squeeze(ids)):
             cv.putText(image, str(id), (int(x)+5, int(y)-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color)
+
+def draw_homography_points(image, corners, mask):
+    shift = 4
+    size = 8 << shift
+    for (x, y), m in zip(np.array(np.squeeze(corners) * (1 << shift), dtype=np.int32), mask):
+        color = (0,255,255) if m else (255,255,0)
+        cv.rectangle(image, (x-size, y-size), (x+size, y+size), color,
+                     thickness=1, lineType=cv.LINE_AA, shift=shift)
+
+def draw_grid(image):
+
+    h, w = image.shape[:2]
+    s = 128
+    for x in range(s,w,s):
+        cv.polylines(image, [np.array([(x,0), (x,h-1)])], False, (192, 192, 0))
+    for y in range(s,h,s):
+        cv.polylines(image, [np.array([(0,y), (w-1,y)])], False, (192, 192, 0))
+
+def perspectiveTransform(points, m):
+
+    assert points.ndim == 2 and points.shape[1] == 2
+    n = points.shape[0]
+    xyw = np.hstack((points, np.ones((n,1), points.dtype)))
+
+    assert m.shape == (3,3)
+    xyw = xyw @ m.T
+
+    return xyw[:,:2] / xyw[:,2:]
 
 class ICamera:
     pass
@@ -94,6 +123,16 @@ class RPiCamera(ICamera):
             lores={'size':(640, 480), 'format':'BGR888'},
             transform=libcamera.Transform(hflip=1, vflip=1),
             display='lores')
+
+        # configuration that tries to leverage just the center of the
+        # camera for less distortion, although I think this sensor
+        # mode also decimates the data (1/2 the resolution is lost in
+        # the active area of the sensor)
+        config_alternate = self._camera.create_video_configuration(
+            sensor={'output_size':(1332,900), 'bit_depth':10},
+            main={'size':(1332, 900), 'format':'RGB888'},
+            transform=libcamera.Transform(hflip=1, vflip=1))
+        
         self._camera.align_configuration(config)
         print(f"{config=}")
         self._camera.configure(config)
@@ -464,6 +503,10 @@ class ScantoolTk:
 
         if self.var_fix_perspective.get() and self.remapper is not None:
             self.var_fix_perspective.set(0)
+            self.fix_perspective2(image_update)
+
+        if self.var_fix_perspective.get() and self.remapper is not None:
+            self.var_fix_perspective.set(0)
             self.fix_perspective(image_camera)
 
         self.update_image_camera(image_camera)
@@ -520,8 +563,93 @@ class ScantoolTk:
 
         image_size = (image.shape[1], image.shape[0])
         warped = cv.warpPerspective(image, homography, image_size)
+
+        image = image.copy()
+        draw_grid(image)
         cv.imwrite('scantool_A.png', image)
+
+        draw_grid(warped)
         cv.imwrite('scantool_B.png', warped)
+
+    def fix_perspective2(self, image):
+
+        print("fix_perspective_2:")
+
+        calibrator = CameraCalibrator(self.charuco_board)
+        corners, corner_ids = calibrator.detect_corners(image)
+        
+        src_points = corners # self.remapper.undistort_points(corners)
+
+        image_size = (image.shape[1], image.shape[0])
+        
+        dists = np.linalg.norm(src_points - np.array(image_size) * .5, axis=1)
+        index_center = np.argmin(dists)
+
+        center_xy = src_points[index_center]
+        center_ij = corner_ids[index_center]
+
+        print(f"{center_ij=} {center_xy=}")
+
+        lookup = {ij: xy for ij, xy in zip(corner_ids, src_points)}
+        dists = []
+        for (i, j), xy0 in lookup.items():
+            xy1 = lookup.get((i-1,j))
+            if xy1 is not None:
+                dists.append(xy1-xy0)
+            xy1 = lookup.get((i,j-1))
+            if xy1 is not None:
+                dists.append(xy1-xy0)
+
+        dists = np.array(dists)
+        with np.printoptions(precision=3):
+            print(f"{dists=}")
+
+        dists = np.linalg.norm(np.array(dists), axis=1)
+        with np.printoptions(precision=3):
+            print(f"{dists=}")
+
+        d = np.median(dists)
+
+        print(f"median distance between neighbors: {d=}")
+        
+        dst_points = (np.array(corner_ids) - center_ij) * d + center_xy
+
+        with np.printoptions(precision=1):
+            print(f"{src_points=}")
+            print(f"{dst_points=}")
+
+        homography, mask = cv.findHomography(
+            src_points, dst_points, method=cv.LMEDS)
+        print(f"{homography=}")
+        print(f"{mask=}")
+
+        warped = cv.warpPerspective(image, homography, image_size)
+
+        image = image.copy()
+        draw_grid(image)
+        draw_homography_points(image, src_points, mask)
+        cv.imwrite('scantool_A.png', image)
+
+        print(f"{src_points.ndim=} {src_points.shape=}")
+
+        warped_points = perspectiveTransform(src_points, homography)
+        draw_grid(warped)
+        draw_homography_points(warped, warped_points, mask)
+        cv.imwrite('scantool_B.png', warped)
+
+        with open('distances.csv', 'w', newline='') as f:
+            writer = csv.DictWriter(f, 'i j axis dist'.split())
+            writer.writeheader()
+            lookup = {ij: xy for ij, xy in zip(corner_ids, warped_points)}
+            for (i, j), xy0 in lookup.items():
+                xy1 = lookup.get((i+1, j))
+                if xy1 is not None:
+                    dist = np.linalg.norm(xy1-xy0)
+                    writer.writerow({'i':i+.5, 'j':j, 'axis':'x', 'dist':dist})
+                xy1 = lookup.get((i, j+1))
+                if xy1 is not None:
+                    dist = np.linalg.norm(xy1-xy0)
+                    writer.writerow({'i':i, 'j':j+.5, 'axis':'y', 'dist':dist})
         
     def update_image_camera(self, image_camera):
         
