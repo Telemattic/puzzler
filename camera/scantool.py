@@ -120,9 +120,8 @@ class RPiCamera(ICamera):
         self._camera = picamera2.Picamera2()
         config = self._camera.create_video_configuration(
             main={'size':(4000, 3000), 'format':'RGB888'},
-            lores={'size':(640, 480), 'format':'BGR888'},
             transform=libcamera.Transform(hflip=1, vflip=1),
-            display='lores')
+            display='main')
 
         # configuration that tries to leverage just the center of the
         # camera for less distortion, although I think this sensor
