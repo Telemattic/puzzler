@@ -1,10 +1,13 @@
 import argparse
 import csv
+import io
+import json
 import math
 import numpy as np
 import os
 import PIL.Image
 import PIL.ImageTk
+import requests
 import scipy
 import threading
 import time
@@ -167,6 +170,31 @@ class RPiCamera(ICamera):
             request.release()
 
         return image
+
+class WebCamera(ICamera):
+
+    def __init__(self, host):
+        self.host = host
+        self.config = self._get_config()
+        print(f"{self.host=} {self.config=}")
+
+    @property
+    def frame_size(self):
+        return tuple(self.config['main']['size'])
+
+    def read(self):
+        r = requests.get(
+            self.host + '/image/main.jpeg', params={}, timeout=5)
+        # magic to give imdecode data it can parse, this is just a
+        # view, not a copy
+        buf = np.frombuffer(r.content, dtype=np.uint8)
+        # cv.imdecode derives the format from the bytestream and there
+        # is no mechanism to force a format, :shrug:
+        return cv.imdecode(buf, cv.IMREAD_COLOR)
+
+    def _get_config(self):
+        r = requests.get(self.host + '/config', timeout=5)
+        return json.loads(r.content)
 
 class CameraCalibrator:
 
@@ -362,10 +390,10 @@ class CameraThread(threading.Thread):
 
 class ScantoolTk:
 
-    def __init__(self, parent, camera_id):
+    def __init__(self, parent, camera):
 
         self._init_charuco_board()
-        self._init_camera(camera_id, 4656, 3496)
+        self._init_camera(camera, 4656, 3496)
         self._init_ui(parent)
         self._init_threads(parent)
 
@@ -384,12 +412,20 @@ class ScantoolTk:
         root.bind("<<camera>>", self.camera_event)
         self.camera_thread.start()
 
-    def _init_camera(self, camera_id, target_w, target_h):
+    def _init_camera(self, camera, target_w, target_h):
         self.camera = None
-        if os.path.exists('/dev/video0'):
+        
+        iface = camera[:camera.find(':')]
+        if iface.lower() in ('http', 'https'):
+            self.camera = WebCamera(camera)
+        elif iface.lower() in ('rpi'):
             self.camera = RPiCamera()
-        else:
+        elif iface.lower() in ('opencv', 'cv'):
+            args = camera[camera.find(':'):]
+            camera_id = int(args)
             self.camera = OpenCVCamera(camera_id, target_w, target_h)
+        else:
+            raise Exception(f"bad camera scheme: {scheme}")
 
     def _init_ui(self, parent):
         self.frame = ttk.Frame(parent, padding=5)
@@ -728,7 +764,7 @@ class ScantoolTk:
 
 def main():
     parser = argparse.ArgumentParser(prog='scantool')
-    parser.add_argument("-c", "--camera", type=int, default=2)
+    parser.add_argument("-c", "--camera", required=True)
     args = parser.parse_args()
         
     root = Tk()
