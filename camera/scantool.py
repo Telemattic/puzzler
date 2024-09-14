@@ -384,9 +384,12 @@ class CameraThread(threading.Thread):
 
     def run(self):
 
+        i = 0
         while True:
+            print(f"Capture {i}")
             frame = self.camera.read()
             self.callback(frame)
+            i += 1
 
 class ScantoolTk:
 
@@ -409,6 +412,7 @@ class ScantoolTk:
 
     def _init_threads(self, root):
         self.camera_thread = CameraThread(self.camera, self.notify_camera_event)
+        self.camera_busy = False
         root.bind("<<camera>>", self.camera_event)
         self.camera_thread.start()
 
@@ -507,6 +511,18 @@ class ScantoolTk:
             print(f"exposure={self.exposure} ({event=})")
 
     def camera_event(self, event):
+        if self.camera_busy:
+            return
+
+        print(f"camera_event")
+        
+        self.camera_busy = True
+        try:
+            self.do_camera_event()
+        finally:
+            self.camera_busy = False
+
+    def do_camera_event(self):
         image_update = self.image_update
 
         corners, ids = None, None
@@ -691,6 +707,7 @@ class ScantoolTk:
         self.image_camera = self.to_photo_image(image_camera)
         self.canvas_camera.delete('all')
         self.canvas_camera.create_image((0,0), image=self.image_camera, anchor=NW)
+        print("update_image_camera")
 
     def update_image_detail(self, image_full):
 
@@ -705,6 +722,7 @@ class ScantoolTk:
         self.image_detail = self.to_photo_image(image_detail)
         self.canvas_detail.delete('all')
         self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
+        print("update_image_detail")
 
     def update_image_binary(self, image_camera):
 
@@ -749,6 +767,7 @@ class ScantoolTk:
         self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
         self.canvas_binary.delete('all')
         self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
+        print("update_image_binary")
 
     @staticmethod
     def to_photo_image(image):
