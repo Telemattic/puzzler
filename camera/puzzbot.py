@@ -1,3 +1,6 @@
+import collections
+import json
+import queue
 import socket
 import threading
 
@@ -19,6 +22,8 @@ class KlipperApiClient:
             self.next_id += 1
         
         msg = self._format_request(o)
+
+        # print(f"... sock.send len={len(msg)} {msg=}")
         
         i = 0
         while i < len(msg):
@@ -32,13 +37,17 @@ class KlipperApiClient:
     def recv(self):
 
         while not self.replies:
-            
+
+            # print("sock.recv...")
             data = self.sock.recv(4096)
+            # print(f"... sock.recv got {len(data)} bytes: {data}")
             if len(data) == 0:
                 raise RuntimeError("disconnected")
 
-            self.replies = collections.deque(self.partial_reply + data.split(b'\x03'))
-            self.partial_reply = replies.pop()
+            data = self.partial_reply + data
+            self.replies = collections.deque(data.split(b'\x03'))
+            self.partial_reply = self.replies.pop()
+            # print(f"... {len(self.replies)=} {len(self.partial_reply)=}")
             
         return self._parse_reply(self.replies.popleft())
         
@@ -48,7 +57,7 @@ class KlipperApiClient:
     def _parse_reply(self, s):
         return json.loads(s)
 
-def KlipperReceiveThread(threading.Thread):
+class KlipperReceiveThread(threading.Thread):
 
     def __init__(self, klipper, callback):
         super().__init__(daemon=True)
@@ -57,16 +66,29 @@ def KlipperReceiveThread(threading.Thread):
 
     def run(self):
         while True:
-            r = self.klipper.recv()
-            self.callback(r)
+            try:
+                r = self.klipper.recv()
+                self.callback(r)
+            except RuntimeError:
+                self.callback(None)
+                return
 
 class BotController:
 
-    def __init__(self, sock):
+    def __init__(self, family=socket.AF_UNIX, address='/tmp/klippy_uds'):
+
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        sock.connect(address)
+
         self.klipper = KlipperApiClient(sock)
         self.recv_queue = queue.Queue()
-        self.recv_thread = KlipperRecvThread(klipper, self.klipper_callback)
+        self.recv_thread = KlipperReceiveThread(
+            self.klipper, self.klipper_callback)
         self.recv_thread.start()
+
+    def __del__(self):
+        # this will (hopefully) make the receive thread go away
+        self.klipper.sock.shutdown(socket.SHUT_RDWR)
 
     def klipper_callback(self, r):
         if r.get('id'):
@@ -77,7 +99,10 @@ class BotController:
     def connect(self):
         params = {
             'objects': {
+                'idle_timeout':['state'],
+                'toolhead': ['axis_homed'],
                 'motion_report':['live_position'],
+                'stepper_enable':None,
                 'webhooks':None
             },
             'template': {
@@ -98,10 +123,13 @@ class BotController:
         self.send_gcode('G28 Z')
         self.send_gcode('G28 X Y')
         self.send_gcode('MANUAL_STEPPER STEPPER=stepper_a ENABLE=1 POS=0')
+        self.finish_moves()
 
-        id = self.klipper.send('objects/query', {'toolhead':None}, True)
-        r = self.klipper.await_response(id)
-        print(r)
+        params = {'objects':{'toolhead':None}}
+        id = self.klipper.send('objects/query', params, True)
+        print(f"Waiting for response {id=}")
+        r = self.await_response(id)
+        print("-------------- The big reveal! --------------\n", r)
 
     def move_to(self, *, x=None, y=None, z=None, f=None):
         args = ['G1']
@@ -110,11 +138,11 @@ class BotController:
         if y is not None:
             args.append(f"Y{y:.2f}")
         if z is not None:
-            args.append(f"Z{y:.2f}")
+            args.append(f"Z{z:.2f}")
         if f is not None:
             args.append(f"F{f:.0f}")
 
-        self.send_gcode(args.join(' '))
+        self.send_gcode(' '.join(args))
 
     def turn_to(self, *, a=None):
 
@@ -130,7 +158,10 @@ class BotController:
 
     def await_response(self, id):
         while True:
-            r := self.recv_queue.get()
+            try:
+                r = self.recv_queue.get(timeout=0.05)
+            except queue.Empty:
+                continue
             if r.get('id') == id:
                 return r
             print("Unexpected response:", r)
