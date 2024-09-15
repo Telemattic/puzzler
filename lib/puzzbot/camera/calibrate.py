@@ -35,7 +35,30 @@ class CameraCalibrator:
         obj_xyz = np.hstack((obj_xy, obj_z), dtype=np.float32)
         return obj_xyz
 
+    def effective_dpi(self, corners, corner_ids):
+        
+        lookup = {ij: xy for ij, xy in zip(corner_ids, corners)}
+        retval = {}
+
+        # conversion from [pixels/square] to DPI:
+        # 25.4 [mm/in] / squareLength [mm/sq]
+        scale = 25.4 / self.charuco_board.getSquareLength()
+        
+        for ij, xy0 in lookup.items():
+            i, j = ij
+            dists = []
+            for neighbor in [(i-1,j), (i+1,j), (i,j-1), (i,j+1)]:
+                xy1 = lookup.get(neighbor)
+                if xy1 is not None:
+                    dists.append(xy1-xy0)
+            if dists:
+                retval[ij] = np.median(np.linalg.norm(np.array(dists), axis=1)) * scale
+
+        return retval
+
     def calibrate_camera(self, corners, ids, image):
+
+        print(f"effective_dpi={self.effective_dpi(corners, ids)}")
 
         img_xy = corners
         obj_ij = ids
@@ -63,8 +86,10 @@ class CameraCalibrator:
             print(f"{rvecs=}")
             print(f"{tvecs=}")
 
+        # alpha: fraction of sensor to take, 0=only "good" pixels, 1=everything
+        alpha = 0
         new_camera_matrix, roi = cv.getOptimalNewCameraMatrix(
-            camera_matrix, dist_coeffs, image_size, 1, image_size)
+            camera_matrix, dist_coeffs, image_size, alpha, image_size)
 
         with np.printoptions(precision=3):
             print(f"{new_camera_matrix=}")

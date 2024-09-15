@@ -78,7 +78,6 @@ class CameraThread(threading.Thread):
 
         i = 0
         while True:
-            print(f"Capture {i}")
             frame = self.camera.read()
             self.callback(frame)
             i += 1
@@ -160,13 +159,20 @@ class ScantoolTk:
         self.var_fix_perspective = IntVar(value=0)
         ttk.Checkbutton(self.controls, text='Fix Perspective', variable=self.var_fix_perspective).grid(column=3, row=0)
 
+        self.var_detect_pieces = IntVar(value=1)
+        ttk.Checkbutton(self.controls, text='Detect Pieces', variable=self.var_detect_pieces).grid(column=4, row=0)
+
         f = ttk.LabelFrame(self.controls, text='Exposure')
-        f.grid(column=4, row=0)
+        f.grid(column=5, row=0)
         self.var_exposure = DoubleVar(value=-6)
         Scale(f, from_=-15, to=0, length=200, resolution=.25, orient=HORIZONTAL, variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
 
         self.var_pitch_yaw_roll = StringVar(value="pyr")
-        ttk.Label(self.controls, textvar=self.var_pitch_yaw_roll).grid(column=5, row=0)
+        ttk.Label(self.controls, textvar=self.var_pitch_yaw_roll).grid(column=6, row=0)
+
+        self.var_frame_counter = StringVar(value="frame")
+        self.frame_no = 0
+        ttk.Label(self.controls, textvar=self.var_frame_counter).grid(column=7, row=0, sticky='E')
 
     def notify_camera_event(self, image):
         self.image_update = image
@@ -204,11 +210,13 @@ class ScantoolTk:
             print(f"exposure={self.exposure} ({event=})")
 
     def camera_event(self, event):
+
+        self.var_frame_counter.set(f"Frame {self.frame_no}")
+        self.frame_no += 1
+        
         if self.camera_busy:
             return
 
-        print(f"camera_event")
-        
         self.camera_busy = True
         try:
             self.do_camera_event()
@@ -344,28 +352,19 @@ class ScantoolTk:
             if xy1 is not None:
                 dists.append(xy1-xy0)
 
-        dists = np.array(dists)
-        with np.printoptions(precision=3):
-            print(f"{dists=}")
-
         dists = np.linalg.norm(np.array(dists), axis=1)
-        with np.printoptions(precision=3):
-            print(f"{dists=}")
 
         d = np.median(dists)
 
-        print(f"median distance between neighbors: {d=}")
+        dpi = d * 25.4 / self.charuco_board.getSquareLength()
+        print(f"median distance between neighbors: {d=:.1f} {dpi=:.1f}")
         
         dst_points = (np.array(corner_ids) - center_ij) * d + center_xy
-
-        with np.printoptions(precision=1):
-            print(f"{src_points=}")
-            print(f"{dst_points=}")
 
         homography, mask = cv.findHomography(
             src_points, dst_points, method=cv.LMEDS)
         print(f"{homography=}")
-        print(f"{mask=}")
+        print(f"{np.count_nonzero(mask)}/{np.size(mask)} points used to compute homography")
 
         warped = cv.warpPerspective(image, homography, image_size)
 
@@ -373,8 +372,6 @@ class ScantoolTk:
         draw_grid(image)
         draw_homography_points(image, src_points, mask)
         cv.imwrite('scantool_A.png', image)
-
-        print(f"{src_points.ndim=} {src_points.shape=}")
 
         warped_points = perspectiveTransform(src_points, homography)
         draw_grid(warped)
@@ -400,7 +397,6 @@ class ScantoolTk:
         self.image_camera = self.to_photo_image(image_camera)
         self.canvas_camera.delete('all')
         self.canvas_camera.create_image((0,0), image=self.image_camera, anchor=NW)
-        print("update_image_camera")
 
     def update_image_detail(self, image_full):
 
@@ -415,9 +411,12 @@ class ScantoolTk:
         self.image_detail = self.to_photo_image(image_detail)
         self.canvas_detail.delete('all')
         self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
-        print("update_image_detail")
 
     def update_image_binary(self, image_camera):
+
+        if not self.var_detect_pieces.get():
+            self.canvas_binary.delete('all')
+            return
 
         gray = cv.cvtColor(image_camera, cv.COLOR_BGR2GRAY)
         hist = np.bincount(image_camera.ravel())
@@ -460,7 +459,6 @@ class ScantoolTk:
         self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
         self.canvas_binary.delete('all')
         self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
-        print("update_image_binary")
 
     @staticmethod
     def to_photo_image(image):
