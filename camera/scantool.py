@@ -244,75 +244,13 @@ class ScantoolTk:
 
         if self.var_fix_perspective.get() and self.remapper is not None:
             self.var_fix_perspective.set(0)
-            self.fix_perspective2(image_update)
-
-        if self.var_fix_perspective.get() and self.remapper is not None:
-            self.var_fix_perspective.set(0)
-            self.fix_perspective(image_camera)
+            self.fix_perspective(image_update)
 
         self.update_image_camera(image_camera)
         self.update_image_detail(image_update)
         self.update_image_binary(image_binary)
 
     def fix_perspective(self, image):
-        camera_matrix = self.remapper.camera_matrix
-        
-        R1 = cv.Rodrigues(self.remapper.rvec)[0]
-        t1 = self.remapper.tvec
-
-        R2 = np.eye(3)
-        t2 = self.remapper.tvec
-
-        with np.printoptions(precision=3):
-            print(f"{R1=}")
-            print(f"{t1=}")
-            print(f"{R2=}")
-            print(f"{t2=}")
-
-        # computeC2MC1
-        R_1to2 = R2 @ R1.T
-        t_1to2 = R2 @ (-R1.T @ t1) + t2
-
-        with np.printoptions(precision=3):
-            print(f"{R_1to2=}")
-            print(f"{t_1to2=}")
-
-        normal1 = R1 @ np.array((0, 0, 1)).reshape(3,1)
-        origin = np.zeros((3,1))
-        origin1 = R1 @ origin + t1
-        d_inv1 = 1. / np.squeeze(normal1).dot(np.squeeze(origin1))
-
-        with np.printoptions(precision=3):
-            print(f"{normal1=}")
-            print(f"{origin1=}")
-            print(f"{d_inv1=}")
-
-        # computeHomography
-        homography_euclidean = R_1to2 + d_inv1 * t_1to2 * normal1.T
-        homography = camera_matrix @ homography_euclidean @ np.linalg.inv(camera_matrix)
-
-        with np.printoptions(precision=3):
-            print(f"{homography_euclidean=}")
-            print(f"{homography=}")
-
-        homography_euclidean /= homography_euclidean[2,2]
-        homography /= homography[2,2]
-        
-        with np.printoptions(precision=3):
-            print(f"normalized {homography_euclidean=}")
-            print(f"normalized {homography=}")
-
-        image_size = (image.shape[1], image.shape[0])
-        warped = cv.warpPerspective(image, homography, image_size)
-
-        image = image.copy()
-        draw_grid(image)
-        cv.imwrite('scantool_A.png', image)
-
-        draw_grid(warped)
-        cv.imwrite('scantool_B.png', warped)
-
-    def fix_perspective2(self, image):
 
         p = PerspectiveComputer(self.charuco_board).compute_homography(image)
 
