@@ -1,4 +1,5 @@
 import cv2 as cv
+import json
 import numpy as np
 import requests
 import time
@@ -110,6 +111,7 @@ class WebCamera(ICamera):
 
     def __init__(self, host):
         self.host = host
+        self.session = requests.Session()
         self.config = self._get_config()
         print(f"{self.host=} {self.config=}")
 
@@ -118,7 +120,7 @@ class WebCamera(ICamera):
         return tuple(self.config['main']['size'])
 
     def read(self):
-        r = requests.get(
+        r = self.session.get(
             self.host + '/image/main.jpeg', params={}, timeout=5)
         # magic to give imdecode data it can parse, this is just a
         # view, not a copy
@@ -128,6 +130,6 @@ class WebCamera(ICamera):
         return cv.imdecode(buf, cv.IMREAD_COLOR)
 
     def _get_config(self):
-        r = requests.get(self.host + '/config', timeout=5)
+        r = self.session.get(self.host + '/config', timeout=5)
         return json.loads(r.content)
 
