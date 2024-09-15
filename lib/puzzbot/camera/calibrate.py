@@ -97,67 +97,6 @@ class CameraCalibrator:
 
         return CalibratedCamera(camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvecs[0], tvecs[0])
 
-    def make_image_remapper(self, props):
-
-        camera_matrix = props['camera_matrix']
-        dist_coeffs = props['dist_coeffs']
-        new_camera_matrix = props['new_camera_matrix']
-        image_size = props['image_size']
-
-        # see opencv-4.10.0/modules/core/include/opencv2/core/hal/interface.h
-        CV_32FC1 = 5
-        CV_16UC2 = 10
-        CV_16SC2 = 11
-
-        x_map, y_map = cv.initUndistortRectifyMap(
-            camera_matrix, dist_coeffs, None, new_camera_matrix, image_size, CV_16SC2)
-
-        return ImageRemapper(x_map, y_map)
-
-        # project the known input points (the corners in the source
-        # image) into the remapped destination image space
-        dst_xy = cv.undistortPoints(img_xy, camera_matrix, dist_coeffs, None, new_camera_matrix)
-        dst_xy = np.squeeze(dst_xy)
-
-        import csv
-        ofile = open('distances.csv', 'w', newline='')
-        writer = csv.DictWriter(ofile, 'i j axis dist'.split())
-        writer.writeheader()
-
-        lookup = {ij: xy for ij, xy in zip(obj_ij, dst_xy)}
-        dists = []
-        for (i, j), xy0 in lookup.items():
-            xy1 = lookup.get((i-1, j))
-            if xy1 is not None:
-                dists.append(xy1 - xy0)
-                writer.writerow({'i':i-.5, 'j':j, 'axis':'x', 'dist':np.linalg.norm(xy1-xy0)})
-            xy1 = lookup.get((i, j-1))
-            if xy1 is not None:
-                dists.append(xy1 - xy0)
-                writer.writerow({'i':i, 'j':j-.5, 'axis':'y', 'dist':np.linalg.norm(xy1-xy0)})
-
-        ofile.close()
-
-        dists = np.linalg.norm(dists, axis=1)
-        with np.printoptions(precision=3):
-            print(f"{np.min(dists)=} {np.max(dists)=} {np.mean(dists)=} {np.std(dists)=}")
-        
-        return {
-            'x_map': x_map,
-            'y_map': y_map,
-            'src_ij': obj_ij,
-            'src_xy': img_xy,
-            'fill_ij': [],
-            'fill_xy': np.zeros((0,2), img_xy.dtype),
-            'new_camera_matrix': new_camera_matrix,
-            'roi': roi,
-            'camera_matrix': camera_matrix,
-            'dist_coeffs': dist_coeffs,
-            'rvecs': rvecs,
-            'tvecs': tvecs,
-            'dst_xy': dst_xy
-        }
-            
     def detect_corners(self, input_image):
         charuco_dict = self.charuco_board.getDictionary()
         
@@ -197,12 +136,75 @@ class CalibratedCamera:
             self.camera_matrix, self.dist_coeffs, None, self.new_camera_matrix, self.image_size, CV_16SC2)
 
     def undistort_image(self, image, interpolation=cv.INTER_LINEAR):
-        image = cv.remap(image, self.x_map, self.y_map, interpolation, borderValue=(255,255,0))
-        if self.roi is not None:
-            cv.rectangle(image, self.roi, (0,255,255), thickness=2)
-        return image
+        return cv.remap(image, self.x_map, self.y_map, interpolation, borderValue=(255,255,0))
 
     def undistort_points(self, img_xy):
         return np.squeeze(cv.undistortPoints(
             img_xy, self.camera_matrix, self.dist_coeffs, None, self.new_camera_matrix))
 
+class PerspectiveComputer:
+
+    def __init__(self, charuco_board):
+        self.charuco_board = charuco_board
+
+    def compute_homography(self, image):
+        
+        calibrator = CameraCalibrator(self.charuco_board)
+        corners, corner_ids = calibrator.detect_corners(image)
+        
+        src_points = corners
+
+        image_size = (image.shape[1], image.shape[0])
+        
+        dists = np.linalg.norm(src_points - np.array(image_size) * .5, axis=1)
+        index_center = np.argmin(dists)
+
+        center_xy = src_points[index_center]
+        center_ij = corner_ids[index_center]
+
+        print(f"{center_ij=} {center_xy=}")
+
+        lookup = {ij: xy for ij, xy in zip(corner_ids, src_points)}
+        dists = []
+        for (i, j), xy0 in lookup.items():
+            xy1 = lookup.get((i-1,j))
+            if xy1 is not None:
+                dists.append(xy1-xy0)
+            xy1 = lookup.get((i,j-1))
+            if xy1 is not None:
+                dists.append(xy1-xy0)
+
+        dists = np.linalg.norm(np.array(dists), axis=1)
+
+        d = np.median(dists)
+
+        dpi = d * 25.4 / self.charuco_board.getSquareLength()
+        print(f"median distance between neighbors: {d=:.1f} {dpi=:.1f}")
+        
+        dst_points = (np.array(corner_ids) - center_ij) * d + center_xy
+
+        homography, mask = cv.findHomography(
+            src_points, dst_points, method=cv.LMEDS)
+        print(f"{homography=}")
+        print(f"{np.count_nonzero(mask)}/{np.size(mask)} points used to compute homography")
+
+        return {'homography': homography, 'image_size': image_size,
+                'corners': corners, 'corner_ids': corner_ids, 'mask': mask}
+        
+class PerspectiveWarper:
+
+    def __init__(self, homography, image_size):
+        self.homography = homography
+        self.image_size = image_size
+        
+    def warp_image(self, image):
+        return cv.warpPerspective(image, self.homography, self.image_size)
+
+    def warp_points(self, points):
+        assert points.ndim == 2 and points.shape[1] == 2
+        n = points.shape[0]
+        xyw = np.hstack((points, np.ones((n,1), points.dtype)))
+
+        xyw = xyw @ self.homography.T
+
+        return xyw[:,:2] / xyw[:,2:]

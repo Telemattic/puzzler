@@ -27,7 +27,7 @@ from tkinter import ttk
 
 import cv2 as cv
 import puzzbot.camera.camera
-from puzzbot.camera.calibrate import CameraCalibrator
+from puzzbot.camera.calibrate import CameraCalibrator, PerspectiveComputer, PerspectiveWarper
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
@@ -55,17 +55,6 @@ def draw_grid(image):
         cv.polylines(image, [np.array([(x,0), (x,h-1)])], False, (192, 192, 0))
     for y in range(s,h,s):
         cv.polylines(image, [np.array([(0,y), (w-1,y)])], False, (192, 192, 0))
-
-def perspectiveTransform(points, m):
-
-    assert points.ndim == 2 and points.shape[1] == 2
-    n = points.shape[0]
-    xyw = np.hstack((points, np.ones((n,1), points.dtype)))
-
-    assert m.shape == (3,3)
-    xyw = xyw @ m.T
-
-    return xyw[:,:2] / xyw[:,2:]
 
 class CameraThread(threading.Thread):
 
@@ -325,58 +314,25 @@ class ScantoolTk:
 
     def fix_perspective2(self, image):
 
-        print("fix_perspective_2:")
+        p = PerspectiveComputer(self.charuco_board).compute_homography(image)
 
-        calibrator = CameraCalibrator(self.charuco_board)
-        corners, corner_ids = calibrator.detect_corners(image)
-        
-        src_points = corners # self.remapper.undistort_points(corners)
+        warper = PerspectiveWarper(p['homography'], p['image_size'])
 
-        image_size = (image.shape[1], image.shape[0])
-        
-        dists = np.linalg.norm(src_points - np.array(image_size) * .5, axis=1)
-        index_center = np.argmin(dists)
+        warped_image = warper.warp_image(image)
 
-        center_xy = src_points[index_center]
-        center_ij = corner_ids[index_center]
-
-        print(f"{center_ij=} {center_xy=}")
-
-        lookup = {ij: xy for ij, xy in zip(corner_ids, src_points)}
-        dists = []
-        for (i, j), xy0 in lookup.items():
-            xy1 = lookup.get((i-1,j))
-            if xy1 is not None:
-                dists.append(xy1-xy0)
-            xy1 = lookup.get((i,j-1))
-            if xy1 is not None:
-                dists.append(xy1-xy0)
-
-        dists = np.linalg.norm(np.array(dists), axis=1)
-
-        d = np.median(dists)
-
-        dpi = d * 25.4 / self.charuco_board.getSquareLength()
-        print(f"median distance between neighbors: {d=:.1f} {dpi=:.1f}")
-        
-        dst_points = (np.array(corner_ids) - center_ij) * d + center_xy
-
-        homography, mask = cv.findHomography(
-            src_points, dst_points, method=cv.LMEDS)
-        print(f"{homography=}")
-        print(f"{np.count_nonzero(mask)}/{np.size(mask)} points used to compute homography")
-
-        warped = cv.warpPerspective(image, homography, image_size)
+        src_points = p['corners']
+        corner_ids = p['corner_ids']
+        mask = p['mask']
 
         image = image.copy()
         draw_grid(image)
         draw_homography_points(image, src_points, mask)
         cv.imwrite('scantool_A.png', image)
 
-        warped_points = perspectiveTransform(src_points, homography)
-        draw_grid(warped)
-        draw_homography_points(warped, warped_points, mask)
-        cv.imwrite('scantool_B.png', warped)
+        warped_points = warper.warp_points(src_points)
+        draw_grid(warped_image)
+        draw_homography_points(warped_image, warped_points, mask)
+        cv.imwrite('scantool_B.png', warped_image)
 
         with open('distances.csv', 'w', newline='') as f:
             writer = csv.DictWriter(f, 'i j axis dist'.split())
