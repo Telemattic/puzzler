@@ -199,10 +199,7 @@ class ScantoolTk:
         print(f"Calibration complete ({elapsed:.3f} seconds)")
 
     def key_event(self, event):
-        if event.char and event.char in '<>':
-            self.exposure += .25 if event.char == '>' else -.25
-            self.camera.set_exposure(self.exposure)
-            print(f"exposure={self.exposure} ({event=})")
+        pass
 
     def camera_event(self, event):
 
@@ -293,7 +290,7 @@ class ScantoolTk:
 
     def update_image_detail(self, image_full):
 
-        src_h, src_w, _ = image_full.shape
+        src_h, src_w = image_full.shape[:2]
         dst_w, dst_h = (src_w//8, src_h//8)
         src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
         image_detail = image_full[src_y:src_y+dst_h, src_x:src_x+dst_w]
@@ -317,7 +314,7 @@ class ScantoolTk:
         if False:
             thresh = cv.adaptiveThreshold(gray, 255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 127, -16)
         elif True:
-            thresh = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
+            thresh = cv.threshold(gray, 130, 255, cv.THRESH_BINARY)[1]
         else:
             thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY+cv.THRESH_OTSU)[1]
             

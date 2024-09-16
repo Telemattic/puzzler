@@ -58,7 +58,8 @@ class RPiCamera(ICamera):
         print("Initializing camera...")
         self._camera = picamera2.Picamera2()
         config = self._camera.create_video_configuration(
-            main={'size':(4000, 3000), 'format':'RGB888'},
+            main={'size':(4056, 3040), 'format':'RGB888'},
+            # lores={'size':(640, 480), 'format':'YUYV'},
             transform=libcamera.Transform(hflip=1, vflip=1),
             display='main')
 
@@ -105,6 +106,7 @@ class RPiCamera(ICamera):
         finally:
             request.release()
 
+        # image = cv.cvtColor(image, cv.COLOR_YUV2BGR_YUYV)
         return image
 
 class WebCamera(ICamera):
