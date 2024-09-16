@@ -15,7 +15,9 @@ def main():
     if sys.platform == 'win32':
         set_process_dpi_awareness()
 
-    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
+    lib = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib")
+    sys.path.insert(0, lib)
+    
     import puzzler
     
     parser = argparse.ArgumentParser(description="PuZzLeR")
