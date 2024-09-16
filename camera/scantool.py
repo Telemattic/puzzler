@@ -89,6 +89,7 @@ class ScantoolTk:
             chessboard_size, square_length, marker_length, aruco_dict)
         self.charuco_corners = None
         self.remapper = None
+        self.warper = None
 
     def _init_threads(self, root):
         self.camera_thread = CameraThread(self.camera, self.notify_camera_event)
@@ -161,6 +162,7 @@ class ScantoolTk:
 
         self.var_frame_counter = StringVar(value="frame")
         self.frame_no = 0
+        self.frame_skip = 0
         ttk.Label(self.controls, textvar=self.var_frame_counter).grid(column=7, row=0, sticky='E')
 
     def notify_camera_event(self, image):
@@ -175,6 +177,7 @@ class ScantoolTk:
         print("Calibrating...")
         image = self.image_update
         self.remapper = None
+        self.warper = None
 
         if image is None:
             print("No image?!")
@@ -188,6 +191,9 @@ class ScantoolTk:
             return
 
         self.remapper = calibrator.calibrate_camera(charuco_corners, charuco_ids, image)
+        
+        p = PerspectiveComputer(self.charuco_board).compute_homography(image)
+        self.warper = PerspectiveWarper(p['homography'], p['image_size'])
             
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
@@ -200,10 +206,11 @@ class ScantoolTk:
 
     def camera_event(self, event):
 
-        self.var_frame_counter.set(f"Frame {self.frame_no}")
+        self.var_frame_counter.set(f"Frame {self.frame_no} ({self.frame_skip} skipped)")
         self.frame_no += 1
         
         if self.camera_busy:
+            self.frame_skip += 1
             return
 
         self.camera_busy = True
@@ -217,8 +224,12 @@ class ScantoolTk:
 
         corners, ids = None, None
         
-        if self.remapper is not None and self.var_undistort.get():
+        if self.remapper and self.var_undistort.get():
+            
             image_update = self.remapper.undistort_image(image_update)
+            if self.warper and self.var_fix_perspective.get():
+                image_update = self.warper.warp_image(image_update)
+                
         elif self.var_detect_corners.get():
             calibrator = CameraCalibrator(self.charuco_board)
             corners, ids = calibrator.detect_corners(image_update)
@@ -230,27 +241,11 @@ class ScantoolTk:
         if corners is not None:
             draw_detected_corners(image_camera, corners * .25)
 
-        if corners is not None and self.remapper is not None:
-            calibrator = CameraCalibrator(self.charuco_board)
-            object_points = calibrator.get_object_points_for_ij(ids)
-            camera_matrix = self.remapper.camera_matrix
-            dist_coeffs = self.remapper.dist_coeffs
-            angles = calibrator.get_euler_angles(object_points, corners, camera_matrix, dist_coeffs)
-            if angles is not None:
-                pitch, yaw, roll = angles
-                self.var_pitch_yaw_roll.set(f"{pitch=:6.2f} {yaw=:6.2f} {roll=:6.2f}")
-            else:
-                self.var_pitch_yaw_roll.set("pitch= yaw= roll=")
-
-        if self.var_fix_perspective.get() and self.remapper is not None:
-            self.var_fix_perspective.set(0)
-            self.fix_perspective(image_update)
-
         self.update_image_camera(image_camera)
         self.update_image_detail(image_update)
         self.update_image_binary(image_binary)
 
-    def fix_perspective(self, image):
+    def do_perspective(self, image):
 
         p = PerspectiveComputer(self.charuco_board).compute_homography(image)
 
@@ -265,12 +260,14 @@ class ScantoolTk:
         image = image.copy()
         draw_grid(image)
         draw_homography_points(image, src_points, mask)
-        cv.imwrite('scantool_A.png', image)
+        if cv.imwrite('scantool_A.png', image):
+            print("image saved to scantool_A.png")
 
         warped_points = warper.warp_points(src_points)
         draw_grid(warped_image)
         draw_homography_points(warped_image, warped_points, mask)
-        cv.imwrite('scantool_B.png', warped_image)
+        if cv.imwrite('scantool_B.png', warped_image):
+            print("image saved to scantool_B.png")
 
         with open('distances.csv', 'w', newline='') as f:
             writer = csv.DictWriter(f, 'i j axis dist'.split())
@@ -285,6 +282,8 @@ class ScantoolTk:
                 if xy1 is not None:
                     dist = np.linalg.norm(xy1-xy0)
                     writer.writerow({'i':i, 'j':j+.5, 'axis':'y', 'dist':dist})
+
+        return warper
         
     def update_image_camera(self, image_camera):
         
