@@ -105,14 +105,14 @@ class BotController:
                 'stepper_enable':None,
                 'webhooks':None
             },
-            'template': {
+            'response_template': {
                 'key': 'objects/subscribe'
             }
         }
         self.klipper.send('objects/subscribe', params)
         
         params = {
-            'template': {
+            'response_template': {
                 'key': 'gcode/subscribe_output'
             }
         }
@@ -142,7 +142,8 @@ class BotController:
         if f is not None:
             args.append(f"F{f:.0f}")
 
-        self.send_gcode(' '.join(args))
+        id = self.send_gcode(' '.join(args), True)
+        self.await_response(id)
 
     def turn_to(self, *, a=None):
 
