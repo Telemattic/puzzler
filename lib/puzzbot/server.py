@@ -1,15 +1,17 @@
+import argparse
+import cv2 as cv
 import http.server
 import io
+import json
+import libcamera
+import numpy as np
 import os
-import socketserver
-import argparse
+import picamera2
+import queue
+import socket
+import threading
 import time
 import urllib.parse
-import libcamera
-import picamera2
-import json
-import cv2 as cv
-import numpy as np
 
 from http import HTTPStatus
 
@@ -53,6 +55,7 @@ class KlipperApiClient:
             self.next_id += 1
         
         msg = json.dumps(o).encode('utf-8') + b'\x03'
+        print(f"send: {msg=}")
 
         i = 0
         while i < len(msg):
@@ -73,7 +76,7 @@ class KlipperApiClient:
 class KlipperApiThread(threading.Thread):
 
     def __init__(self, klipper):
-        super().__init__(fnord)
+        super().__init__(daemon=True)
         self.klipper = klipper
 
     def run(self):
@@ -90,7 +93,7 @@ class KlipperApiThread(threading.Thread):
             partial_reply = replies.pop()
 
             for repl in replies:
-                o = json.loads(s.decode('utf-8'))
+                o = json.loads(repl.decode('utf-8'))
                 if 'id' in o:
                     self.klipper.replies.put(o)
                 else:
@@ -115,7 +118,7 @@ class BotRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         
         parts = urllib.parse.urlsplit(self.path)
-        path, params = dict(urllib.parse.parse_qsl(parts.query))
+        path, params = parts.path, dict(urllib.parse.parse_qsl(parts.query))
         
         if path.startswith('/camera'):
             self.post_camera(parts.path[7:], params)
@@ -134,10 +137,16 @@ class BotRequestHandler(http.server.BaseHTTPRequestHandler):
     def get_bot_notifications(self, params):
 
         klipper = self.server.klipper
-        
-        data = json.dumps(klipper.notifications)
-        klipper.notifications = []
 
+        notifications = []
+        try:
+            while True:
+                x = klipper.notifications.get(block=False)
+                notifications.append(x)
+        except queue.Empty:
+            pass
+        
+        data = json.dumps(notifications)
         self.send_json_response(data)
 
     def post_bot(self, path, params):
@@ -147,11 +156,14 @@ class BotRequestHandler(http.server.BaseHTTPRequestHandler):
 
         data = self.rfile.read(content_length)
         data = json.loads(data.decode('utf-8'))
-        
-        repl = klipper.send(data['method'], data['params'], data['response'])
+
+        k_method = data['method']
+        k_params = data.get('params', {})
+        k_response = data.get('response', False)
+        repl = klipper.send(k_method, k_params, k_response)
 
         if repl is not None:
-            self.send_json_response(repl)
+            self.send_json_response(json.dumps(repl))
         else:
             self.send_response(HTTPStatus.OK)
             self.send_header('Content-Length', '0')
@@ -319,6 +331,7 @@ def main():
     with BotServer(("", args.port), BotRequestHandler) as httpd:
         httpd.camera = camera
         httpd.klipper = klipper
+        thread.start()
         print(f"serving at port {args.port}, pid {os.getpid()}")
         httpd.serve_forever()
 
