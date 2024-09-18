@@ -146,7 +146,7 @@ class ScantoolTk:
         self.var_detect_corners = IntVar(value=1)
         ttk.Checkbutton(self.controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
 
-        self.var_fix_perspective = IntVar(value=0)
+        self.var_fix_perspective = IntVar(value=1)
         ttk.Checkbutton(self.controls, text='Fix Perspective', variable=self.var_fix_perspective).grid(column=3, row=0)
 
         self.var_detect_pieces = IntVar(value=1)
@@ -157,17 +157,64 @@ class ScantoolTk:
         self.var_exposure = DoubleVar(value=-6)
         Scale(f, from_=-15, to=0, length=200, resolution=.25, orient=HORIZONTAL, variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
 
-        self.var_pitch_yaw_roll = StringVar(value="pyr")
-        ttk.Label(self.controls, textvar=self.var_pitch_yaw_roll).grid(column=6, row=0)
-
         self.var_frame_counter = StringVar(value="frame")
         self.frame_no = 0
         self.frame_skip = 0
-        ttk.Label(self.controls, textvar=self.var_frame_counter).grid(column=7, row=0, sticky='E')
+        ttk.Label(self.controls, textvar=self.var_frame_counter).grid(column=6, row=0)
+
+        ttk.Button(self.controls, text='home', command=self.do_home).grid(column=0, row=1)
+        ttk.Button(self.controls, text='gcode1', command=self.do_gcode1).grid(column=1, row=1)
+        ttk.Button(self.controls, text='gcode2', command=self.do_gcode2).grid(column=2, row=1)
 
     def notify_camera_event(self, image):
         self.image_update = image
         self.frame.event_generate("<<camera>>")
+
+    def do_home(self):
+        print("home!")
+        self.send_gcode('G28 Z')
+        self.send_gcode('G28 X Y')
+        self.send_gcode('M400')
+
+    def do_gcode1(self):
+        print("gcode1!")
+        self.send_gcode("G1 Z0")
+        self.send_gcode("G1 X0 Y70")
+
+    def do_gcode2(self):
+        print("gcode2!")
+        self.send_gcode("G1 Z0")
+        
+        self.send_gcode("G1 X0 Y70")
+        self.send_gcode("M400")
+        time.sleep(.5)
+
+        cv.imwrite('img_0_0.png', self.get_image())
+        
+        self.send_gcode("G1 X50 Y70")
+        self.send_gcode("M400")
+        time.sleep(.5)
+
+        cv.imwrite('img_1_0.png', self.get_image())
+
+    def get_image(self):
+
+        image = self.camera.read()
+        
+        if self.remapper and self.var_undistort.get():
+            image = self.remapper.undistort_image(image)
+            
+        if self.warper and self.var_fix_perspective.get():
+            image = self.warper.warp_image(image)
+
+        return image
+
+    def send_gcode(self, script):
+        print(f"gcode: {script}")
+        o = {'method':'gcode/script', 'params':{'script':script}, 'response':True}
+        r = requests.post('http://localhost:8000/bot', json=o)
+        o = r.json()
+        print(o)
 
     def do_exposure(self, arg):
         self.camera.set_exposure(self.var_exposure.get())
@@ -229,7 +276,7 @@ class ScantoolTk:
             if self.warper and self.var_fix_perspective.get():
                 image_update = self.warper.warp_image(image_update)
                 
-        elif self.var_detect_corners.get():
+        if self.var_detect_corners.get():
             calibrator = CameraCalibrator(self.charuco_board)
             corners, ids = calibrator.detect_corners(image_update)
 
