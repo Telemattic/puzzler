@@ -287,17 +287,18 @@ def initialize_camera(args):
 
     config = {
         'main':{
-            'size': (args.width, args.height)
+            'size': (args.width, args.height),
+            'format': 'RGB888'
         },
         'display': 'main',
-        'buffer_count': 2
+        'transform': libcamera.Transform(hflip=1, vflip=1)
     }
     
     if args.preview:
         config['lores'] = {'size':(640, 480)}
         config['display'] = 'lores'
     
-    cc = camera.create_still_configuration(**config)
+    cc = camera.create_video_configuration(**config)
     camera.align_configuration(cc)
     camera.configure(cc)
     

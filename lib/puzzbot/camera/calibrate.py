@@ -58,7 +58,7 @@ class CameraCalibrator:
 
     def calibrate_camera(self, corners, ids, image):
 
-        print(f"effective_dpi={self.effective_dpi(corners, ids)}")
+        # print(f"effective_dpi={self.effective_dpi(corners, ids)}")
 
         img_xy = corners
         obj_ij = ids
