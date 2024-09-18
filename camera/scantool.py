@@ -191,6 +191,8 @@ class ScantoolTk:
             return
 
         self.remapper = calibrator.calibrate_camera(charuco_corners, charuco_ids, image)
+
+        image = self.remapper.undistort_image(image)
         
         p = PerspectiveComputer(self.charuco_board).compute_homography(image)
         self.warper = PerspectiveWarper(p['homography'], p['image_size'])
@@ -363,11 +365,6 @@ class ScantoolTk:
         return PIL.ImageTk.PhotoImage(image=image)
 
 def main():
-    lib = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
-    sys.path.insert(0, lib)
-    
-    import puzzbot.camera.camera
-    
     parser = argparse.ArgumentParser(prog='scantool')
     parser.add_argument("-c", "--camera", required=True)
     args = parser.parse_args()
