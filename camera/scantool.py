@@ -73,21 +73,22 @@ class CameraThread(threading.Thread):
 
 class ScantoolTk:
 
-    def __init__(self, parent, camera):
+    def __init__(self, parent, args, config):
 
-        self._init_charuco_board()
-        self._init_camera(camera, 4656, 3496)
+        self.server = args.server
+        self.config = config
+        self._init_charuco_board(config['charuco_board'])
+        self._init_camera(args.camera, 4656, 3496)
         self._init_ui(parent)
         self._init_threads(parent)
 
-    def _init_charuco_board(self):
-        chessboard_size = (16, 12)
-        square_length = 10.
-        marker_length = 5.
-        aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_100)
+    def _init_charuco_board(self, board):
         self.charuco_board = cv.aruco.CharucoBoard(
-            chessboard_size, square_length, marker_length, aruco_dict)
-        self.charuco_corners = None
+            board['chessboard_size'],
+            board['square_length'],
+            board['marker_length'],
+            cv.aruco.getPredefinedDictionary(board['aruco_dict'])
+        )
         self.remapper = None
         self.warper = None
 
@@ -212,7 +213,7 @@ class ScantoolTk:
     def send_gcode(self, script):
         print(f"gcode: {script}")
         o = {'method':'gcode/script', 'params':{'script':script}, 'response':True}
-        r = requests.post('http://localhost:8000/bot', json=o)
+        r = requests.post(self.server + '/bot', json=o)
         o = r.json()
         print(o)
 
@@ -231,13 +232,13 @@ class ScantoolTk:
             return
         
         calibrator = CameraCalibrator(self.charuco_board)
-        charuco_corners, charuco_ids = calibrator.detect_corners(image)
+        corners, corner_ids = calibrator.detect_corners(image)
 
-        if charuco_ids is None or len(charuco_ids) == 0:
+        if corner_ids is None or len(corner_ids) == 0:
             print("Failed to locate corners.")
             return
 
-        self.remapper = calibrator.calibrate_camera(charuco_corners, charuco_ids, image)
+        self.remapper = calibrator.calibrate_camera(corners, corner_ids, image)
 
         image = self.remapper.undistort_image(image)
         
@@ -344,9 +345,6 @@ class ScantoolTk:
         src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
         image_detail = image_full[src_y:src_y+dst_h, src_x:src_x+dst_w]
 
-        if self.charuco_corners is not None:
-            self.draw_detected_corners(image_detail, self.charuco_corners - (src_x, src_y))
-            
         self.image_detail = self.to_photo_image(image_detail)
         self.canvas_detail.delete('all')
         self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
@@ -413,11 +411,24 @@ class ScantoolTk:
 
 def main():
     parser = argparse.ArgumentParser(prog='scantool')
-    parser.add_argument("-c", "--camera", required=True)
+    parser.add_argument("-c", "--camera")
+    parser.add_argument("-s", "--server", required=True)
     args = parser.parse_args()
+
+    config = {
+        'charuco_board': {
+            'chessboard_size': (16,12),
+            'square_length': 10.,
+            'marker_length': 5.,
+            'aruco_dict':cv.aruco.DICT_4X4_100
+        }
+    }
+
+    if args.camera is None:
+        args.camera = args.server + "/camera"
         
     root = Tk()
-    ui = ScantoolTk(root, args.camera)
+    ui = ScantoolTk(root, args, config)
     root.title("PuZzLeR: scantool")
     root.mainloop()
 
