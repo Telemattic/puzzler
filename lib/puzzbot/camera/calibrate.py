@@ -2,14 +2,62 @@ import cv2 as cv
 import math
 import numpy as np
 
-class CameraCalibrator:
+class CornerDetector:
 
     def __init__(self, charuco_board):
         self.charuco_board = charuco_board
 
+    def detect_corners(self, input_image):
+        charuco_dict = self.charuco_board.getDictionary()
+        
+        charuco_params = cv.aruco.CharucoParameters()
+        charuco_params.minMarkers = 2
+
+        detector_params = cv.aruco.DetectorParameters()
+        detector_params.cornerRefinementWinSize = 10
+        detector_params.relativeCornerRefinmentWinSize = 0.5
+        
+        detector = cv.aruco.CharucoDetector(
+            self.charuco_board, charucoParams=charuco_params, detectorParams=detector_params)
+        charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(input_image)
+
+        if charuco_corners is None or len(charuco_corners) < 2:
+            return None, None
+
+        uv = np.squeeze(charuco_corners)
+        ij = self.get_ij_for_ids(np.squeeze(charuco_ids))
+
+        return uv, ij
+    
+    def effective_dpi(self, corners, corner_ids):
+        
+        lookup = {ij: xy for ij, xy in zip(corner_ids, corners)}
+        retval = {}
+
+        # conversion from [pixels/square] to DPI:
+        # 25.4 [mm/in] / squareLength [mm/sq]
+        scale = 25.4 / self.charuco_board.getSquareLength()
+        
+        for ij, xy0 in lookup.items():
+            i, j = ij
+            dists = []
+            for neighbor in [(i-1,j), (i+1,j), (i,j-1), (i,j+1)]:
+                xy1 = lookup.get(neighbor)
+                if xy1 is not None:
+                    dists.append(xy1-xy0)
+            if dists:
+                retval[ij] = np.median(np.linalg.norm(np.array(dists), axis=1)) * scale
+
+        return retval
+
     def get_ij_for_ids(self, ids):
         n_cols, n_rows = self.charuco_board.getChessboardSize()
         return [(k % (n_cols-1), k // (n_cols-1)) for k in ids]
+
+class CameraCalibrator:
+
+    def __init__(self, charuco_board):
+        self.charuco_board = charuco_board
 
     def get_euler_angles(self, object_points, image_points, camera_matrix, dist_coeffs):
 
@@ -34,27 +82,6 @@ class CameraCalibrator:
         obj_z = np.zeros((len(obj_xy), 1), obj_xy.dtype)
         obj_xyz = np.hstack((obj_xy, obj_z), dtype=np.float32)
         return obj_xyz
-
-    def effective_dpi(self, corners, corner_ids):
-        
-        lookup = {ij: xy for ij, xy in zip(corner_ids, corners)}
-        retval = {}
-
-        # conversion from [pixels/square] to DPI:
-        # 25.4 [mm/in] / squareLength [mm/sq]
-        scale = 25.4 / self.charuco_board.getSquareLength()
-        
-        for ij, xy0 in lookup.items():
-            i, j = ij
-            dists = []
-            for neighbor in [(i-1,j), (i+1,j), (i,j-1), (i,j+1)]:
-                xy1 = lookup.get(neighbor)
-                if xy1 is not None:
-                    dists.append(xy1-xy0)
-            if dists:
-                retval[ij] = np.median(np.linalg.norm(np.array(dists), axis=1)) * scale
-
-        return retval
 
     def calibrate_camera(self, corners, ids, image):
 
@@ -97,25 +124,6 @@ class CameraCalibrator:
 
         return CalibratedCamera(camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvecs[0], tvecs[0])
 
-    def detect_corners(self, input_image):
-        charuco_dict = self.charuco_board.getDictionary()
-        
-        charuco_params = cv.aruco.CharucoParameters()
-        charuco_params.minMarkers = 2
-
-        detector_params = cv.aruco.DetectorParameters()
-        detector_params.cornerRefinementWinSize = 10
-        detector_params.relativeCornerRefinmentWinSize = 0.5
-        
-        detector = cv.aruco.CharucoDetector(
-            self.charuco_board, charucoParams=charuco_params, detectorParams=detector_params)
-        charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(input_image)
-
-        if charuco_corners is None or len(charuco_corners) < 2:
-            return None, None
-
-        return np.squeeze(charuco_corners), self.get_ij_for_ids(np.squeeze(charuco_ids))
-        
 class CalibratedCamera:
 
     def __init__(self, camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvec, tvec):
@@ -149,8 +157,12 @@ class PerspectiveComputer:
 
     def compute_homography(self, image):
         
-        calibrator = CameraCalibrator(self.charuco_board)
-        corners, corner_ids = calibrator.detect_corners(image)
+        corners, corner_ids = CornerDetector(self.charuco_board).detect_corners(image)
+
+        n_corners = 0 if corners is None else len(corners)
+        if n_corners < 4:
+            print(f"PerspectiveComputer: found {n_corners} corners, aborting.")
+            return None
         
         src_points = corners
 

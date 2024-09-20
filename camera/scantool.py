@@ -27,7 +27,7 @@ from tkinter import ttk
 
 import cv2 as cv
 import puzzbot.camera.camera
-from puzzbot.camera.calibrate import CameraCalibrator, PerspectiveComputer, PerspectiveWarper
+from puzzbot.camera.calibrate import CornerDetector, CameraCalibrator, PerspectiveComputer, PerspectiveWarper
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
@@ -231,13 +231,14 @@ class ScantoolTk:
             print("No image?!")
             return
         
-        calibrator = CameraCalibrator(self.charuco_board)
-        corners, corner_ids = calibrator.detect_corners(image)
+        corner_detector = CornerDetector(self.charuco_board)
+        corners, corner_ids = corner_detector.detect_corners(image)
 
         if corner_ids is None or len(corner_ids) == 0:
             print("Failed to locate corners.")
             return
 
+        calibrator = CameraCalibrator(self.charuco_board)
         self.remapper = calibrator.calibrate_camera(corners, corner_ids, image)
 
         image = self.remapper.undistort_image(image)
@@ -278,8 +279,8 @@ class ScantoolTk:
                 image_update = self.warper.warp_image(image_update)
                 
         if self.var_detect_corners.get():
-            calibrator = CameraCalibrator(self.charuco_board)
-            corners, ids = calibrator.detect_corners(image_update)
+            corner_detector = CornerDetector(self.charuco_board)
+            corners, ids = corner_detector.detect_corners(image_update)
 
         w, h = self.camera.frame_size
         dst_size = (w // 4, h // 4)
@@ -422,6 +423,13 @@ def main():
             'marker_length': 5.,
             'aruco_dict':cv.aruco.DICT_4X4_100
         }
+    }
+
+    config['charuco_board'] = {
+        'chessboard_size': (33,44),
+        'square_length': 6.,
+        'marker_length': 3.,
+        'aruco_dict':cv.aruco.DICT_4X4_1000
     }
 
     if args.camera is None:
