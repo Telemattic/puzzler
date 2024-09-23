@@ -124,6 +124,14 @@ class WebCamera(ICamera):
     def read(self):
         r = self.session.get(
             self.host + '/image/main.jpeg', params={}, timeout=5)
+        r.raise_for_status()
+
+        # pprint.pprint(r.headers)
+        
+        metadata = json.loads(r.headers["X-Puzzler"])['image_metadata']
+        # pprint.pprint(metadata)
+        print(f"{metadata['ExposureTime']=}")
+        
         # magic to give imdecode data it can parse, this is just a
         # view, not a copy
         buf = np.frombuffer(r.content, dtype=np.uint8)

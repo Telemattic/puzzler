@@ -28,15 +28,16 @@ from tkinter import ttk
 import cv2 as cv
 import puzzbot.camera.camera
 from puzzbot.camera.calibrate import CornerDetector, CameraCalibrator, PerspectiveComputer, PerspectiveWarper
+from puzzbot.camera.calibrate import BigHammerCalibrator
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
     shift = 4
     size = size << shift
-    for x, y in np.array(np.squeeze(corners) * (1 << shift), dtype=np.int32):
+    for x, y in np.array(corners * (1 << shift), dtype=np.int32):
         cv.rectangle(image, (x-size, y-size), (x+size, y+size), color, thickness=thickness, lineType=cv.LINE_AA, shift=shift)
     if ids is not None:
-        for (x, y), id in zip(np.squeeze(corners), np.squeeze(ids)):
+        for (x, y), id in zip(corners, ids):
             cv.putText(image, str(id), (int(x)+5, int(y)-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color)
 
 def draw_homography_points(image, corners, mask):
@@ -83,11 +84,20 @@ class ScantoolTk:
         self._init_threads(parent)
 
     def _init_charuco_board(self, board):
+
+        if board['aruco_dict'] is not None:
+            aruco_dict = cv.aruco.getPredefinedDictionary(board['aruco_dict'])
+        else:
+            dict_path = r'C:\home\eldridge\proj\bricksort\camera\calib\custom_dict_9.json'
+            fs = cv.FileStorage(dict_path, cv.FILE_STORAGE_READ)
+            aruco_dict = cv.aruco.Dictionary()
+            aruco_dict.readDictionary(fs.root())
+        
         self.charuco_board = cv.aruco.CharucoBoard(
             board['chessboard_size'],
             board['square_length'],
             board['marker_length'],
-            cv.aruco.getPredefinedDictionary(board['aruco_dict'])
+            aruco_dict
         )
         self.remapper = None
         self.warper = None
@@ -192,7 +202,7 @@ class ScantoolTk:
 
         cv.imwrite('img_0_0.png', self.get_image())
         
-        self.send_gcode("G1 X50 Y70")
+        self.send_gcode("G1 X0 Y140")
         self.send_gcode("M400")
         time.sleep(.5)
 
@@ -237,6 +247,18 @@ class ScantoolTk:
         if corner_ids is None or len(corner_ids) == 0:
             print("Failed to locate corners.")
             return
+
+        hammer = BigHammerCalibrator(self.charuco_board).calibrate(image)
+        if hammer is not None:
+            cv.imwrite('hammer_0.png', image)
+            hammer_a = cv.resize(image, None, fx=.5, fy=.5)
+            draw_detected_corners(hammer_a, corners*.5, corner_ids)
+            cv.imwrite('hammer_a.png', hammer_a)
+            hammer_a = None
+            hammer_b = hammer(image)
+            draw_grid(hammer_b)
+            cv.imwrite('hammer_b.png', hammer_b)
+            hammer_b = None
 
         calibrator = CameraCalibrator(self.charuco_board)
         self.remapper = calibrator.calibrate_camera(corners, corner_ids, image)
@@ -429,7 +451,7 @@ def main():
         'chessboard_size': (33,44),
         'square_length': 6.,
         'marker_length': 3.,
-        'aruco_dict':cv.aruco.DICT_4X4_1000
+        'aruco_dict': cv.aruco.DICT_4X4_1000
     }
 
     if args.camera is None:

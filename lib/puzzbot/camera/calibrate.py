@@ -1,17 +1,34 @@
 import cv2 as cv
+import functools
 import math
 import numpy as np
+import scipy.interpolate
+
+def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
+    # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
+    shift = 4
+    size = size << shift
+    for x, y in np.array(corners * (1 << shift), dtype=np.int32):
+        cv.rectangle(image, (x-size, y-size), (x+size, y+size), color, thickness=thickness, lineType=cv.LINE_AA, shift=shift)
+    if ids is not None:
+        for (x, y), id in zip(corners, ids):
+            cv.putText(image, str(id), (int(x)+5, int(y)-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color)
 
 class CornerDetector:
 
     def __init__(self, charuco_board):
         self.charuco_board = charuco_board
 
-    def detect_corners(self, input_image):
+    def detect_corners(self, input_image, camera_matrix=None, dist_coeffs=None):
         charuco_dict = self.charuco_board.getDictionary()
         
         charuco_params = cv.aruco.CharucoParameters()
         charuco_params.minMarkers = 2
+        
+        if camera_matrix is not None and dist_coeffs is not None:
+            charuco_params.cameraMatrix = camera_matrix
+            charuco_params.distCoeffs = dist_coeffs
+            charuco_params.minMarkers = 1
 
         detector_params = cv.aruco.DetectorParameters()
         detector_params.cornerRefinementWinSize = 10
@@ -85,6 +102,8 @@ class CameraCalibrator:
 
     def calibrate_camera(self, corners, ids, image):
 
+        return self.calibrate_camera2(corners, ids, image)
+
         # print(f"effective_dpi={self.effective_dpi(corners, ids)}")
 
         img_xy = corners
@@ -124,6 +143,68 @@ class CameraCalibrator:
 
         return CalibratedCamera(camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvecs[0], tvecs[0])
 
+    def calibrate_camera2(self, corners, ids, image):
+
+        detect0 = dict(zip(ids,corners))
+
+        for i in range(2):
+
+            if i == 1:
+                corners, ids = CornerDetector(self.charuco_board).detect_corners(image, camera_matrix, dist_coeffs)
+                detect1 = dict(zip(ids,corners))
+
+            img_xy = corners
+            obj_ij = ids
+
+            obj_xyz = self.get_object_points_for_ij(obj_ij)
+
+            object_points = [obj_xyz]
+            image_points = [img_xy]
+            image_size = (image.shape[1], image.shape[0])
+            # flags for fancier models
+            # cv.CALIB_RATIONAL_MODEL
+            # cv.CALIB_THIN_PRISM_MODEL
+            # cv.CALIB_TILTED_MODEL
+            flags = cv.CALIB_FIX_ASPECT_RATIO
+            input_camera_matrix = np.eye(3)
+
+            ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv.calibrateCamera(
+                object_points, image_points, image_size, input_camera_matrix,
+                None, flags=flags)
+
+            with np.printoptions(precision=6):
+                print(f"--iteration {i}--")
+                print(f"{ret=}")
+                print(f"{camera_matrix=}")
+                print(f"{dist_coeffs=}")
+                print(f"{rvecs=}")
+                print(f"{tvecs=}")
+
+        a_keys = set(detect0.keys())
+        b_keys = set(detect1.keys())
+        print(f"{len(a_keys)=} {len(b_keys)=} {len(a_keys & b_keys)=}")
+        print(f"{len(a_keys - b_keys)=} {len(b_keys - a_keys)=}")
+
+        image = image.copy()
+        corners = np.asarray(list(detect0.values()))
+        draw_detected_corners(image, corners, thickness=3, size=12)
+
+        corners = np.asarray([v for k, v in detect1.items() if k not in detect0])
+        draw_detected_corners(image, corners, thickness=3, size=12, color=(255,255,0))
+
+        cv.imwrite("calibrate2.png", image)
+
+        # alpha: fraction of sensor to take, 0=only "good" pixels, 1=everything
+        alpha = 0
+        new_camera_matrix, roi = cv.getOptimalNewCameraMatrix(
+            camera_matrix, dist_coeffs, image_size, alpha, image_size)
+
+        with np.printoptions(precision=3):
+            print(f"{new_camera_matrix=}")
+            print(f"{roi=}")
+
+        return CalibratedCamera(camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvecs[0], tvecs[0])
+    
 class CalibratedCamera:
 
     def __init__(self, camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvec, tvec):
@@ -220,3 +301,143 @@ class PerspectiveWarper:
         xyw = xyw @ self.homography.T
 
         return xyw[:,:2] / xyw[:,2:]
+
+class BigHammerCalibrator:
+
+    def __init__(self, charuco_board):
+        self.charuco_board = charuco_board
+
+    @staticmethod
+    def maximum_rect(ij_pairs):
+        
+        min_i = min(i for i, _ in ij_pairs)
+        max_i = max(i for i, _ in ij_pairs)
+        min_j = min(j for _, j in ij_pairs)
+        max_j = max(j for _, j in ij_pairs)
+
+        min_i_by_j = dict()
+        max_i_by_j = dict()
+        min_j_by_i = dict()
+        max_j_by_i = dict()
+        for i, j in ij_pairs:
+            if i <= min_i_by_j.get(j, max_i):
+                min_i_by_j[j] = i
+            if i >= max_i_by_j.get(j, min_i):
+                max_i_by_j[j] = i
+            if j <= min_j_by_i.get(i, max_j):
+                min_j_by_i[i] = j
+            if j >= max_j_by_i.get(i, min_j):
+                max_j_by_i[i] = j
+
+        A = np.zeros((max_i+1, max_j+1), dtype=np.int32)
+
+        for j in range(min_j, max_j+1):
+            for i in range(min_i, max_i+1):
+                if min_i_by_j[j] <= i <= max_i_by_j[j] and min_j_by_i[i] <= j <= max_j_by_i[i]:
+                    A[i,j] = 1
+
+        S = A.cumsum(axis=0).cumsum(axis=1)
+
+        best_area = -1
+        best_rects = []
+
+        def is_valid(i0, j0, i1, j1):
+
+            area1 = (i1-i0+1) * (j1-j0+1)
+            if i0 > 0 and j0 > 0:
+                area2 = S[i1,j1] + S[i0-1,j0-1] - S[i0-1,j1] - S[i1,j0-1]
+            elif i0 > 0:
+                area2 = S[i1,j1] - S[i0-1,j1]
+            elif j0 > 0:
+                area2 = S[i1,j1] - S[i1,j0-1]
+
+            return area1 == area2
+
+            pred = (all(min_i_by_j[j] <= i0 and i1 <= max_i_by_j[j] for j in range(j0,j1+1)) and
+                    all(min_j_by_i[i] <= j0 and j1 <= max_j_by_i[i] for i in range(i0,i1+1)))
+            assert (area1 == area2) == pred, f"{i0=} {j0=} {i1=} {j1=} {area1=} {area2=} {pred=}"
+            return pred
+
+        @functools.cache
+        def search(i0, j0, i1, j1):
+
+            nonlocal best_area, best_rects
+
+            if not is_valid(i0, j0, i1, j1):
+                return False
+
+            area = (i1-i0+1) * (j1-j0+1)
+            if area > best_area:
+                best_area = area
+                best_rects = []
+            if area >= best_area:
+                best_rects.append((i0, j0, i1, j1))
+
+            # try to expand in all directions, rather than being
+            # incremental
+            if search(i0-1,j0-1,i1+1,j1+1):
+                return True
+
+            # the all directions expansion failed, so try each direction
+            # singly
+            search(i0-1, j0, i1, j1)
+            search(i0, j0-1, i1, j1)
+            search(i0, j0, i1+1, j1)
+            search(i0, j0, i1, j1+1)
+
+            return True
+
+        i = (min_i + max_i) // 2
+        j = (min_j + max_j) // 2
+        search(i, j, i, j)
+
+        if len(best_rects) != 1:
+            raise ValueError(f"maximum_rect: expected exactly 1 rectangle, got {len(best_rects)}")
+
+        return best_rects[0]
+
+    def calibrate(self, image):
+
+        uv, ij = CornerDetector(self.charuco_board).detect_corners(image)
+        if uv is None:
+            return None
+
+        print(f"BigHammer: found {len(ij)} corners")
+
+        image_size = np.array(image.shape[:2][::-1])
+
+        dist = np.linalg.norm(uv - image_size/2, axis=1)
+        central_corner_idx = np.argmin(dist)
+        
+        center_ij = ij[central_corner_idx]
+
+        print(f"{center_ij=}")
+
+        pixels_per_mm = 600. / 25.4
+        ij_scale = pixels_per_mm * self.charuco_board.getSquareLength()
+
+        # point closest to the center stays in place
+        points = (np.asarray(ij) - center_ij) * ij_scale + image_size/2
+
+        u_range = np.arange(0, image_size[0], 1)
+        v_range = np.arange(0, image_size[1], 1)
+        grid_u, grid_v = np.meshgrid(u_range, v_range)
+
+        print(f"{u_range.shape=} {v_range.shape=}")
+        print(f"{grid_u.shape=} {grid_v.shape=}")
+
+        u_map = scipy.interpolate.griddata(points, uv[:,0], (grid_u, grid_v), method='cubic')
+        v_map = scipy.interpolate.griddata(points, uv[:,1], (grid_u, grid_v), method='cubic')
+
+        print(f"{u_map.shape=} {v_map.shape=}")
+
+        return BigHammerRemapper(u_map, v_map)
+        
+class BigHammerRemapper:
+
+    def __init__(self, u_map, v_map):
+        self.u_map = np.asarray(u_map, dtype=np.float32)
+        self.v_map = np.asarray(v_map, dtype=np.float32)
+
+    def __call__(self, image):
+        return cv.remap(image, self.u_map, self.v_map, cv.INTER_LINEAR, borderValue=(255,255,0))
