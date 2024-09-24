@@ -130,7 +130,7 @@ class WebCamera(ICamera):
         
         metadata = json.loads(r.headers["X-Puzzler"])['image_metadata']
         # pprint.pprint(metadata)
-        print(f"{metadata['ExposureTime']=}")
+        # print(f"{metadata['ExposureTime']=}")
         
         # magic to give imdecode data it can parse, this is just a
         # view, not a copy

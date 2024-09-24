@@ -186,6 +186,11 @@ class ScantoolTk:
         self.send_gcode('G28 Z')
         self.send_gcode('G28 X Y')
         self.send_gcode('M400')
+        # in theory we could do a force move on stepper_y or
+        # stepper_y1 to account for non-orthogonality of the X and Y
+        # axes after homing
+        #
+        # self.send_gcode('FORCE_MOVE STEPPER=stepper_y DISTANCE=3 VELOCITY=500')
 
     def do_gcode1(self):
         print("gcode1!")
@@ -195,19 +200,17 @@ class ScantoolTk:
     def do_gcode2(self):
         print("gcode2!")
         self.send_gcode("G1 Z0")
+
+        for i, x in enumerate([0, 70]):
+            for j, y in enumerate([70, 140]):
+                self.send_gcode(f"G1 X{x} Y{y}")
+                self.send_gcode("M400")
+                time.sleep(.5)
+
+                path = f'img_{i}_{j}.png'
+                print(f"save {x=} {y=} to {path}")
+                cv.imwrite(path, self.get_image())
         
-        self.send_gcode("G1 X0 Y70")
-        self.send_gcode("M400")
-        time.sleep(.5)
-
-        cv.imwrite('img_0_0.png', self.get_image())
-        
-        self.send_gcode("G1 X0 Y140")
-        self.send_gcode("M400")
-        time.sleep(.5)
-
-        cv.imwrite('img_1_0.png', self.get_image())
-
     def get_image(self):
 
         image = self.camera.read()
@@ -260,13 +263,16 @@ class ScantoolTk:
             cv.imwrite('hammer_b.png', hammer_b)
             hammer_b = None
 
-        calibrator = CameraCalibrator(self.charuco_board)
-        self.remapper = calibrator.calibrate_camera(corners, corner_ids, image)
+            self.remapper = hammer
+        else:
 
-        image = self.remapper.undistort_image(image)
-        
-        p = PerspectiveComputer(self.charuco_board).compute_homography(image)
-        self.warper = PerspectiveWarper(p['homography'], p['image_size'])
+            calibrator = CameraCalibrator(self.charuco_board)
+            self.remapper = calibrator.calibrate_camera(corners, corner_ids, image)
+
+            image = self.remapper.undistort_image(image)
+
+            p = PerspectiveComputer(self.charuco_board).compute_homography(image)
+            self.warper = PerspectiveWarper(p['homography'], p['image_size'])
             
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
@@ -309,7 +315,23 @@ class ScantoolTk:
         image_binary = image_camera = cv.resize(image_update, dst_size)
 
         if corners is not None:
-            draw_detected_corners(image_camera, corners * .25)
+            min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
+            inside = dict()
+            border = dict()
+            outside = dict()
+            for ij, uv in zip(ids, corners):
+                if min_i <= ij[0] <= max_i and min_j <= ij[1] <= max_j:
+                    inside[ij] = uv * .25
+                elif min_i-1 <= ij[0] <= max_i+1 and min_j-1 <= ij[1] <= max_j+1:
+                    border[ij] = uv * .25
+                else:
+                    outside[ij] = uv * .25
+            if inside:
+                draw_detected_corners(image_camera, np.array(list(inside.values())), color=(255,0,0))
+            if border:
+                draw_detected_corners(image_camera, np.array(list(border.values())), color=(0,255,0))
+            if outside:
+                draw_detected_corners(image_camera, np.array(list(outside.values())), color=(0,0,255))
 
         self.update_image_camera(image_camera)
         self.update_image_detail(image_update)

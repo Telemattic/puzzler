@@ -343,6 +343,9 @@ class BigHammerCalibrator:
 
         def is_valid(i0, j0, i1, j1):
 
+            if i0 < 0 or i1 > max_i or j0 < 0 or j1 > max_j:
+                return False
+
             area1 = (i1-i0+1) * (j1-j0+1)
             if i0 > 0 and j0 > 0:
                 area2 = S[i1,j1] + S[i0-1,j0-1] - S[i0-1,j1] - S[i1,j0-1]
@@ -392,7 +395,7 @@ class BigHammerCalibrator:
         search(i, j, i, j)
 
         if len(best_rects) != 1:
-            raise ValueError(f"maximum_rect: expected exactly 1 rectangle, got {len(best_rects)}")
+            raise ValueError(f"maximum_rect: expected exactly 1 rectangle, got {best_rects}")
 
         return best_rects[0]
 
@@ -411,10 +414,62 @@ class BigHammerCalibrator:
         
         center_ij = ij[central_corner_idx]
 
-        print(f"{center_ij=}")
+        rect_ij = self.maximum_rect(ij)
+        min_i, min_j, max_i, max_j = rect_ij
+
+        grid_ij = [(i, j) for i in range(min_i-1, max_i+2) for j in range(min_j-1, max_j+2)]
+        
+        have_dict = dict(zip(ij,uv))
+        need_ij = [ij for ij in grid_ij if ij not in have_dict]
+
+        print(f"{center_ij=} {rect_ij=} {len(have_dict)=} {len(need_ij)=}")
+
+        lerper = scipy.interpolate.RBFInterpolator(ij, uv)
+        Z = lerper(need_ij)
+
+        image_copy = cv.resize(image, None, fx=.25, fy=.25)
+        draw_detected_corners(image_copy, uv*.25, color=(255,128,0))
+        draw_detected_corners(image_copy, Z*.25, color=(0,128,255))
+        cv.imwrite('hammer_rbf.png', image_copy)
+
+        need_dict = dict(zip(need_ij, Z))
+
+        # print(f"{have_dict=} {need_dict=}")
+
+        grid_dict = have_dict | need_dict
 
         pixels_per_mm = 600. / 25.4
         ij_scale = pixels_per_mm * self.charuco_board.getSquareLength()
+
+        # point closest to the center stays in place
+        grid_points = (np.asarray(grid_ij) - center_ij) * ij_scale + image_size/2
+        grid_values = np.array([grid_dict[ij] for ij in grid_ij])
+
+        grid_points_u = (np.arange(min_i-1, max_i+2, 1) - center_ij[0]) * ij_scale + image_size[0]/2
+        grid_points_v = (np.arange(min_j-1, max_j+2, 1) - center_ij[1]) * ij_scale + image_size[1]/2
+        grid_values_u = np.zeros((max_i-min_i+3, max_j-min_j+3))
+        grid_values_v = np.zeros((max_i-min_i+3, max_j-min_j+3))
+
+        print(f"{grid_points_u.shape=} {grid_points_v.shape=} {grid_values_u.shape=} {grid_values_v.shape=}")
+        for j in range(min_j-1, max_j+2):
+            for i in range(min_i-1, max_i+2):
+                uv = grid_dict[(i,j)]
+                grid_values_u[i-min_i+1,j-min_j+1] = uv[0]
+                grid_values_v[i-min_i+1,j-min_j+1] = uv[1]
+
+        u_range = np.arange(0, image_size[0], 1)
+        v_range = np.arange(0, image_size[1], 1)
+        grid_u, grid_v = np.meshgrid(u_range, v_range)
+        
+        u_interp = scipy.interpolate.RegularGridInterpolator((grid_points_u, grid_points_v), grid_values_u, method='linear', bounds_error=False)
+        u_map = u_interp((grid_u, grid_v))
+        
+        v_interp = scipy.interpolate.RegularGridInterpolator((grid_points_u, grid_points_v), grid_values_v, method='linear', bounds_error=False)
+        v_map = v_interp((grid_u, grid_v))
+
+        print(f"*** {u_map.shape=} {v_map.shape=} ***")
+
+        return BigHammerRemapper(u_map, v_map)
 
         # point closest to the center stays in place
         points = (np.asarray(ij) - center_ij) * ij_scale + image_size/2
@@ -440,4 +495,7 @@ class BigHammerRemapper:
         self.v_map = np.asarray(v_map, dtype=np.float32)
 
     def __call__(self, image):
-        return cv.remap(image, self.u_map, self.v_map, cv.INTER_LINEAR, borderValue=(255,255,0))
+        return self.undistort_image(image)
+
+    def undistort_image(self, image):
+        return cv.remap(image, self.u_map, self.v_map, cv.INTER_LINEAR, borderValue=(128,128,128))
