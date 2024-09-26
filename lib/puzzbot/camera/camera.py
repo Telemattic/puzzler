@@ -57,7 +57,7 @@ class RPiCamera(ICamera):
         import picamera2
         print("Initializing camera...")
         self._camera = picamera2.Picamera2()
-        config = self._camera.create_video_configuration(
+        config = self._camera.create_still_configuration(
             main={'size':(4056, 3040), 'format':'RGB888'},
             # lores={'size':(640, 480), 'format':'YUYV'},
             transform=libcamera.Transform(hflip=1, vflip=1),

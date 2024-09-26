@@ -133,15 +133,15 @@ class ScantoolTk:
         w, h = self.camera.frame_size
 
         self.canvas_camera = Canvas(self.frame, width=w//4, height=h//4,
-                                    background='white', highlightthickness=0)
+                                    background='gray', highlightthickness=0)
         self.canvas_camera.grid(column=0, row=0, columnspan=2, sticky=(N, W, E, S))
 
         self.canvas_detail = Canvas(self.frame, width=w//8, height=h//8,
-                                    background='white', highlightthickness=0)
+                                    background='gray', highlightthickness=0)
         self.canvas_detail.grid(column=0, row=1, sticky=(N, W, E, S))
 
         self.canvas_binary = Canvas(self.frame, width=w//8, height=h//8,
-                                    background='white', highlightthickness=0)
+                                    background='gray', highlightthickness=0)
         self.canvas_binary.grid(column=1, row=1, sticky=(N, W, E, S))
 
         parent.bind("<Key>", self.key_event)
@@ -354,7 +354,7 @@ class ScantoolTk:
             corner_detector = CornerDetector(self.charuco_board)
             corners, ids = corner_detector.detect_corners(image_update)
 
-        w, h = self.camera.frame_size
+        h, w = image_update.shape[:2]
         dst_size = (w // 4, h // 4)
         image_binary = image_camera = cv.resize(image_update, dst_size)
 
@@ -425,12 +425,15 @@ class ScantoolTk:
         
         self.image_camera = self.to_photo_image(image_camera)
         self.canvas_camera.delete('all')
-        self.canvas_camera.create_image((0,0), image=self.image_camera, anchor=NW)
+        win_w, win_h = self.canvas_camera.winfo_width(), self.canvas_camera.winfo_height()
+        img_h, img_w = image_camera.shape[:2]
+        x, y = (win_w - img_w) // 2, (win_h - img_h) // 2
+        self.canvas_camera.create_image((x, y), image=self.image_camera, anchor=NW)
 
     def update_image_detail(self, image_full):
 
+        dst_w, dst_h = self.canvas_detail.winfo_width(), self.canvas_detail.winfo_height()
         src_h, src_w = image_full.shape[:2]
-        dst_w, dst_h = (src_w//8, src_h//8)
         src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
         image_detail = image_full[src_y:src_y+dst_h, src_x:src_x+dst_w]
 

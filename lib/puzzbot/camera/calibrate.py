@@ -5,6 +5,8 @@ import numpy as np
 import scipy.interpolate
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
+    if corners is None or len(corners) == 0:
+        return
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
     shift = 4
     size = size << shift
@@ -18,28 +20,45 @@ class CornerDetector:
 
     def __init__(self, charuco_board):
         self.charuco_board = charuco_board
-
-    def detect_corners(self, input_image, camera_matrix=None, dist_coeffs=None):
-        charuco_dict = self.charuco_board.getDictionary()
         
-        charuco_params = cv.aruco.CharucoParameters()
-        charuco_params.minMarkers = 2
+        self.charuco_params = cv.aruco.CharucoParameters()
+        self.charuco_params.minMarkers = 2
+        self.charuco_params.tryRefineMarkers = True
         
-        if camera_matrix is not None and dist_coeffs is not None:
-            charuco_params.cameraMatrix = camera_matrix
-            charuco_params.distCoeffs = dist_coeffs
-            charuco_params.minMarkers = 1
+        self.detector_params = cv.aruco.DetectorParameters()
+        self.detector_params.cornerRefinementMethod = cv.aruco.CORNER_REFINE_SUBPIX
+        self.detector_params.cornerRefinementWinSize = 10
+        self.detector_params.relativeCornerRefinmentWinSize = 0.5
 
-        detector_params = cv.aruco.DetectorParameters()
-        detector_params.cornerRefinementWinSize = 10
-        detector_params.relativeCornerRefinmentWinSize = 0.5
+        self.median_ksize = None
+
+    def detect_corners(self, input_image):
+        if self.median_ksize is None:
+            return self.detect_corners_impl(input_image)
+    
+        gray_image = cv.cvtColor(input_image, cv.COLOR_BGR2GRAY)
+        median_image = cv.medianBlur(input_image, self.median_ksize)
+        corners, ids = self.detect_corners_impl(median_image)
+        return self.refine_subpix(gray_image, corners), ids
+
+    def refine_subpix(self, gray_image, corners):
+        # this doesn't seem to change anything (i.e. corners ==
+        # refined), even though we're using it on the source image
+        # instead of the median image that we used for corner
+        # detection initially
+        winSize = 10
+        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_COUNT, 40, .000001)
+        refined = cv.cornerSubPix(gray_image, corners, (winSize, winSize), (-1, -1), criteria)
+        return refined
+        
+    def detect_corners_impl(self, input_image):
         
         detector = cv.aruco.CharucoDetector(
-            self.charuco_board, charucoParams=charuco_params, detectorParams=detector_params)
+            self.charuco_board, charucoParams=self.charuco_params, detectorParams=self.detector_params)
         charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(input_image)
 
-        if charuco_corners is None or len(charuco_corners) < 2:
-            return None, None
+        if charuco_corners is None or len(charuco_corners) < 1:
+            return np.zeros((0,2)), []
 
         uv = np.squeeze(charuco_corners)
         ij = self.get_ij_for_ids(np.squeeze(charuco_ids))
@@ -102,10 +121,6 @@ class CameraCalibrator:
 
     def calibrate_camera(self, corners, ids, image):
 
-        return self.calibrate_camera2(corners, ids, image)
-
-        # print(f"effective_dpi={self.effective_dpi(corners, ids)}")
-
         img_xy = corners
         obj_ij = ids
 
@@ -143,68 +158,6 @@ class CameraCalibrator:
 
         return CalibratedCamera(camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvecs[0], tvecs[0])
 
-    def calibrate_camera2(self, corners, ids, image):
-
-        detect0 = dict(zip(ids,corners))
-
-        for i in range(2):
-
-            if i == 1:
-                corners, ids = CornerDetector(self.charuco_board).detect_corners(image, camera_matrix, dist_coeffs)
-                detect1 = dict(zip(ids,corners))
-
-            img_xy = corners
-            obj_ij = ids
-
-            obj_xyz = self.get_object_points_for_ij(obj_ij)
-
-            object_points = [obj_xyz]
-            image_points = [img_xy]
-            image_size = (image.shape[1], image.shape[0])
-            # flags for fancier models
-            # cv.CALIB_RATIONAL_MODEL
-            # cv.CALIB_THIN_PRISM_MODEL
-            # cv.CALIB_TILTED_MODEL
-            flags = cv.CALIB_FIX_ASPECT_RATIO
-            input_camera_matrix = np.eye(3)
-
-            ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv.calibrateCamera(
-                object_points, image_points, image_size, input_camera_matrix,
-                None, flags=flags)
-
-            with np.printoptions(precision=6):
-                print(f"--iteration {i}--")
-                print(f"{ret=}")
-                print(f"{camera_matrix=}")
-                print(f"{dist_coeffs=}")
-                print(f"{rvecs=}")
-                print(f"{tvecs=}")
-
-        a_keys = set(detect0.keys())
-        b_keys = set(detect1.keys())
-        print(f"{len(a_keys)=} {len(b_keys)=} {len(a_keys & b_keys)=}")
-        print(f"{len(a_keys - b_keys)=} {len(b_keys - a_keys)=}")
-
-        image = image.copy()
-        corners = np.asarray(list(detect0.values()))
-        draw_detected_corners(image, corners, thickness=3, size=12)
-
-        corners = np.asarray([v for k, v in detect1.items() if k not in detect0])
-        draw_detected_corners(image, corners, thickness=3, size=12, color=(255,255,0))
-
-        cv.imwrite("calibrate2.png", image)
-
-        # alpha: fraction of sensor to take, 0=only "good" pixels, 1=everything
-        alpha = 0
-        new_camera_matrix, roi = cv.getOptimalNewCameraMatrix(
-            camera_matrix, dist_coeffs, image_size, alpha, image_size)
-
-        with np.printoptions(precision=3):
-            print(f"{new_camera_matrix=}")
-            print(f"{roi=}")
-
-        return CalibratedCamera(camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvecs[0], tvecs[0])
-    
 class CalibratedCamera:
 
     def __init__(self, camera_matrix, dist_coeffs, new_camera_matrix, image_size, roi, rvec, tvec):
@@ -400,8 +353,11 @@ class BigHammerCalibrator:
         return best_rects[0]
 
     def calibrate(self, image):
-
-        uv, ij = CornerDetector(self.charuco_board).detect_corners(image)
+        
+        detector = CornerDetector(self.charuco_board)
+        detector.median_ksize = 5
+        
+        uv, ij = detector.detect_corners(image)
         if uv is None:
             return None
 
@@ -469,33 +425,26 @@ class BigHammerCalibrator:
 
         print(f"*** {u_map.shape=} {v_map.shape=} ***")
 
-        return BigHammerRemapper(u_map, v_map)
+        ll, ur = (np.array([[min_i, min_j], [max_i, max_j]]) - center_ij) * ij_scale + image_size/2
+        ll = np.asarray(np.ceil(ll), dtype=np.int32).tolist()
+        ur = np.asarray(np.floor(ur), dtype=np.int32).tolist()
+        roi = tuple(ll + ur)
 
-        # point closest to the center stays in place
-        points = (np.asarray(ij) - center_ij) * ij_scale + image_size/2
+        return BigHammerRemapper(u_map, v_map, roi)
 
-        u_range = np.arange(0, image_size[0], 1)
-        v_range = np.arange(0, image_size[1], 1)
-        grid_u, grid_v = np.meshgrid(u_range, v_range)
-
-        print(f"{u_range.shape=} {v_range.shape=}")
-        print(f"{grid_u.shape=} {grid_v.shape=}")
-
-        u_map = scipy.interpolate.griddata(points, uv[:,0], (grid_u, grid_v), method='cubic')
-        v_map = scipy.interpolate.griddata(points, uv[:,1], (grid_u, grid_v), method='cubic')
-
-        print(f"{u_map.shape=} {v_map.shape=}")
-
-        return BigHammerRemapper(u_map, v_map)
-        
 class BigHammerRemapper:
 
-    def __init__(self, u_map, v_map):
+    def __init__(self, u_map, v_map, roi):
         self.u_map = np.asarray(u_map, dtype=np.float32)
         self.v_map = np.asarray(v_map, dtype=np.float32)
+        self.roi = roi
 
     def __call__(self, image):
         return self.undistort_image(image)
 
     def undistort_image(self, image):
-        return cv.remap(image, self.u_map, self.v_map, cv.INTER_LINEAR, borderValue=(128,128,128))
+        image = cv.remap(image, self.u_map, self.v_map, cv.INTER_LINEAR, borderValue=(128,128,128))
+        if self.roi is not None:
+            x0, y0, x1, y1 = self.roi
+            image = image[y0:y1,x0:x1,:]
+        return image
