@@ -6,6 +6,7 @@ sys.path.insert(0, lib)
 
 import cv2 as cv
 import functools
+import json
 import math
 import numpy as np
 import re
@@ -150,20 +151,39 @@ def find_pieces(scanpath, crop=None, alpha=0., beta=0.):
         for center_mm, radius_mm in all_pieces:
             center_px = np.array(proj.mm_to_px(center_mm) + offset_px, dtype=np.int32)
             radius_px = int(radius_mm * proj.px_per_mm)
-            print(f"{center_px=} {radius_px=}")
+            # print(f"{center_px=} {radius_px=}")
             cv.circle(pano, center_px, radius_px, (0,255,255))
 
     dist = scipy.spatial.distance.pdist([i for i, _ in all_pieces])
 
     n = len(all_pieces)
+    
+    uniq_ids = dict((i,i) for i in range(n))
+
     print("Scanning for redundant pieces, {n} total pieces")
     k = 0
     for i in range(n-1):
         l = n-(i+1)
-        overlaps = np.flatnonzero(dist[k:k+l] < all_pieces[i][1])
+        overlaps = np.flatnonzero(dist[k:k+l] < all_pieces[i][1])+i+1
         if len(overlaps):
-            print(f"piece {i} overlaps pieces {overlaps+i+1}")
+            print(f"piece {i} overlaps pieces {overlaps}")
+            if uniq_ids[i] == i:
+                for m in overlaps:
+                    uniq_ids[m] = i
+            else:
+                # we expect all the overlapping pieces of piece 'i' to
+                # also have overlapped whatever it is that 'i'
+                # overlapped
+                assert all(uniq_ids[m] == uniq_ids[i] for m in overlaps)
         k += l
+    assert k == len(dist)
+
+    keepers = []
+    for k, v in uniq_ids.items():
+        if k == v:
+            keepers.append(all_pieces[k])
+
+    print(f"Found {n} pieces with initial scan, reduced to {len(keepers)} unique pieces")
 
     if False:
         for img, x, y in images2:
@@ -174,6 +194,12 @@ def find_pieces(scanpath, crop=None, alpha=0., beta=0.):
 
     opath = os.path.join(scanpath, "pano.png")
     cv.imwrite(opath, pano)
+
+    to_scan = [k[0].tolist() for k in keepers]
+
+    opath = os.path.join(scanpath, 'toscan.json')
+    with open(opath, 'w') as f:
+        f.write(json.dumps(to_scan, indent=4))
             
 
 def make_pano(path, crop = None):
