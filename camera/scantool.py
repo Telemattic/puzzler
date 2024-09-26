@@ -173,9 +173,13 @@ class ScantoolTk:
         self.frame_skip = 0
         ttk.Label(self.controls, textvar=self.var_frame_counter).grid(column=6, row=0)
 
-        ttk.Button(self.controls, text='home', command=self.do_home).grid(column=0, row=1)
-        ttk.Button(self.controls, text='gcode1', command=self.do_gcode1).grid(column=1, row=1)
-        ttk.Button(self.controls, text='gcode2', command=self.do_gcode2).grid(column=2, row=1)
+        f = ttk.LabelFrame(self.controls, text='GCode')
+        f.grid(column=0, row=1, columnspan=5)
+        ttk.Button(f, text='home', command=self.do_home).grid(column=0, row=0)
+        ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=1, row=0)
+        ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=2, row=0)
+        ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=3, row=0)
+        ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=4, row=0)
 
     def notify_camera_event(self, image):
         self.image_update = image
@@ -210,6 +214,45 @@ class ScantoolTk:
                 path = f'img_{i}_{j}.png'
                 print(f"save {x=} {y=} to {path}")
                 cv.imwrite(path, self.get_image())
+
+    def do_gcode3(self):
+        print("gcode3!")
+        self.send_gcode("G1 Z0")
+
+        for y in range(475,701,50):
+            for x in range(135,676,75):
+                self.send_gcode(f"G1 X{x} Y{y} F5000")
+                self.send_gcode("M400")
+                time.sleep(.5)
+                
+                path = f'scan_{x}_{y}.png'
+                print(f"save {x=} {y=} to {path}")
+                cv.imwrite(path, self.get_image())
+        print("All done!")
+        
+    def do_gcode4(self):
+        print("gcode4!")
+
+        with open('scan_x/toscan.json') as f:
+            coords = json.loads(f.read())
+
+        mm_per_pix = 25.4 / 600
+        image_w, image_h = 4000, 3000
+        x_offset = -(image_w / 2) * mm_per_pix
+        y_offset = (image_h / 2) * mm_per_pix
+        
+        self.send_gcode("G1 Z0")
+        n = len(coords)
+        for i, (x, y) in enumerate(coords):
+            self.send_gcode(f"G1 X{x+x_offset} Y{y+y_offset} F5000")
+            self.send_gcode("M400")
+            time.sleep(.5)
+
+            opath = f'scan_x/piece_{i}.png'
+            print(f"save piece {i}/{n} to {opath}")
+            cv.imwrite(opath, self.get_image())
+
+        print("All done!")
         
     def get_image(self):
 
@@ -245,6 +288,7 @@ class ScantoolTk:
             return
         
         corner_detector = CornerDetector(self.charuco_board)
+        corner_detector.median_ksize = 5
         corners, corner_ids = corner_detector.detect_corners(image)
 
         if corner_ids is None or len(corner_ids) == 0:
@@ -314,7 +358,7 @@ class ScantoolTk:
         dst_size = (w // 4, h // 4)
         image_binary = image_camera = cv.resize(image_update, dst_size)
 
-        if corners is not None:
+        if len(corners) > 0:
             min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
             inside = dict()
             border = dict()
