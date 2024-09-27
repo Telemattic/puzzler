@@ -1,5 +1,6 @@
 import cv2 as cv
 import functools
+import json
 import math
 import numpy as np
 import scipy.interpolate
@@ -398,23 +399,45 @@ class BigHammerCalibrator:
         ij_scale = pixels_per_mm * self.charuco_board.getSquareLength()
 
         # point closest to the center stays in place
-        grid_points = (np.asarray(grid_ij) - center_ij) * ij_scale + image_size/2
-        grid_values = np.array([grid_dict[ij] for ij in grid_ij])
-
         grid_points_u = (np.arange(min_i-1, max_i+2, 1) - center_ij[0]) * ij_scale + image_size[0]/2
         grid_points_v = (np.arange(min_j-1, max_j+2, 1) - center_ij[1]) * ij_scale + image_size[1]/2
         grid_values_u = np.zeros((max_i-min_i+3, max_j-min_j+3))
         grid_values_v = np.zeros((max_i-min_i+3, max_j-min_j+3))
 
-        print(f"{grid_points_u.shape=} {grid_points_v.shape=} {grid_values_u.shape=} {grid_values_v.shape=}")
         for j in range(min_j-1, max_j+2):
             for i in range(min_i-1, max_i+2):
                 uv = grid_dict[(i,j)]
                 grid_values_u[i-min_i+1,j-min_j+1] = uv[0]
                 grid_values_v[i-min_i+1,j-min_j+1] = uv[1]
 
-        u_range = np.arange(0, image_size[0], 1)
-        v_range = np.arange(0, image_size[1], 1)
+        ll, ur = (np.array([[min_i, min_j], [max_i, max_j]]) - center_ij) * ij_scale + image_size/2
+        ll = np.asarray(np.ceil(ll), dtype=np.int32).tolist()
+        ur = np.asarray(np.floor(ur), dtype=np.int32).tolist()
+        roi = tuple(ll + ur)
+        
+        print(f"{roi=}")
+
+        o = {'dpi':600.,
+             'roi':roi,
+             'points_u':grid_points_u.tolist(),
+             'points_v':grid_points_v.tolist(),
+             'values_u':grid_values_u.tolist(),
+             'values_v':grid_values_v.tolist()}
+        with open('camera-calibration.json', 'w') as f:
+            json.dump(o, f)
+
+        return BigHammerRemapper.from_calibration(o)
+
+        use_roi = False
+
+        if use_roi:
+            u_range = np.arange(0, image_size[0], 1)
+            v_range = np.arange(0, image_size[1], 1)
+        else:
+            x0, y0, x1, y1 = roi
+            u_range = np.arange(x0, x1, 1)
+            v_range = np.arange(y0, y1, 1)
+            
         grid_u, grid_v = np.meshgrid(u_range, v_range)
         
         u_interp = scipy.interpolate.RegularGridInterpolator((grid_points_u, grid_points_v), grid_values_u, method='linear', bounds_error=False)
@@ -423,28 +446,43 @@ class BigHammerCalibrator:
         v_interp = scipy.interpolate.RegularGridInterpolator((grid_points_u, grid_points_v), grid_values_v, method='linear', bounds_error=False)
         v_map = v_interp((grid_u, grid_v))
 
-        print(f"*** {u_map.shape=} {v_map.shape=} ***")
+        if use_roi:
+            x0, y0, x1, y1 = roi
+            u_map = u_map[y0:y1,x0:x1]
+            v_map = v_map[y0:y1,x0:x1]
 
-        ll, ur = (np.array([[min_i, min_j], [max_i, max_j]]) - center_ij) * ij_scale + image_size/2
-        ll = np.asarray(np.ceil(ll), dtype=np.int32).tolist()
-        ur = np.asarray(np.floor(ur), dtype=np.int32).tolist()
-        roi = tuple(ll + ur)
-
-        return BigHammerRemapper(u_map, v_map, roi)
+        return BigHammerRemapper(u_map, v_map)
 
 class BigHammerRemapper:
 
-    def __init__(self, u_map, v_map, roi):
+    @staticmethod
+    def from_calibration(calibration):
+        roi = tuple(calibration['roi'])
+        points_u = np.array(calibration['points_u'])
+        points_v = np.array(calibration['points_v'])
+        values_u = np.array(calibration['values_u'])
+        values_v = np.array(calibration['values_v'])
+
+        x0, y0, x1, y1 = roi
+        u_range = np.arange(x0, x1, 1)
+        v_range = np.arange(y0, y1, 1)
+            
+        grid_u, grid_v = np.meshgrid(u_range, v_range)
+        
+        u_interp = scipy.interpolate.RegularGridInterpolator((points_u, points_v), values_u, method='linear', bounds_error=False)
+        u_map = u_interp((grid_u, grid_v))
+        
+        v_interp = scipy.interpolate.RegularGridInterpolator((points_u, points_v), values_v, method='linear', bounds_error=False)
+        v_map = v_interp((grid_u, grid_v))
+
+        return BigHammerRemapper(u_map, v_map)
+
+    def __init__(self, u_map, v_map):
         self.u_map = np.asarray(u_map, dtype=np.float32)
         self.v_map = np.asarray(v_map, dtype=np.float32)
-        self.roi = roi
 
     def __call__(self, image):
         return self.undistort_image(image)
 
     def undistort_image(self, image):
-        image = cv.remap(image, self.u_map, self.v_map, cv.INTER_LINEAR, borderValue=(128,128,128))
-        if self.roi is not None:
-            x0, y0, x1, y1 = self.roi
-            image = image[y0:y1,x0:x1,:]
-        return image
+        return cv.remap(image, self.u_map, self.v_map, cv.INTER_LINEAR, borderValue=(128,128,128))
