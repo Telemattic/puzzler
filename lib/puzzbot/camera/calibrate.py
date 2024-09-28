@@ -384,10 +384,11 @@ class BigHammerCalibrator:
         lerper = scipy.interpolate.RBFInterpolator(ij, uv)
         Z = lerper(need_ij)
 
-        image_copy = cv.resize(image, None, fx=.25, fy=.25)
-        draw_detected_corners(image_copy, uv*.25, color=(255,128,0))
-        draw_detected_corners(image_copy, Z*.25, color=(0,128,255))
-        cv.imwrite('hammer_rbf.png', image_copy)
+        if False:
+            image_copy = cv.resize(image, None, fx=.25, fy=.25)
+            draw_detected_corners(image_copy, uv*.25, color=(255,128,0))
+            draw_detected_corners(image_copy, Z*.25, color=(0,128,255))
+            cv.imwrite('hammer_rbf.png', image_copy)
 
         need_dict = dict(zip(need_ij, Z))
 
@@ -417,41 +418,16 @@ class BigHammerCalibrator:
         
         print(f"{roi=}")
 
-        o = {'dpi':600.,
-             'roi':roi,
-             'points_u':grid_points_u.tolist(),
-             'points_v':grid_points_v.tolist(),
-             'values_u':grid_values_u.tolist(),
-             'values_v':grid_values_v.tolist()}
-        with open('camera-calibration.json', 'w') as f:
-            json.dump(o, f)
+        calibration = {
+            'dpi':600.,
+            'roi':roi,
+            'points_u':grid_points_u.tolist(),
+            'points_v':grid_points_v.tolist(),
+            'values_u':grid_values_u.tolist(),
+            'values_v':grid_values_v.tolist()
+        }
 
-        return BigHammerRemapper.from_calibration(o)
-
-        use_roi = False
-
-        if use_roi:
-            u_range = np.arange(0, image_size[0], 1)
-            v_range = np.arange(0, image_size[1], 1)
-        else:
-            x0, y0, x1, y1 = roi
-            u_range = np.arange(x0, x1, 1)
-            v_range = np.arange(y0, y1, 1)
-            
-        grid_u, grid_v = np.meshgrid(u_range, v_range)
-        
-        u_interp = scipy.interpolate.RegularGridInterpolator((grid_points_u, grid_points_v), grid_values_u, method='linear', bounds_error=False)
-        u_map = u_interp((grid_u, grid_v))
-        
-        v_interp = scipy.interpolate.RegularGridInterpolator((grid_points_u, grid_points_v), grid_values_v, method='linear', bounds_error=False)
-        v_map = v_interp((grid_u, grid_v))
-
-        if use_roi:
-            x0, y0, x1, y1 = roi
-            u_map = u_map[y0:y1,x0:x1]
-            v_map = v_map[y0:y1,x0:x1]
-
-        return BigHammerRemapper(u_map, v_map)
+        return calibration
 
 class BigHammerRemapper:
 

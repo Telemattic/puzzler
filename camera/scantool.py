@@ -27,8 +27,7 @@ from tkinter import ttk
 
 import cv2 as cv
 import puzzbot.camera.camera
-from puzzbot.camera.calibrate import CornerDetector, CameraCalibrator, PerspectiveComputer, PerspectiveWarper
-from puzzbot.camera.calibrate import BigHammerCalibrator
+from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, BigHammerRemapper
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
@@ -100,7 +99,6 @@ class ScantoolTk:
             aruco_dict
         )
         self.remapper = None
-        self.warper = None
 
     def _init_threads(self, root):
         self.camera_thread = CameraThread(self.camera, self.notify_camera_event)
@@ -146,35 +144,33 @@ class ScantoolTk:
 
         parent.bind("<Key>", self.key_event)
 
-        self.controls = ttk.Frame(self.frame, padding=5)
-        self.controls.grid(column=0, row=2, columnspan=2, sticky=(N, W, E, S))
+        controls = ttk.Frame(self.frame, padding=5)
+        controls.grid(column=0, row=2, columnspan=2, sticky=(N, W, E, S))
 
-        ttk.Button(self.controls, text='Calibrate', command=self.do_calibrate).grid(column=0, row=0)
+        ttk.Button(controls, text='Calibrate', command=self.do_calibrate).grid(column=0, row=0)
 
         self.var_undistort = IntVar(value=1)
-        ttk.Checkbutton(self.controls, text='Undistort', variable=self.var_undistort).grid(column=1, row=0)
+        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=1, row=0)
 
         self.var_detect_corners = IntVar(value=1)
-        ttk.Checkbutton(self.controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
-
-        self.var_fix_perspective = IntVar(value=1)
-        ttk.Checkbutton(self.controls, text='Fix Perspective', variable=self.var_fix_perspective).grid(column=3, row=0)
+        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
 
         self.var_detect_pieces = IntVar(value=1)
-        ttk.Checkbutton(self.controls, text='Detect Pieces', variable=self.var_detect_pieces).grid(column=4, row=0)
+        ttk.Checkbutton(controls, text='Detect Pieces', variable=self.var_detect_pieces).grid(column=3, row=0)
 
-        f = ttk.LabelFrame(self.controls, text='Exposure')
-        f.grid(column=5, row=0)
+        f = ttk.LabelFrame(controls, text='Exposure')
+        f.grid(column=4, row=0)
         self.var_exposure = DoubleVar(value=-6)
-        Scale(f, from_=-15, to=0, length=200, resolution=.25, orient=HORIZONTAL, variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
+        Scale(f, from_=-15, to=0, length=200, resolution=.25, orient=HORIZONTAL,
+              variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
 
         self.var_frame_counter = StringVar(value="frame")
         self.frame_no = 0
         self.frame_skip = 0
-        ttk.Label(self.controls, textvar=self.var_frame_counter).grid(column=6, row=0)
+        ttk.Label(controls, textvar=self.var_frame_counter).grid(column=5, row=0)
 
-        f = ttk.LabelFrame(self.controls, text='GCode')
-        f.grid(column=0, row=1, columnspan=5)
+        f = ttk.LabelFrame(self.frame, text='GCode')
+        f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
         ttk.Button(f, text='home', command=self.do_home).grid(column=0, row=0)
         ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=1, row=0)
         ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=2, row=0)
@@ -205,15 +201,16 @@ class ScantoolTk:
         print("gcode2!")
         self.send_gcode("G1 Z0")
 
-        for i, x in enumerate([0, 70]):
-            for j, y in enumerate([70, 140]):
+        for x in [0, 70, 140]:
+            for y in [70, 140, 210]:
                 self.send_gcode(f"G1 X{x} Y{y}")
                 self.send_gcode("M400")
                 time.sleep(.5)
 
-                path = f'img_{i}_{j}.png'
+                path = f'img_{x}_{y}.png'
                 print(f"save {x=} {y=} to {path}")
                 cv.imwrite(path, self.get_image())
+        print("All done!")
 
     def do_gcode3(self):
         print("gcode3!")
@@ -261,9 +258,6 @@ class ScantoolTk:
         if self.remapper and self.var_undistort.get():
             image = self.remapper.undistort_image(image)
             
-        if self.warper and self.var_fix_perspective.get():
-            image = self.warper.warp_image(image)
-
         return image
 
     def send_gcode(self, script):
@@ -271,7 +265,8 @@ class ScantoolTk:
         o = {'method':'gcode/script', 'params':{'script':script}, 'response':True}
         r = requests.post(self.server + '/bot', json=o)
         o = r.json()
-        print(o)
+        if o.get('result') != dict():
+            print(o)
 
     def do_exposure(self, arg):
         self.camera.set_exposure(self.var_exposure.get())
@@ -281,42 +276,14 @@ class ScantoolTk:
         print("Calibrating...")
         image = self.image_update
         self.remapper = None
-        self.warper = None
 
         if image is None:
             print("No image?!")
             return
         
-        corner_detector = CornerDetector(self.charuco_board)
-        corner_detector.median_ksize = 5
-        corners, corner_ids = corner_detector.detect_corners(image)
-
-        if corner_ids is None or len(corner_ids) == 0:
-            print("Failed to locate corners.")
-            return
-
-        hammer = BigHammerCalibrator(self.charuco_board).calibrate(image)
-        if hammer is not None:
-            cv.imwrite('hammer_0.png', image)
-            hammer_a = cv.resize(image, None, fx=.5, fy=.5)
-            draw_detected_corners(hammer_a, corners*.5, corner_ids)
-            cv.imwrite('hammer_a.png', hammer_a)
-            hammer_a = None
-            hammer_b = hammer(image)
-            draw_grid(hammer_b)
-            cv.imwrite('hammer_b.png', hammer_b)
-            hammer_b = None
-
-            self.remapper = hammer
-        else:
-
-            calibrator = CameraCalibrator(self.charuco_board)
-            self.remapper = calibrator.calibrate_camera(corners, corner_ids, image)
-
-            image = self.remapper.undistort_image(image)
-
-            p = PerspectiveComputer(self.charuco_board).compute_homography(image)
-            self.warper = PerspectiveWarper(p['homography'], p['image_size'])
+        calibration = BigHammerCalibrator(self.charuco_board).calibrate(image)
+        if calibration is not None:
+            self.remapper = BigHammerRemapper.from_calibration(calibration)
             
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
@@ -347,8 +314,6 @@ class ScantoolTk:
         if self.remapper and self.var_undistort.get():
             
             image_update = self.remapper.undistort_image(image_update)
-            if self.warper and self.var_fix_perspective.get():
-                image_update = self.warper.warp_image(image_update)
                 
         if self.var_detect_corners.get():
             corner_detector = CornerDetector(self.charuco_board)
@@ -381,46 +346,6 @@ class ScantoolTk:
         self.update_image_detail(image_update)
         self.update_image_binary(image_binary)
 
-    def do_perspective(self, image):
-
-        p = PerspectiveComputer(self.charuco_board).compute_homography(image)
-
-        warper = PerspectiveWarper(p['homography'], p['image_size'])
-
-        warped_image = warper.warp_image(image)
-
-        src_points = p['corners']
-        corner_ids = p['corner_ids']
-        mask = p['mask']
-
-        image = image.copy()
-        draw_grid(image)
-        draw_homography_points(image, src_points, mask)
-        if cv.imwrite('scantool_A.png', image):
-            print("image saved to scantool_A.png")
-
-        warped_points = warper.warp_points(src_points)
-        draw_grid(warped_image)
-        draw_homography_points(warped_image, warped_points, mask)
-        if cv.imwrite('scantool_B.png', warped_image):
-            print("image saved to scantool_B.png")
-
-        with open('distances.csv', 'w', newline='') as f:
-            writer = csv.DictWriter(f, 'i j axis dist'.split())
-            writer.writeheader()
-            lookup = {ij: xy for ij, xy in zip(corner_ids, warped_points)}
-            for (i, j), xy0 in lookup.items():
-                xy1 = lookup.get((i+1, j))
-                if xy1 is not None:
-                    dist = np.linalg.norm(xy1-xy0)
-                    writer.writerow({'i':i+.5, 'j':j, 'axis':'x', 'dist':dist})
-                xy1 = lookup.get((i, j+1))
-                if xy1 is not None:
-                    dist = np.linalg.norm(xy1-xy0)
-                    writer.writerow({'i':i, 'j':j+.5, 'axis':'y', 'dist':dist})
-
-        return warper
-        
     def update_image_camera(self, image_camera):
         
         self.image_camera = self.to_photo_image(image_camera)
