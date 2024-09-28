@@ -14,6 +14,7 @@ import scipy.spatial.distance
 import time
 from pprint import *
 from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, draw_detected_corners
+import puzzler
 
 class PieceFinder:
 
@@ -234,6 +235,7 @@ def global_calibrate(board, images):
     for xy, image in images.items():
         print(f"{xy=}")
         the_corners, the_ids = CornerDetector(board).detect_corners(image)
+        print(f"   {len(the_corners)} corners")
         corners[xy] = corners_to_dict(the_corners, the_ids)
 
     square_length = board.getSquareLength()
@@ -380,13 +382,59 @@ def make_corners_detectable(path, board):
             img2 = cv.bilateralFilter(img, d, sigma, sigma)
             print(f"  bilateralFilter({d=}, {sigma=}): {count_corners(img2)} corners detected")
             cv.imwrite(f'test_d/bilateral_d{d}_sigma{sigma}.png', img2)
-    
+
+def compute_hu_moments_for_pieces(pieces):
+    def moments(piece):
+        return cv.HuMoments(cv.moments(piece.points))
+    return dict((i.label, moments(i)) for i in pieces)
+
+def compare_moments(path_a, path_b):
+
+    puzzle_a = puzzler.file.load(path_a)
+    puzzle_b = puzzler.file.load(path_b)
+
+    # dict_a = compute_hu_moments_for_pieces(puzzle_a.pieces)
+    # dict_b = compute_hu_moments_for_pieces(puzzle_b.pieces)
+
+    for piece_b in puzzle_b.pieces:
+
+        for mode in (cv.CONTOURS_MATCH_I1, cv.CONTOURS_MATCH_I2, cv.CONTOURS_MATCH_I3):
+
+            scores = []
+            for piece_a in puzzle_a.pieces:
+                score = cv.matchShapes(piece_a.points, piece_b.points, mode, 0.)
+                scores.append((score, piece_a.label))
+
+            scores.sort()
+            print(f"piece_b={piece_b.label}")
+            print(f"{mode=} scores:")
+            for i, (score, label) in enumerate(scores):
+                print(f"{i} {score:.6f} {label}")
+                if label == piece_b.label:
+                    break
+            print()
+
+    for i in puzzle_a.pieces:
+        best_score = None
+        best_match = None
+        for j in puzzle_a.pieces:
+            if i != j:
+                score = cv.matchShapes(i.points, j.points, cv.CONTOURS_MATCH_I1, 0.)
+                if best_match is None or score < best_score:
+                    best_score = score
+                    best_match = j
+        print(f"i={i.label} j={best_match.label} score={best_score}")
+
 def main():
 
-    if True:
-        # scan_q: crop=(883, 245, 3575, 2653)
+    if False:
+        compare_moments('../bucks.json', '../fnord.json')
+        return None
+
+    if False:
+        # scan_q: crop=None, alpha=.00429247, beta=.00293304
         # scan_x: crop=(741, 245, 3716, 2653) alpha=-.0369759 beta=-0.0371328
-        find_pieces('scan_x', crop=(741, 245, 3716, 2653), alpha=-.0369759, beta=-0.0371328)
+        find_pieces('scan_q', crop=None, alpha=.00429247, beta=.00293304)
         return None
     
     if False:
@@ -402,17 +450,15 @@ def main():
 
     if False:
         repeat_alignment_directories('test_a', 'test_d', board)
-        # repeat_alignment_test('test_a/img_1_1.png', 'test_b/img_1_1.png', board)
         return None
 
     images = dict()
-    for j in range(2):
-        for i in range(2):
-            path = f"scan_x/img_{i}_{j}.png"
-            x = i * 70.
-            y = j * 70. + 70.
-            print(f"load {path}, {x=} {y=}")
-            images[(x,y)] = cv.imread(path)
+    for i in os.scandir('scan_x'):
+        if m := re.match('img_(\d+)_(\d+)\.png', i.name):
+            x = int(m[1])
+            y = int(m[2])
+            print(f"load {i.path}, {x=} {y=}")
+            images[(x,y)] = cv.imread(i.path)
 
     print("global_calibrate!")
     global_calibrate(board, images)
