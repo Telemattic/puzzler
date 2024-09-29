@@ -10,6 +10,7 @@ os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 
 import argparse
 import csv
+import cv2 as cv
 import io
 import json
 import math
@@ -17,7 +18,6 @@ import numpy as np
 import PIL.Image
 import PIL.ImageTk
 import requests
-import scipy
 import threading
 import time
 
@@ -25,7 +25,6 @@ from tkinter import *
 from tkinter import font
 from tkinter import ttk
 
-import cv2 as cv
 import puzzbot.camera.camera
 from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, BigHammerRemapper
 
@@ -77,6 +76,7 @@ class ScantoolTk:
 
         self.server = args.server
         self.config = config
+        self.calibration = self.config.get('calibration', {})
         self._init_charuco_board(config['charuco_board'])
         self._init_camera(args.camera, 4656, 3496)
         self._init_ui(parent)
@@ -147,7 +147,7 @@ class ScantoolTk:
         controls = ttk.Frame(self.frame, padding=5)
         controls.grid(column=0, row=2, columnspan=2, sticky=(N, W, E, S))
 
-        ttk.Button(controls, text='Calibrate', command=self.do_calibrate).grid(column=0, row=0)
+        ttk.Button(controls, text='Camera Calibrate', command=self.do_camera_calibrate).grid(column=0, row=0)
 
         self.var_undistort = IntVar(value=1)
         ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=1, row=0)
@@ -155,7 +155,7 @@ class ScantoolTk:
         self.var_detect_corners = IntVar(value=1)
         ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
 
-        self.var_detect_pieces = IntVar(value=1)
+        self.var_detect_pieces = IntVar(value=0)
         ttk.Checkbutton(controls, text='Detect Pieces', variable=self.var_detect_pieces).grid(column=3, row=0)
 
         f = ttk.LabelFrame(controls, text='Exposure')
@@ -172,10 +172,13 @@ class ScantoolTk:
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
         ttk.Button(f, text='home', command=self.do_home).grid(column=0, row=0)
-        ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=1, row=0)
-        ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=2, row=0)
-        ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=3, row=0)
-        ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=4, row=0)
+        ttk.Button(f, text='Gantry Calibrate', command=self.do_gantry_calibrate).grid(column=1, row=0)
+        ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=2, row=0)
+        ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=3, row=0)
+        ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=4, row=0)
+        ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=5, row=0)
+
+        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=6, row=0)
 
     def notify_camera_event(self, image):
         self.image_update = image
@@ -191,6 +194,71 @@ class ScantoolTk:
         # axes after homing
         #
         # self.send_gcode('FORCE_MOVE STEPPER=stepper_y DISTANCE=3 VELOCITY=500')
+
+    def do_save_config(self):
+        o = self.config.copy()
+        o['calibration'] = self.calibration
+        with open('the-config.json', 'w') as f:
+            json.dump(o, f, indent=4)
+
+    def do_gantry_calibrate(self):
+        print("gantry calibrate!")
+
+        all_corners = {}
+
+        board = self.charuco_board
+        detector = CornerDetector(board)
+        
+        for x in [0, 70, 140]:
+            for y in [70, 140, 210]:
+                self.send_gcode(f"G1 X{x} Y{y}")
+                self.send_gcode("M400")
+                time.sleep(.5)
+
+                image = self.get_image()
+                corners, ids = detector.detect_corners(image)
+                print(f"... found {len(corners)} corners")
+                if len(corners):
+                    all_corners[(x,y)] = dict(zip(ids,corners))
+
+        square_length = board.getSquareLength()
+        board_n_cols, board_n_rows = board.getChessboardSize()
+
+        gamma = (25.4 / 600) # mm/pixel
+
+        print(f"{square_length=} {board_n_cols=} {board_n_rows=}")
+
+        n_rows = 2 * sum(len(v) for v in all_corners.values())
+        n_cols = 4
+
+        A = np.zeros((n_rows, n_cols))
+        b = np.zeros((n_rows,))
+
+        r = 0
+        for (xm, ym), image_corners in all_corners.items():
+            for (ii, jj), (u, v) in image_corners.items():
+                xc = ii * square_length
+                yc = (board_n_rows - 1 - jj) * square_length
+                A[r,1] = -ym
+                A[r,2] = 1
+                b[r] = xc - xm - gamma * u
+                r += 1
+                A[r,0] = xm
+                A[r,3] = 1
+                b[r] = yc - ym + gamma * v
+                r += 1
+
+        # solve Ax = b
+        x = np.linalg.lstsq(A, b, rcond=None)[0]
+        print(f"{x=}")
+        alpha, beta = x[0], x[1]
+        error = alpha - beta
+        for units, scale in [('radians ', 1.), ('degrees ', 180./math.pi), ('mm/meter', 1000.)]:
+            print(f"{units}: alpha={alpha*scale:7.3f} beta={beta*scale:7.3f} error={error*scale:7.3f}")
+        
+        print("all done!")
+
+        self.calibration['gantry'] = {'alpha':x[0], 'beta':x[1]}
 
     def do_gcode1(self):
         print("gcode1!")
@@ -271,7 +339,7 @@ class ScantoolTk:
     def do_exposure(self, arg):
         self.camera.set_exposure(self.var_exposure.get())
 
-    def do_calibrate(self):
+    def do_camera_calibrate(self):
         start = time.monotonic()
         print("Calibrating...")
         image = self.image_update
@@ -287,6 +355,8 @@ class ScantoolTk:
             
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
+
+        self.calibration['camera'] = calibration
 
     def key_event(self, event):
         pass
@@ -323,7 +393,7 @@ class ScantoolTk:
         dst_size = (w // 4, h // 4)
         image_binary = image_camera = cv.resize(image_update, dst_size)
 
-        if len(corners) > 0:
+        if corners is not None and len(corners) > 0:
             min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
             inside = dict()
             border = dict()
