@@ -98,7 +98,6 @@ class ScantoolTk:
             board['marker_length'],
             aruco_dict
         )
-        self.remapper = None
 
     def _init_threads(self, root):
         self.camera_thread = CameraThread(self.camera, self.notify_camera_event)
@@ -121,6 +120,12 @@ class ScantoolTk:
             self.camera = pb.OpenCVCamera(camera_id, target_w, target_h)
         else:
             raise Exception(f"bad camera scheme: {scheme}")
+
+        self.remapper = None
+        
+        calibration = self.config['calibration']
+        if 'camera' in calibration:
+            self.remapper = BigHammerRemapper.from_calibration(calibration['camera'])
 
     def _init_ui(self, parent):
         self.frame = ttk.Frame(parent, padding=5)
@@ -498,26 +503,36 @@ class ScantoolTk:
 
 def main():
     parser = argparse.ArgumentParser(prog='scantool')
-    parser.add_argument("-c", "--camera")
-    parser.add_argument("-s", "--server", required=True)
+    parser.add_argument("-c", "--config")
+    parser.add_argument("--camera")
+    parser.add_argument("-s", "--server")
     args = parser.parse_args()
 
-    config = {
-        'charuco_board': {
-            'chessboard_size': (16,12),
-            'square_length': 10.,
-            'marker_length': 5.,
-            'aruco_dict':cv.aruco.DICT_4X4_100
+    if args.config:
+        with open(args.config) as f:
+            config = json.load(f)
+    else:
+        config = {}
+
+    if args.server:
+        config['server'] = args.server
+
+    if 'charuco_board' not in config:
+        config['charuco_board'] = {
+            'chessboard_size': (33,44),
+            'square_length': 6.,
+            'marker_length': 3.,
+            'aruco_dict':cv.aruco.DICT_4X4_1000
         }
-    }
 
-    config['charuco_board'] = {
-        'chessboard_size': (33,44),
-        'square_length': 6.,
-        'marker_length': 3.,
-        'aruco_dict': cv.aruco.DICT_4X4_1000
-    }
+    if 'calibration' not in config:
+        config['calibration'] = {}
 
+    if 'server' not in config:
+        print("Must specific server, either on command line or in configuration")
+        return
+
+    args.server = config['server']
     if args.camera is None:
         args.camera = args.server + "/camera"
         
