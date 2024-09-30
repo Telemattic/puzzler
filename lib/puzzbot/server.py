@@ -7,8 +7,10 @@ import libcamera
 import numpy as np
 import os
 import picamera2
+import pprint
 import queue
 import socket
+import sys
 import threading
 import time
 import urllib.parse
@@ -270,6 +272,14 @@ class BotServer(http.server.ThreadingHTTPServer):
     allow_reuse_address = True
     allow_reuse_port = True
 
+    def handle_error(self, request, client_address):
+        x = sys.exception()
+        if isinstance(x, ConnectionResetError):
+            print('ConnectionResetError: during processing of request from',
+                  client_address, file=sys.stderr)
+            return
+        return super().handle_error(request, client_address)
+
 def initialize_klipper(args):
 
     print("initializing klipper")
@@ -298,7 +308,7 @@ def initialize_camera(args):
         config['lores'] = {'size':(640, 480)}
         config['display'] = 'lores'
     
-    cc = camera.create_video_configuration(**config)
+    cc = camera.create_still_configuration(**config)
     camera.align_configuration(cc)
     camera.configure(cc)
     
@@ -309,7 +319,12 @@ def initialize_camera(args):
     camera.start()
     time.sleep(2)
 
-    print(f"camera started, config={camera.camera_configuration()}")
+    camera.set_controls({'AeEnable':True})
+    
+    print("camera started:")
+    o = {'config': _clean_config(camera.camera_configuration()),
+         'controls': camera.camera_controls}
+    pprint.pp(o, sort_dicts=True)
 
     return camera
 
