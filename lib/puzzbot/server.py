@@ -140,11 +140,15 @@ class BotRequestHandler(http.server.BaseHTTPRequestHandler):
 
         klipper = self.server.klipper
 
+        timeout = dict(params).get('timeout', None)
+        block = timeout is not None
         notifications = []
         try:
+            x = klipper.notifications.get(block=block, timeout=timeout)
             while True:
-                x = klipper.notifications.get(block=False)
                 notifications.append(x)
+                # after we receive the first response just drain the queue, but don't block again
+                x = klipper.notifications.get(block=False)
         except queue.Empty:
             pass
         
