@@ -296,9 +296,13 @@ def initialize_camera(args):
     camera = picamera2.Picamera2(camera_num=args.device)
 
     config = {
-        'main':{
+        'main': {
             'size': (args.width, args.height),
             'format': 'RGB888'
+        },
+        'lores': {
+            'size': (args.width//4, args.height//4),
+            'format': 'YUV420'
         },
         'display': 'main',
         'transform': libcamera.Transform(hflip=1, vflip=1)
