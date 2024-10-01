@@ -11,7 +11,7 @@ os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 import argparse
 import csv
 import cv2 as cv
-import io
+import itertools
 import json
 import math
 import numpy as np
@@ -56,6 +56,85 @@ def draw_grid(image):
         cv.polylines(image, [np.array([(x,0), (x,h-1)])], False, (192, 192, 0))
     for y in range(s,h,s):
         cv.polylines(image, [np.array([(0,y), (w-1,y)])], False, (192, 192, 0))
+
+class GantryCalibrator:
+
+    def __init__(self, bot, board, dpi=600.):
+        self.bot = bot
+        self.board = board
+        self.dpi = 600.
+
+    def calibrate(self, coordinates):
+        self.move_to(z=0)
+
+        images = {}
+        for x, y in coordinates:
+            images[(x,y)] = self.find_corners_at(x,y)
+
+        return self.compute_calibration(images)
+
+    def compute_calibration(self, images):
+        
+        square_length = self.board.getSquareLength()
+        board_n_cols, board_n_rows = self.board.getChessboardSize()
+
+        mm_per_pixel = 25.4 / self.dpi
+
+        n_rows = 2 * sum(len(v) for v in images.values())
+        n_cols = 4
+
+        A = np.zeros((n_rows, n_cols))
+        b = np.zeros((n_rows,))
+
+        r = 0
+        for (xm, ym), corners in images.items():
+            for (ii, jj), (u, v) in corners.items():
+                xc = ii * square_length
+                yc = (board_n_rows - 1 - jj) * square_length
+                A[r,1] = -ym
+                A[r,2] = 1
+                b[r] = xc - xm - mm_per_pixel * u
+                r += 1
+                A[r,0] = xm
+                A[r,3] = 1
+                b[r] = yc - ym + mm_per_pixel * v
+                r += 1
+
+        # solve Ax = b
+        x = np.linalg.lstsq(A, b, rcond=None)[0]
+        print(f"{x=}")
+        alpha, beta = x[0], x[1]
+        error = alpha - beta
+        for units, scale in [('radians ', 1.), ('degrees ', 180./math.pi), ('mm/meter', 1000.)]:
+            print(f"{units}: alpha={alpha*scale:7.3f} beta={beta*scale:7.3f} error={error*scale:7.3f}")
+            
+        return {'alpha':x[0], 'beta':x[1]}
+    
+    def find_corners_at(self, x, y):
+            
+        detector = CornerDetector(self.board)
+        
+        self.move_to(x=x, y=y)
+        time.sleep(.5)
+
+        image = self.bot.get_image()
+        corners, ids = detector.detect_corners(image)
+        return dict(zip(ids,corners))
+
+    def move_to(self, x=None, y=None, z=None, f=None):
+        v = ["G1"]
+        if x is not None:
+            v.append(f"X{x}")
+        if y is not None:
+            v.append(f"Y{y}")
+        if z is not None:
+            v.append(f"Z{z}")
+        if f is not None:
+            v.append(f"F{f}")
+            
+        self.bot.send_gcode(' '.join(v))
+        self.bot.send_gcode('M400')
+    
 
 class AxesStatus(ttk.LabelFrame):
 
@@ -185,7 +264,7 @@ class ScantoolTk:
         self.var_undistort = IntVar(value=1)
         ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=1, row=0)
 
-        self.var_detect_corners = IntVar(value=1)
+        self.var_detect_corners = IntVar(value=0)
         ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
 
         self.var_detect_pieces = IntVar(value=0)
@@ -297,66 +376,16 @@ class ScantoolTk:
 
     def do_gantry_calibrate(self):
         d = twisted_threads.deferToThread(self.gantry_calibrate_impl)
+        d.addCallback(self.set_gantry_calibration)
+
+    def set_gantry_calibration(self, calibration):
+        self.calibration['gantry'] = calibration
             
     def gantry_calibrate_impl(self):
-        print("gantry calibrate!")
-
-        all_corners = {}
-
-        board = self.charuco_board
-        detector = CornerDetector(board)
-        
-        for x in [0, 70, 140]:
-            for y in [70, 140, 210]:
-                self.send_gcode(f"G1 X{x} Y{y}")
-                self.send_gcode("M400")
-                time.sleep(.5)
-
-                image = self.get_image()
-                corners, ids = detector.detect_corners(image)
-                print(f"... found {len(corners)} corners")
-                if len(corners):
-                    all_corners[(x,y)] = dict(zip(ids,corners))
-
-        square_length = board.getSquareLength()
-        board_n_cols, board_n_rows = board.getChessboardSize()
-
-        gamma = (25.4 / 600) # mm/pixel
-
-        print(f"{square_length=} {board_n_cols=} {board_n_rows=}")
-
-        n_rows = 2 * sum(len(v) for v in all_corners.values())
-        n_cols = 4
-
-        A = np.zeros((n_rows, n_cols))
-        b = np.zeros((n_rows,))
-
-        r = 0
-        for (xm, ym), image_corners in all_corners.items():
-            for (ii, jj), (u, v) in image_corners.items():
-                xc = ii * square_length
-                yc = (board_n_rows - 1 - jj) * square_length
-                A[r,1] = -ym
-                A[r,2] = 1
-                b[r] = xc - xm - gamma * u
-                r += 1
-                A[r,0] = xm
-                A[r,3] = 1
-                b[r] = yc - ym + gamma * v
-                r += 1
-
-        # solve Ax = b
-        x = np.linalg.lstsq(A, b, rcond=None)[0]
-        print(f"{x=}")
-        alpha, beta = x[0], x[1]
-        error = alpha - beta
-        for units, scale in [('radians ', 1.), ('degrees ', 180./math.pi), ('mm/meter', 1000.)]:
-            print(f"{units}: alpha={alpha*scale:7.3f} beta={beta*scale:7.3f} error={error*scale:7.3f}")
-        
-        print("all done!")
-
-        self.calibration['gantry'] = {'alpha':x[0], 'beta':x[1]}
-
+        coordinates = list(itertools.product([0, 70, 140], [70, 140, 210]))
+        calibrator = GantryCalibrator(self, self.charuco_board)
+        return calibrator.calibrate(coordinates)
+    
     def do_gcode1(self):
         print("gcode1!")
         self.send_gcode("G1 Z0")
