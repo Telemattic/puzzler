@@ -18,12 +18,14 @@ import numpy as np
 import PIL.Image
 import PIL.ImageTk
 import requests
-import threading
 import time
 
 from tkinter import *
 from tkinter import font
 from tkinter import ttk
+import twisted.internet
+from twisted.internet import tksupport, reactor
+from twisted.internet import threads as twisted_threads
 
 import puzzbot.camera.camera
 from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, BigHammerRemapper
@@ -55,20 +57,40 @@ def draw_grid(image):
     for y in range(s,h,s):
         cv.polylines(image, [np.array([(0,y), (w-1,y)])], False, (192, 192, 0))
 
-class CameraThread(threading.Thread):
+class AxesStatus(ttk.LabelFrame):
 
-    def __init__(self, camera, callback):
-        super().__init__(daemon=True)
-        self.camera = camera
-        self.callback = callback
+    def __init__(self, parent, axes_and_labels):
+        def make_light(color):
+            image = PIL.Image.new('RGB', (16,16), color)
+            return PIL.ImageTk.PhotoImage(image=image)
+        super().__init__(parent, text='Axes')
+        self.images = [make_light((200,0,0)), make_light((0,200,0))]
+        self.axes = dict()
+        for i, (axis, label) in enumerate(axes_and_labels):
+            l = ttk.Label(self, image=self.images[0])
+            l.grid(column=i*2, row=0, sticky='W')
+            self.axes[axis] = l
+            l = ttk.Label(self, text=label)
+            l.grid(column=i*2+1, row=0, sticky='W')
 
-    def run(self):
+    def set_axes(self, axes):
+        for axis, value in axes.items():
+            self.axes[axis].configure(image=self.images[1 if value else 0])
 
-        i = 0
-        while True:
-            frame = self.camera.read()
-            self.callback(frame)
-            i += 1
+class AxesPosition(ttk.LabelFrame):
+
+    def __init__(self, parent):
+        super().__init__(parent, text='Position')
+        self.axes = dict()
+        for i, axis in enumerate('XYZA'):
+            s = StringVar(value=f"{axis} -")
+            self.axes[axis] = s
+            l = ttk.Label(self, textvar=s, width=12)
+            l.grid(column=i, row=0)
+
+    def set_axes(self, axes):
+        for axis, value in axes.items():
+            self.axes[axis].set(f"{axis}: {value:9.3f}")
 
 class ScantoolTk:
 
@@ -100,10 +122,14 @@ class ScantoolTk:
         )
 
     def _init_threads(self, root):
-        self.camera_thread = CameraThread(self.camera, self.notify_camera_event)
-        self.camera_busy = False
         root.bind("<<camera>>", self.camera_event)
-        self.camera_thread.start()
+        self.camera_busy = False
+        d = twisted_threads.deferToThread(self.camera.read, 'lores')
+        d.addCallback(self.notify_camera_event)
+
+        self.klipper_subscribe()
+        poll = twisted.internet.task.LoopingCall(self.klipper_poll)
+        poll.start(0)
 
     def _init_camera(self, camera, target_w, target_h):
         import puzzbot.camera.camera as pb
@@ -122,10 +148,12 @@ class ScantoolTk:
             raise Exception(f"bad camera scheme: {scheme}")
 
         self.remapper = None
+        self.remapper2 = None
         
         calibration = self.config['calibration']
         if 'camera' in calibration:
             self.remapper = BigHammerRemapper.from_calibration(calibration['camera'])
+            self.remapper2 = BigHammerRemapper.from_calibration(calibration['camera'], 4)
 
     def _init_ui(self, parent):
         self.frame = ttk.Frame(parent, padding=5)
@@ -185,20 +213,81 @@ class ScantoolTk:
 
         ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=6, row=0)
 
+        self.axes_status = AxesStatus(self.frame, [
+            ('stepper_x', 'X'),
+            ('stepper_y', 'Y1'),
+            ('stepper_y1', 'Y2'),
+            ('stepper_z', 'Z'),
+            ('manual_stepper stepper_a', 'A')
+        ])
+        self.axes_status.grid(column=0, row=4)
+
+        self.axes_position = AxesPosition(self.frame)
+        self.axes_position.grid(column=1, row=4)
+
+    def klipper_poll(self):
+        d = twisted_threads.deferToThread(requests.get, self.server + '/bot/notifications', params={'timeout':5})
+        d.addCallback(self.klipper_notifications_callback)
+        return d
+
+    def klipper_notifications_callback(self, notifications):
+        notifications.raise_for_status()
+        for o in notifications.json():
+            key = o.get('key', None)
+            params = o.get('params', None)
+            if key is None or params is None or len(o) != 2:
+                print("klipper notification mystery:", json.dumps(o, indent=4))
+            elif key == 'objects/subscribe':
+                self.klipper_objects_subscribe(params)
+            elif key == 'gcode/subscribe_output':
+                self.klipper_gcode_output(params)
+            else:
+                print("klipper notification mystery, unknown key:", json.dumps(o, indent=4))
+
+    def klipper_objects_subscribe(self, o):
+        eventtime = o.pop('eventtime')
+        status = o.pop('status')
+        assert len(o) == 0
+        
+        stepper_enable = status.pop('stepper_enable', None)
+        if stepper_enable:
+            self.axes_status.set_axes(stepper_enable['steppers'])
+            
+        motion_report = status.pop('motion_report', None)
+        if motion_report:
+            X, Y, Z = motion_report['live_position'][:3]
+            self.axes_position.set_axes({'X':X, 'Y':Y, 'Z':Z})
+
+        # don't know what to do with this
+        # idle_timeout = status.pop('idle_timeout', None)
+
+        if len(status):
+            print("klipper_objects_subscribe:", json.dumps(status, indent=4))
+
+    def klipper_gcode_output(self, o):
+        print("klipper_gcode_output:", json.dumps(o, indent=4))
+
     def notify_camera_event(self, image):
         self.image_update = image
         self.frame.event_generate("<<camera>>")
+        d = twisted_threads.deferToThread(self.camera.read, 'lores')
+        d.addCallback(self.notify_camera_event)
 
     def do_home(self):
+        d = twisted_threads.deferToThread(self.home_impl)
+
+    def home_impl(self):
         print("home!")
         self.send_gcode('G28 Z')
         self.send_gcode('G28 X Y')
+        self.send_gcode('MANUAL_STEPPER STEPPER=stepper_a ENABLE=1 SET_POSITION=0')
         self.send_gcode('M400')
         # in theory we could do a force move on stepper_y or
         # stepper_y1 to account for non-orthogonality of the X and Y
         # axes after homing
         #
         # self.send_gcode('FORCE_MOVE STEPPER=stepper_y DISTANCE=3 VELOCITY=500')
+        print("all done!")
 
     def do_save_config(self):
         o = self.config.copy()
@@ -207,6 +296,9 @@ class ScantoolTk:
             json.dump(o, f, indent=4)
 
     def do_gantry_calibrate(self):
+        d = twisted_threads.deferToThread(self.gantry_calibrate_impl)
+            
+    def gantry_calibrate_impl(self):
         print("gantry calibrate!")
 
         all_corners = {}
@@ -328,11 +420,38 @@ class ScantoolTk:
 
         image = self.camera.read()
         
-        if self.remapper and self.var_undistort.get():
+        if self.remapper: # and self.var_undistort.get():
             image = self.remapper.undistort_image(image)
             
         return image
 
+    def klipper_subscribe(self):
+        params = {
+            'objects': {
+                'idle_timeout':['state'],
+                'toolhead': ['homed_axes'],
+                'motion_report':['live_position'],
+                'stepper_enable':None,
+                'webhooks':None
+            },
+            'response_template': {
+                'key': 'objects/subscribe'
+            }
+        }
+        o = {'method':'objects/subscribe', 'params':params, 'response':True}
+        r = requests.post(self.server + '/bot', json=o)
+        print(r.json())
+        self.klipper_objects_subscribe(r.json()['result'])
+        
+        params = {
+            'response_template': {
+                'key': 'gcode/subscribe_output'
+            }
+        }
+        o = {'method':'gcode/subscribe_output', 'params':params, 'response':True}
+        r = requests.post(self.server + '/bot', json=o)
+        print(r.json())
+        
     def send_gcode(self, script):
         print(f"gcode: {script}")
         o = {'method':'gcode/script', 'params':{'script':script}, 'response':True}
@@ -347,8 +466,9 @@ class ScantoolTk:
     def do_camera_calibrate(self):
         start = time.monotonic()
         print("Calibrating...")
-        image = self.image_update
         self.remapper = None
+        self.remapper2 = None
+        image = self.get_image()
 
         if image is None:
             print("No image?!")
@@ -357,6 +477,7 @@ class ScantoolTk:
         calibration = BigHammerCalibrator(self.charuco_board).calibrate(image)
         if calibration is not None:
             self.remapper = BigHammerRemapper.from_calibration(calibration)
+            self.remapper2 = BigHammerRemapper.from_calibration(calibration, 4)
             
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
@@ -386,17 +507,21 @@ class ScantoolTk:
 
         corners, ids = None, None
         
-        if self.remapper and self.var_undistort.get():
-            
-            image_update = self.remapper.undistort_image(image_update)
+        if self.remapper2 and self.var_undistort.get():
+            image_update = self.remapper2.undistort_image(image_update)
                 
         if self.var_detect_corners.get():
             corner_detector = CornerDetector(self.charuco_board)
             corners, ids = corner_detector.detect_corners(image_update)
 
         h, w = image_update.shape[:2]
-        dst_size = (w // 4, h // 4)
-        image_binary = image_camera = cv.resize(image_update, dst_size)
+
+        if True:
+            dst_size = (w, h)
+            image_binary = image_camera = image_update.copy()
+        else:
+            dst_size = (w // 4, h // 4)
+            image_binary = image_camera = cv.resize(image_update, dst_size)
 
         if corners is not None and len(corners) > 0:
             min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
@@ -405,11 +530,11 @@ class ScantoolTk:
             outside = dict()
             for ij, uv in zip(ids, corners):
                 if min_i <= ij[0] <= max_i and min_j <= ij[1] <= max_j:
-                    inside[ij] = uv * .25
+                    inside[ij] = uv
                 elif min_i-1 <= ij[0] <= max_i+1 and min_j-1 <= ij[1] <= max_j+1:
-                    border[ij] = uv * .25
+                    border[ij] = uv
                 else:
-                    outside[ij] = uv * .25
+                    outside[ij] = uv
             if inside:
                 draw_detected_corners(image_camera, np.array(list(inside.values())), color=(255,0,0))
             if border:
@@ -539,7 +664,11 @@ def main():
     root = Tk()
     ui = ScantoolTk(root, args, config)
     root.title("PuZzLeR: scantool")
-    root.mainloop()
+    root.protocol('WM_DELETE_WINDOW', reactor.stop)
+    
+    # root.mainloop()
+    tksupport.install(root)
+    reactor.run()
 
 if __name__ == '__main__':
     main()
