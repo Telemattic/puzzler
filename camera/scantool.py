@@ -375,17 +375,14 @@ class ScantoolTk:
             json.dump(o, f, indent=4)
 
     def do_gantry_calibrate(self):
-        d = twisted_threads.deferToThread(self.gantry_calibrate_impl)
+        coordinates = list(itertools.product([0, 70, 140], [70, 140, 210]))
+        calibrator = GantryCalibrator(self, self.charuco_board)
+        d = twisted_threads.deferToThread(calibrator.calibrate, coordinates)
         d.addCallback(self.set_gantry_calibration)
 
     def set_gantry_calibration(self, calibration):
         self.calibration['gantry'] = calibration
             
-    def gantry_calibrate_impl(self):
-        coordinates = list(itertools.product([0, 70, 140], [70, 140, 210]))
-        calibrator = GantryCalibrator(self, self.charuco_board)
-        return calibrator.calibrate(coordinates)
-    
     def do_gcode1(self):
         print("gcode1!")
         self.send_gcode("G1 Z0")
@@ -689,10 +686,11 @@ def main():
     args.server = config['server']
     if args.camera is None:
         args.camera = args.server + "/camera"
-        
+
     root = Tk()
     ui = ScantoolTk(root, args, config)
     root.title("PuZzLeR: scantool")
+
     root.protocol('WM_DELETE_WINDOW', reactor.stop)
     
     # root.mainloop()
