@@ -121,9 +121,9 @@ class WebCamera(ICamera):
     def frame_size(self):
         return tuple(self.config['main']['size'])
 
-    def read(self):
+    def read(self, stream = 'main'):
         r = self.session.get(
-            self.host + '/image/main.jpeg', params={}, timeout=5)
+            self.host + f'/image/{stream}.jpeg', params={}, timeout=5)
         r.raise_for_status()
 
         # pprint.pprint(r.headers)
