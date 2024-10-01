@@ -432,17 +432,33 @@ class BigHammerCalibrator:
 class BigHammerRemapper:
 
     @staticmethod
-    def from_calibration(calibration):
+    def from_calibration(calibration, step=None):
+
         roi = tuple(calibration['roi'])
         points_u = np.array(calibration['points_u'])
         points_v = np.array(calibration['points_v'])
         values_u = np.array(calibration['values_u'])
         values_v = np.array(calibration['values_v'])
 
+        if step is not None:
+            x0, y0, x1, y1 = roi
+            w, h = x1-x0, y1-y0
+            x0 = x0 // step
+            y0 = y0 // step
+            x1 = x0 + w // step
+            y1 = y0 + h // step
+            roi = (x0, y0, x1, y1)
+            points_u = points_u * (1. / step)
+            points_v = points_v * (1. / step)
+            values_u = values_u * (1. / step)
+            values_v = values_v * (1. / step)
+
+        print(f"{roi=}")
+        
         x0, y0, x1, y1 = roi
         u_range = np.arange(x0, x1, 1)
         v_range = np.arange(y0, y1, 1)
-            
+
         grid_u, grid_v = np.meshgrid(u_range, v_range)
         
         u_interp = scipy.interpolate.RegularGridInterpolator((points_u, points_v), values_u, method='linear', bounds_error=False)
