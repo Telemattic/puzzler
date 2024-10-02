@@ -297,8 +297,6 @@ class ScantoolTk:
         )
 
     def _init_threads(self, root):
-        root.bind("<<camera>>", self.camera_event)
-        self.camera_busy = False
         d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
         d.addCallback(self.notify_camera_event)
 
@@ -423,8 +421,7 @@ class ScantoolTk:
         print("klipper_gcode_output:", json.dumps(o, indent=4))
 
     def notify_camera_event(self, image):
-        self.image_update = image
-        self.frame.event_generate("<<camera>>")
+        self.image_update(image)
         d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
         d.addCallback(self.notify_camera_event)
 
@@ -548,38 +545,22 @@ class ScantoolTk:
     def key_event(self, event):
         pass
 
-    def camera_event(self, event):
-
-        self.var_frame_counter.set(f"Frame {self.frame_no} ({self.frame_skip} skipped)")
-        self.frame_no += 1
-        
-        if self.camera_busy:
-            self.frame_skip += 1
-            return
-
-        self.camera_busy = True
-        try:
-            self.do_camera_event()
-        finally:
-            self.camera_busy = False
-
-    def do_camera_event(self):
-        image_update = self.image_update
+    def image_update(self, image):
 
         corners, ids = None, None
         
         if self.var_detect_corners.get():
             corner_detector = CornerDetector(self.charuco_board)
-            corners, ids = corner_detector.detect_corners(image_update)
+            corners, ids = corner_detector.detect_corners(image)
 
-        h, w = image_update.shape[:2]
+        h, w = image.shape[:2]
 
         if True:
             dst_size = (w, h)
-            image_binary = image_camera = image_update.copy()
+            image_binary = image_camera = image.copy()
         else:
             dst_size = (w // 4, h // 4)
-            image_binary = image_camera = cv.resize(image_update, dst_size)
+            image_binary = image_camera = cv.resize(image, dst_size)
 
         if corners is not None and len(corners) > 0:
             min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
@@ -601,7 +582,7 @@ class ScantoolTk:
                 draw_detected_corners(image_camera, np.array(list(outside.values())), color=(0,0,255))
 
         self.update_image_camera(image_camera)
-        self.update_image_detail(image_update)
+        self.update_image_detail(image)
         self.update_image_binary(image_binary)
 
     def update_image_camera(self, image_camera):
