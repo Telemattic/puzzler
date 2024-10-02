@@ -171,11 +171,82 @@ class AxesPosition(ttk.LabelFrame):
         for axis, value in axes.items():
             self.axes[axis].set(f"{axis}: {value:9.3f}")
 
+class KlipperException(Exception):
+    pass
+
+class Klipper:
+
+    def __init__(self, server):
+        self.server = server
+        self.request_url = self.server + "/bot"
+        self.notifications_url = self.server + "/bot/notifications"
+        self.callbacks = {}
+
+    def request(self, method, params, response=True):
+        o = {'method':method, 'params':params, 'response':response}
+        r = requests.post(self.request_url, json=o)
+        r.raise_for_status()
+        if not response:
+            return
+        o = r.json()
+        if 'result' not in o:
+            raise KlipperException(o)
+        return o['result']
+
+    def gcode_script(self, script):
+        print(f"gcode: {script}")
+        o = self.request('gcode/script', {'script':script})
+        if o != dict():
+            print(o)
+
+    def objects_subscribe(self, callback):
+        key = 'objects/subscribe'
+        params = {
+            'objects': {
+                'idle_timeout':['state'],
+                'toolhead': ['homed_axes'],
+                'motion_report':['live_position'],
+                'stepper_enable':None,
+                'webhooks':None
+            },
+            'response_template': {
+                'key': key
+            }
+        }
+        self.callbacks[key] = callback
+        o = self.request('objects/subscribe', params)
+        callback(o)
+
+    def gcode_subscribe_output(self, callback):
+        key = 'gcode/subscribe_output'
+        params = {
+            'response_template': {
+                'key': key
+            }
+        }
+        self.callbacks[key] = callback
+        return self.request('gcode/subscribe_output', params)
+        
+    def poll_notifications(self):
+        d = twisted_threads.deferToThread(requests.get, self.notifications_url, params={'timeout':5})
+        d.addCallback(self._notifications_callback)
+        return d
+
+    def _notifications_callback(self, notifications):
+        notifications.raise_for_status()
+        for o in notifications.json():
+            key = o.get('key', None)
+            params = o.get('params', None)
+            if key is None or params is None or len(o) != 2:
+                print("klipper notification mystery:", json.dumps(o, indent=4))
+            else:
+                self.callbacks[key](params)
+
 class ScantoolTk:
 
     def __init__(self, parent, args, config):
 
-        self.server = args.server
+        self.klipper = Klipper(args.server)
         self.config = config
         self.calibration = self.config.get('calibration', {})
         self._init_charuco_board(config['charuco_board'])
@@ -206,8 +277,9 @@ class ScantoolTk:
         d = twisted_threads.deferToThread(self.camera.read, 'lores')
         d.addCallback(self.notify_camera_event)
 
-        self.klipper_subscribe()
-        poll = twisted.internet.task.LoopingCall(self.klipper_poll)
+        self.klipper.objects_subscribe(self.klipper_objects_subscribe_callback)
+        self.klipper.gcode_subscribe_output(self.klipper_gcode_subscribe_output_callback)
+        poll = twisted.internet.task.LoopingCall(self.klipper.poll_notifications)
         poll.start(0)
 
     def _init_camera(self, camera, target_w, target_h):
@@ -304,26 +376,7 @@ class ScantoolTk:
         self.axes_position = AxesPosition(self.frame)
         self.axes_position.grid(column=1, row=4)
 
-    def klipper_poll(self):
-        d = twisted_threads.deferToThread(requests.get, self.server + '/bot/notifications', params={'timeout':5})
-        d.addCallback(self.klipper_notifications_callback)
-        return d
-
-    def klipper_notifications_callback(self, notifications):
-        notifications.raise_for_status()
-        for o in notifications.json():
-            key = o.get('key', None)
-            params = o.get('params', None)
-            if key is None or params is None or len(o) != 2:
-                print("klipper notification mystery:", json.dumps(o, indent=4))
-            elif key == 'objects/subscribe':
-                self.klipper_objects_subscribe(params)
-            elif key == 'gcode/subscribe_output':
-                self.klipper_gcode_output(params)
-            else:
-                print("klipper notification mystery, unknown key:", json.dumps(o, indent=4))
-
-    def klipper_objects_subscribe(self, o):
+    def klipper_objects_subscribe_callback(self, o):
         eventtime = o.pop('eventtime')
         status = o.pop('status')
         assert len(o) == 0
@@ -343,7 +396,7 @@ class ScantoolTk:
         if len(status):
             print("klipper_objects_subscribe:", json.dumps(status, indent=4))
 
-    def klipper_gcode_output(self, o):
+    def klipper_gcode_subscribe_output_callback(self, o):
         print("klipper_gcode_output:", json.dumps(o, indent=4))
 
     def notify_camera_event(self, image):
@@ -404,6 +457,9 @@ class ScantoolTk:
         print("All done!")
 
     def do_gcode3(self):
+        d = twisted_threads.deferToThread(self.gcode3_impl)
+
+    def gcode3_impl(self):
         print("gcode3!")
         self.send_gcode("G1 Z0")
 
@@ -451,40 +507,8 @@ class ScantoolTk:
             
         return image
 
-    def klipper_subscribe(self):
-        params = {
-            'objects': {
-                'idle_timeout':['state'],
-                'toolhead': ['homed_axes'],
-                'motion_report':['live_position'],
-                'stepper_enable':None,
-                'webhooks':None
-            },
-            'response_template': {
-                'key': 'objects/subscribe'
-            }
-        }
-        o = {'method':'objects/subscribe', 'params':params, 'response':True}
-        r = requests.post(self.server + '/bot', json=o)
-        print(r.json())
-        self.klipper_objects_subscribe(r.json()['result'])
-        
-        params = {
-            'response_template': {
-                'key': 'gcode/subscribe_output'
-            }
-        }
-        o = {'method':'gcode/subscribe_output', 'params':params, 'response':True}
-        r = requests.post(self.server + '/bot', json=o)
-        print(r.json())
-        
     def send_gcode(self, script):
-        print(f"gcode: {script}")
-        o = {'method':'gcode/script', 'params':{'script':script}, 'response':True}
-        r = requests.post(self.server + '/bot', json=o)
-        o = r.json()
-        if o.get('result') != dict():
-            print(o)
+        self.klipper.gcode_script(script)
 
     def do_exposure(self, arg):
         self.camera.set_exposure(self.var_exposure.get())
