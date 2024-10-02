@@ -94,11 +94,12 @@ class PieceFinder:
         R = np.array([[np.cos(alpha), -np.sin(beta)],
                       [np.sin(alpha), np.cos(beta)]])
 
+        self.klipper.move_to(z=0)
+        
         images = []
         for y in range(y0, y1, self.y_step):
             for x in range(x0, x1, self.x_step):
-                self.klipper.gcode_script(f"G1 X{x} Y{y} F5000")
-                self.klipper.gcode_script("M400")
+                self.klipper.move_to(x=x, y=y, f=5000)
                 time.sleep(.5)
                 image = self.camera.get_calibrated_image()
 
@@ -195,7 +196,7 @@ class GantryCalibrator:
         self.dpi = 600.
 
     def calibrate(self, coordinates):
-        self.move_to(z=0)
+        self.klipper.move_to(z=0)
 
         images = {}
         for x, y in coordinates:
@@ -244,27 +245,12 @@ class GantryCalibrator:
             
         detector = CornerDetector(self.board)
         
-        self.move_to(x=x, y=y)
+        self.klipper.move_to(x=x, y=y)
         time.sleep(.5)
 
         image = self.camera.get_calibrated_image()
         corners, ids = detector.detect_corners(image)
         return dict(zip(ids,corners))
-
-    def move_to(self, x=None, y=None, z=None, f=None):
-        v = ["G1"]
-        if x is not None:
-            v.append(f"X{x}")
-        if y is not None:
-            v.append(f"Y{y}")
-        if z is not None:
-            v.append(f"Z{z}")
-        if f is not None:
-            v.append(f"F{f}")
-            
-        self.klipper.gcode_script(' '.join(v))
-        self.klipper.gcode_script('M400')
-    
 
 class AxesStatus(ttk.LabelFrame):
 
@@ -312,6 +298,21 @@ class Klipper:
         self.notifications_url = self.server + "/bot/notifications"
         self.callbacks = {}
 
+    def move_to(self, x=None, y=None, z=None, f=None, wait=True):
+        v = ["G1"]
+        if x is not None:
+            v.append(f"X{x}")
+        if y is not None:
+            v.append(f"Y{y}")
+        if z is not None:
+            v.append(f"Z{z}")
+        if f is not None:
+            v.append(f"F{f}")
+            
+        self.gcode_script(' '.join(v))
+        if wait:
+            self.gcode_script('M400')
+    
     def request(self, method, params, response=True):
         o = {'method':method, 'params':params, 'response':response}
         r = requests.post(self.request_url, json=o)
