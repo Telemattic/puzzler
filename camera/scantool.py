@@ -339,14 +339,6 @@ class ScantoolTk:
                                     background='gray', highlightthickness=0)
         self.canvas_camera.grid(column=0, row=0, columnspan=2, sticky=(N, W, E, S))
 
-        self.canvas_detail = Canvas(self.frame, width=w//8, height=h//8,
-                                    background='gray', highlightthickness=0)
-        self.canvas_detail.grid(column=0, row=1, sticky=(N, W, E, S))
-
-        self.canvas_binary = Canvas(self.frame, width=w//8, height=h//8,
-                                    background='gray', highlightthickness=0)
-        self.canvas_binary.grid(column=1, row=1, sticky=(N, W, E, S))
-
         parent.bind("<Key>", self.key_event)
 
         controls = ttk.Frame(self.frame, padding=5)
@@ -359,9 +351,6 @@ class ScantoolTk:
 
         self.var_detect_corners = IntVar(value=0)
         ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
-
-        self.var_detect_pieces = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Detect Pieces', variable=self.var_detect_pieces).grid(column=3, row=0)
 
         f = ttk.LabelFrame(controls, text='Exposure')
         f.grid(column=4, row=0)
@@ -545,118 +534,48 @@ class ScantoolTk:
     def key_event(self, event):
         pass
 
+    def detect_corners_and_annotate_image(self, image):
+
+        corner_detector = CornerDetector(self.charuco_board)
+        corners, ids = corner_detector.detect_corners(image)
+
+        if len(corners) == 0:
+            return
+        
+        min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
+        inside = dict()
+        border = dict()
+        outside = dict()
+        for ij, uv in zip(ids, corners):
+            if min_i <= ij[0] <= max_i and min_j <= ij[1] <= max_j:
+                inside[ij] = uv
+            elif min_i-1 <= ij[0] <= max_i+1 and min_j-1 <= ij[1] <= max_j+1:
+                border[ij] = uv
+            else:
+                outside[ij] = uv
+        if inside:
+            draw_detected_corners(image_camera, np.array(list(inside.values())), color=(255,0,0))
+        if border:
+            draw_detected_corners(image_camera, np.array(list(border.values())), color=(0,255,0))
+        if outside:
+            draw_detected_corners(image_camera, np.array(list(outside.values())), color=(0,0,255))
+
     def image_update(self, image):
 
-        corners, ids = None, None
-        
         if self.var_detect_corners.get():
-            corner_detector = CornerDetector(self.charuco_board)
-            corners, ids = corner_detector.detect_corners(image)
-
-        h, w = image.shape[:2]
-
-        if True:
-            dst_size = (w, h)
-            image_binary = image_camera = image.copy()
-        else:
-            dst_size = (w // 4, h // 4)
-            image_binary = image_camera = cv.resize(image, dst_size)
-
-        if corners is not None and len(corners) > 0:
-            min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
-            inside = dict()
-            border = dict()
-            outside = dict()
-            for ij, uv in zip(ids, corners):
-                if min_i <= ij[0] <= max_i and min_j <= ij[1] <= max_j:
-                    inside[ij] = uv
-                elif min_i-1 <= ij[0] <= max_i+1 and min_j-1 <= ij[1] <= max_j+1:
-                    border[ij] = uv
-                else:
-                    outside[ij] = uv
-            if inside:
-                draw_detected_corners(image_camera, np.array(list(inside.values())), color=(255,0,0))
-            if border:
-                draw_detected_corners(image_camera, np.array(list(border.values())), color=(0,255,0))
-            if outside:
-                draw_detected_corners(image_camera, np.array(list(outside.values())), color=(0,0,255))
-
-        self.update_image_camera(image_camera)
-        self.update_image_detail(image)
-        self.update_image_binary(image_binary)
-
-    def update_image_camera(self, image_camera):
+            self.detect_corners_and_annotate_image(image)
         
-        self.image_camera = self.to_photo_image(image_camera)
+        self.image_camera = self.to_photo_image(image)
         self.canvas_camera.delete('all')
         win_w, win_h = self.canvas_camera.winfo_width(), self.canvas_camera.winfo_height()
-        img_h, img_w = image_camera.shape[:2]
+        img_h, img_w = image.shape[:2]
         x, y = (win_w - img_w) // 2, (win_h - img_h) // 2
         self.canvas_camera.create_image((x, y), image=self.image_camera, anchor=NW)
-
-    def update_image_detail(self, image_full):
-
-        dst_w, dst_h = self.canvas_detail.winfo_width(), self.canvas_detail.winfo_height()
-        src_h, src_w = image_full.shape[:2]
-        src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
-        image_detail = image_full[src_y:src_y+dst_h, src_x:src_x+dst_w]
-
-        self.image_detail = self.to_photo_image(image_detail)
-        self.canvas_detail.delete('all')
-        self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
-
-    def update_image_binary(self, image_camera):
-
-        if not self.var_detect_pieces.get():
-            self.canvas_binary.delete('all')
-            return
-
-        gray = cv.cvtColor(image_camera, cv.COLOR_BGR2GRAY)
-        hist = np.bincount(image_camera.ravel())
-
-        if False:
-            thresh = cv.adaptiveThreshold(gray, 255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 127, -16)
-        elif True:
-            thresh = cv.threshold(gray, 130, 255, cv.THRESH_BINARY)[1]
-        else:
-            thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY+cv.THRESH_OTSU)[1]
-            
-        kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
-        thresh = cv.erode(thresh, kernel)
-        thresh = cv.dilate(thresh, kernel)
-
-        image_binary = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)
-        
-        if True:
-            contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)[0]
-            cv.drawContours(image_binary, contours, -1, (0,255,0), thickness=2, lineType=cv.LINE_AA)
-            for c in contours:
-                r = cv.boundingRect(c)
-                r = (r[0]-25, r[1]-25, r[2]+50, r[3]+50)
-                if r[0] < 0 or r[1] < 0:
-                    continue
-                if r[0] + r[2] >= thresh.shape[1] or r[1] + r[3] >= thresh.shape[0]:
-                    continue
-                cv.rectangle(image_binary, r, (255,0,0), thickness=2)
-
-        if True:
-            x0 = 20
-            y0 = image_binary.shape[0] - 20
-            x_coords = x0 + np.arange(len(hist))
-            y_coords = y0 - (hist * 200) // np.max(hist)
-            pts = np.array(np.vstack((x_coords, y_coords)).T, dtype=np.int32)
-            cv.polylines(image_binary, [np.array([(x0, y0), (x0+255, y0)])], False, (192, 192, 0), thickness=2)
-            cv.polylines(image_binary, [pts], False, (255, 255, 0), thickness=2)
-        
-        dst_size = (self.camera.frame_size[0]//8, self.camera.frame_size[1]//8)
-        self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
-        self.canvas_binary.delete('all')
-        self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
 
     @staticmethod
     def to_photo_image(image):
         h, w = image.shape[:2]
-        if len(image.shape) == 3:
+        if image.ndim == 3:
             dst_mode = 'RGB'
             src_mode = 'BGR'
         else:
