@@ -9,6 +9,7 @@ sys.path.insert(0, lib)
 os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 
 import argparse
+import collections
 import csv
 import cv2 as cv
 import itertools
@@ -27,7 +28,6 @@ import twisted.internet
 from twisted.internet import tksupport, reactor
 from twisted.internet import threads as twisted_threads
 
-import puzzbot.camera.camera
 from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, BigHammerRemapper
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
@@ -59,8 +59,9 @@ def draw_grid(image):
 
 class GantryCalibrator:
 
-    def __init__(self, bot, board, dpi=600.):
-        self.bot = bot
+    def __init__(self, klipper, camera, board, dpi=600.):
+        self.klipper = klipper
+        self.camera = camera
         self.board = board
         self.dpi = 600.
 
@@ -117,7 +118,7 @@ class GantryCalibrator:
         self.move_to(x=x, y=y)
         time.sleep(.5)
 
-        image = self.bot.get_image()
+        image = self.camera.get_calibrated_image()
         corners, ids = detector.detect_corners(image)
         return dict(zip(ids,corners))
 
@@ -132,8 +133,8 @@ class GantryCalibrator:
         if f is not None:
             v.append(f"F{f}")
             
-        self.bot.send_gcode(' '.join(v))
-        self.bot.send_gcode('M400')
+        self.klipper.gcode_script(' '.join(v))
+        self.klipper.gcode_script('M400')
     
 
 class AxesStatus(ttk.LabelFrame):
@@ -242,6 +243,30 @@ class Klipper:
             else:
                 self.callbacks[key](params)
 
+class CalibratedCamera:
+
+    def __init__(self, raw_camera):
+        self.raw_camera = raw_camera
+        self.remappers = collections.defaultdict(lambda x: x)
+
+    def set_calibration(self, calibration):
+        self.remappers['main'] = BigHammerRemapper.from_calibration(calibration)
+        self.remappers['lores'] = BigHammerRemapper.from_calibration(calibration, 4)
+
+    def get_raw_image(self, stream='main'):
+        return self.raw_camera.read(stream)
+
+    def get_calibrated_image(self, stream='main'):
+        raw_image = self.get_raw_image(stream)
+        return self.remappers[stream].undistort_image(raw_image)
+
+    def get_image(self, stream='main', calibrated=True):
+        return self.get_calibrated_image(stream) if calibrated else self.get_raw_image(stream)
+
+    @property
+    def frame_size(self):
+        return self.raw_camera.frame_size
+
 class ScantoolTk:
 
     def __init__(self, parent, args, config):
@@ -274,7 +299,7 @@ class ScantoolTk:
     def _init_threads(self, root):
         root.bind("<<camera>>", self.camera_event)
         self.camera_busy = False
-        d = twisted_threads.deferToThread(self.camera.read, 'lores')
+        d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
         d.addCallback(self.notify_camera_event)
 
         self.klipper.objects_subscribe(self.klipper_objects_subscribe_callback)
@@ -288,23 +313,21 @@ class ScantoolTk:
         
         iface = camera[:camera.find(':')]
         if iface.lower() in ('http', 'https'):
-            self.camera = pb.WebCamera(camera)
+            raw_camera = pb.WebCamera(camera)
         elif iface.lower() in ('rpi'):
-            self.camera = pb.RPiCamera()
+            raw_camera = pb.RPiCamera()
         elif iface.lower() in ('opencv', 'cv'):
             args = camera[camera.find(':'):]
             camera_id = int(args)
-            self.camera = pb.OpenCVCamera(camera_id, target_w, target_h)
+            raw_camera = pb.OpenCVCamera(camera_id, target_w, target_h)
         else:
             raise Exception(f"bad camera scheme: {scheme}")
 
-        self.remapper = None
-        self.remapper2 = None
-        
+        self.camera = CalibratedCamera(raw_camera)
+
         calibration = self.config['calibration']
         if 'camera' in calibration:
-            self.remapper = BigHammerRemapper.from_calibration(calibration['camera'])
-            self.remapper2 = BigHammerRemapper.from_calibration(calibration['camera'], 4)
+            self.camera.set_calibration(calibration['camera'])
 
     def _init_ui(self, parent):
         self.frame = ttk.Frame(parent, padding=5)
@@ -402,7 +425,7 @@ class ScantoolTk:
     def notify_camera_event(self, image):
         self.image_update = image
         self.frame.event_generate("<<camera>>")
-        d = twisted_threads.deferToThread(self.camera.read, 'lores')
+        d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
         d.addCallback(self.notify_camera_event)
 
     def do_home(self):
@@ -429,7 +452,7 @@ class ScantoolTk:
 
     def do_gantry_calibrate(self):
         coordinates = list(itertools.product([0, 70, 140], [70, 140, 210]))
-        calibrator = GantryCalibrator(self, self.charuco_board)
+        calibrator = GantryCalibrator(self.klipper, self.camera, self.charuco_board)
         d = twisted_threads.deferToThread(calibrator.calibrate, coordinates)
         d.addCallback(self.set_gantry_calibration)
 
@@ -453,7 +476,7 @@ class ScantoolTk:
 
                 path = f'img_{x}_{y}.png'
                 print(f"save {x=} {y=} to {path}")
-                cv.imwrite(path, self.get_image())
+                cv.imwrite(path, self.camera.get_calibrated_image())
         print("All done!")
 
     def do_gcode3(self):
@@ -471,7 +494,7 @@ class ScantoolTk:
                 
                 path = f'scan_{x}_{y}.png'
                 print(f"save {x=} {y=} to {path}")
-                cv.imwrite(path, self.get_image())
+                cv.imwrite(path, self.camera.get_calibrated_image())
         print("All done!")
         
     def do_gcode4(self):
@@ -494,19 +517,10 @@ class ScantoolTk:
 
             opath = f'scan_x/piece_{i}.png'
             print(f"save piece {i}/{n} to {opath}")
-            cv.imwrite(opath, self.get_image())
+            cv.imwrite(opath, self.get_calibrated_image())
 
         print("All done!")
         
-    def get_image(self):
-
-        image = self.camera.read()
-        
-        if self.remapper: # and self.var_undistort.get():
-            image = self.remapper.undistort_image(image)
-            
-        return image
-
     def send_gcode(self, script):
         self.klipper.gcode_script(script)
 
@@ -516,9 +530,7 @@ class ScantoolTk:
     def do_camera_calibrate(self):
         start = time.monotonic()
         print("Calibrating...")
-        self.remapper = None
-        self.remapper2 = None
-        image = self.get_image()
+        image = self.camera.get_raw_image()
 
         if image is None:
             print("No image?!")
@@ -526,8 +538,7 @@ class ScantoolTk:
         
         calibration = BigHammerCalibrator(self.charuco_board).calibrate(image)
         if calibration is not None:
-            self.remapper = BigHammerRemapper.from_calibration(calibration)
-            self.remapper2 = BigHammerRemapper.from_calibration(calibration, 4)
+            self.camera.set_calibration(calibration)
             
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
@@ -557,9 +568,6 @@ class ScantoolTk:
 
         corners, ids = None, None
         
-        if self.remapper2 and self.var_undistort.get():
-            image_update = self.remapper2.undistort_image(image_update)
-                
         if self.var_detect_corners.get():
             corner_detector = CornerDetector(self.charuco_board)
             corners, ids = corner_detector.detect_corners(image_update)
