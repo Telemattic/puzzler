@@ -19,6 +19,7 @@ import numpy as np
 import PIL.Image
 import PIL.ImageTk
 import requests
+import scipy.spatial.distance
 import time
 
 from tkinter import *
@@ -56,6 +57,134 @@ def draw_grid(image):
         cv.polylines(image, [np.array([(x,0), (x,h-1)])], False, (192, 192, 0))
     for y in range(s,h,s):
         cv.polylines(image, [np.array([(0,y), (w-1,y)])], False, (192, 192, 0))
+
+class ImageProjection:
+
+    def __init__(self, coord_mm, px_per_mm):
+        self.coord_mm = coord_mm
+        self.px_per_mm = px_per_mm
+
+    def px_to_mm(self, px):
+        mm_per_px = 1 / self.px_per_mm
+        return np.asarray(px) * (mm_per_px, -mm_per_px) + self.coord_mm
+
+    def mm_to_px(self, mm):
+        return (np.asarray(mm) - self.coord_mm) * (self.px_per_mm, -self.px_per_mm)
+
+class PieceFinder:
+
+    def __init__(self, klipper, camera, calibration):
+        self.klipper = klipper
+        self.camera = camera
+        self.calibration = calibration
+        self.image_dpi = 600.
+        self.image_binary_threshold = 130
+        self.min_size_mm = 10
+        self.max_size_mm = 50
+        self.margin_px = 5
+        self.x_step = 75
+        self.y_step = 50
+
+    def find_pieces(self, rect):
+
+        x0, y0, x1, y1 = rect
+
+        alpha = self.calibration['alpha']
+        beta = self.calibration['beta']
+        R = np.array([[np.cos(alpha), -np.sin(beta)],
+                      [np.sin(alpha), np.cos(beta)]])
+
+        images = []
+        for y in range(y0, y1, self.y_step):
+            for x in range(x0, x1, self.x_step):
+                self.klipper.gcode_script(f"G1 X{x} Y{y} F5000")
+                self.klipper.gcode_script("M400")
+                time.sleep(.5)
+                image = self.camera.get_calibrated_image()
+
+                pieces = self.find_pieces_one_image(image)
+                images.append(((x, y), pieces))
+
+        all_pieces = []
+        px_per_mm = self.image_dpi / 25.4
+        for image_no, (xy, pieces) in enumerate(images):
+
+            xy_mm = R @ np.array(xy).T
+
+            proj = ImageProjection(xy_mm, px_per_mm)
+
+            for r in pieces:
+                x, y, w, h = r
+                center_px = np.array((x + w/2, (y + h/2)))
+                radius_px = math.hypot(w, h) / 2
+
+                center_mm = proj.px_to_mm(center_px)
+                radius_mm = radius_px / px_per_mm
+
+                all_pieces.append((center_mm, radius_mm))
+
+        dist = scipy.spatial.distance.pdist([i for i, _ in all_pieces])
+
+        n = len(all_pieces)
+
+        uniq_ids = dict((i,i) for i in range(n))
+
+        print("Scanning for redundant pieces, {n} total pieces")
+        k = 0
+        for i in range(n-1):
+            l = n-(i+1)
+            overlaps = np.flatnonzero(dist[k:k+l] < all_pieces[i][1])+i+1
+            if len(overlaps):
+                print(f"piece {i} overlaps pieces {overlaps}")
+                if uniq_ids[i] == i:
+                    for m in overlaps:
+                        uniq_ids[m] = i
+                else:
+                    # we expect all the overlapping pieces of piece 'i' to
+                    # also have overlapped whatever it is that 'i'
+                    # overlapped
+                    assert all(uniq_ids[m] == uniq_ids[i] for m in overlaps)
+            k += l
+        assert k == len(dist)
+
+        keepers = []
+        for k, v in uniq_ids.items():
+            if k == v:
+                keepers.append(all_pieces[k])
+
+        print(f"Found {n} pieces with initial scan, reduced to {len(keepers)} unique pieces")
+
+        to_scan = [k[0].tolist() for k in keepers]
+
+        with open('toscan.json', 'w') as f:
+            f.write(json.dumps(to_scan, indent=4))
+
+    def find_pieces_one_image(self, image):
+        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        thresh = cv.threshold(gray, self.image_binary_threshold, 255, cv.THRESH_BINARY)[1]
+            
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
+        thresh = cv.erode(thresh, kernel)
+        thresh = cv.dilate(thresh, kernel)
+
+        contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)[0]
+    
+        retval = []
+    
+        image_h, image_w = gray.shape
+        margin_px = self.margin_px
+
+        min_size_px = self.min_size_mm * self.image_dpi / 25.4
+        max_size_px = self.max_size_mm * self.image_dpi / 25.4
+    
+        for c in contours:
+            r = cv.boundingRect(c)
+            x, y, w, h = r
+            if min_size_px <= w <= max_size_px and min_size_px <= h <= max_size_px:
+                if margin_px < x and x+w < image_w - margin_px and margin_px < y and y+h < image_h - margin_px:
+                    retval.append(r)
+
+        return retval
 
 class GantryCalibrator:
 
@@ -354,14 +483,15 @@ class ScantoolTk:
 
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
-        ttk.Button(f, text='home', command=self.do_home).grid(column=0, row=0)
+        ttk.Button(f, text='Home', command=self.do_home).grid(column=0, row=0)
         ttk.Button(f, text='Gantry Calibrate', command=self.do_gantry_calibrate).grid(column=1, row=0)
-        ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=2, row=0)
-        ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=3, row=0)
-        ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=4, row=0)
-        ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=5, row=0)
+        ttk.Button(f, text='Find Pieces', command=self.do_find_pieces).grid(column=2, row=0)
+        ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=3, row=0)
+        ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=4, row=0)
+        ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=5, row=0)
+        ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=6, row=0)
 
-        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=6, row=0)
+        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=7, row=0)
 
         self.axes_status = AxesStatus(self.frame, [
             ('stepper_x', 'X'),
@@ -433,6 +563,11 @@ class ScantoolTk:
 
     def set_gantry_calibration(self, calibration):
         self.calibration['gantry'] = calibration
+
+    def do_find_pieces(self):
+        finder = PieceFinder(self.klipper, self.camera, self.calibration['gantry'])
+        rect = (135, 475, 676, 701)
+        d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
     def do_gcode1(self):
         print("gcode1!")
