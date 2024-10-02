@@ -352,17 +352,6 @@ class ScantoolTk:
         self.var_detect_corners = IntVar(value=0)
         ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
 
-        f = ttk.LabelFrame(controls, text='Exposure')
-        f.grid(column=4, row=0)
-        self.var_exposure = DoubleVar(value=-6)
-        Scale(f, from_=-15, to=0, length=200, resolution=.25, orient=HORIZONTAL,
-              variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
-
-        self.var_frame_counter = StringVar(value="frame")
-        self.frame_no = 0
-        self.frame_skip = 0
-        ttk.Label(controls, textvar=self.var_frame_counter).grid(column=5, row=0)
-
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
         ttk.Button(f, text='home', command=self.do_home).grid(column=0, row=0)
@@ -509,9 +498,6 @@ class ScantoolTk:
         
     def send_gcode(self, script):
         self.klipper.gcode_script(script)
-
-    def do_exposure(self, arg):
-        self.camera.set_exposure(self.var_exposure.get())
 
     def do_camera_calibrate(self):
         start = time.monotonic()
