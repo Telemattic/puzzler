@@ -9,23 +9,26 @@ sys.path.insert(0, lib)
 os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 
 import argparse
+import collections
 import csv
 import cv2 as cv
-import io
+import itertools
 import json
 import math
 import numpy as np
 import PIL.Image
 import PIL.ImageTk
 import requests
-import threading
+import scipy.spatial.distance
 import time
 
 from tkinter import *
 from tkinter import font
 from tkinter import ttk
+import twisted.internet
+from twisted.internet import tksupport, reactor
+from twisted.internet import threads as twisted_threads
 
-import puzzbot.camera.camera
 from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, BigHammerRemapper
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
@@ -55,28 +58,373 @@ def draw_grid(image):
     for y in range(s,h,s):
         cv.polylines(image, [np.array([(0,y), (w-1,y)])], False, (192, 192, 0))
 
-class CameraThread(threading.Thread):
+class ImageProjection:
 
-    def __init__(self, camera, callback):
-        super().__init__(daemon=True)
+    def __init__(self, coord_mm, px_per_mm):
+        self.coord_mm = coord_mm
+        self.px_per_mm = px_per_mm
+
+    def px_to_mm(self, px):
+        mm_per_px = 1 / self.px_per_mm
+        return np.asarray(px) * (mm_per_px, -mm_per_px) + self.coord_mm
+
+    def mm_to_px(self, mm):
+        return (np.asarray(mm) - self.coord_mm) * (self.px_per_mm, -self.px_per_mm)
+
+class PieceFinder:
+
+    def __init__(self, gantry, camera):
+        self.gantry = gantry
         self.camera = camera
-        self.callback = callback
+        self.image_dpi = 600.
+        self.image_binary_threshold = 130
+        self.min_size_mm = 10
+        self.max_size_mm = 50
+        self.margin_px = 5
+        self.x_step = 75
+        self.y_step = 50
 
-    def run(self):
+    def find_pieces(self, rect):
 
-        i = 0
-        while True:
-            frame = self.camera.read()
-            self.callback(frame)
-            i += 1
+        x0, y0, x1, y1 = rect
+
+        self.gantry.move_to(z=0)
+        
+        images = []
+        for y in range(y0, y1, self.y_step):
+            for x in range(x0, x1, self.x_step):
+                self.gantry.move_to(x=x, y=y, f=5000)
+                time.sleep(.5)
+                image = self.camera.get_calibrated_image()
+
+                pieces = self.find_pieces_one_image(image)
+                images.append(((x, y), pieces))
+
+        all_pieces = []
+        px_per_mm = self.image_dpi / 25.4
+        for image_no, (xy, pieces) in enumerate(images):
+
+            proj = ImageProjection(np.array(xy), px_per_mm)
+
+            for r in pieces:
+                x, y, w, h = r
+                center_px = np.array((x + w/2, (y + h/2)))
+                radius_px = math.hypot(w, h) / 2
+
+                center_mm = proj.px_to_mm(center_px)
+                radius_mm = radius_px / px_per_mm
+
+                all_pieces.append((center_mm, radius_mm))
+
+        dist = scipy.spatial.distance.pdist([i for i, _ in all_pieces])
+
+        n = len(all_pieces)
+
+        uniq_ids = dict((i,i) for i in range(n))
+
+        print("Scanning for redundant pieces, {n} total pieces")
+        k = 0
+        for i in range(n-1):
+            l = n-(i+1)
+            overlaps = np.flatnonzero(dist[k:k+l] < all_pieces[i][1])+i+1
+            if len(overlaps):
+                print(f"piece {i} overlaps pieces {overlaps}")
+                if uniq_ids[i] == i:
+                    for m in overlaps:
+                        uniq_ids[m] = i
+                else:
+                    # we expect all the overlapping pieces of piece 'i' to
+                    # also have overlapped whatever it is that 'i'
+                    # overlapped
+                    assert all(uniq_ids[m] == uniq_ids[i] for m in overlaps)
+            k += l
+        assert k == len(dist)
+
+        keepers = []
+        for k, v in uniq_ids.items():
+            if k == v:
+                keepers.append(all_pieces[k])
+
+        print(f"Found {n} pieces with initial scan, reduced to {len(keepers)} unique pieces")
+
+        to_scan = [k[0].tolist() for k in keepers]
+
+        with open('toscan.json', 'w') as f:
+            f.write(json.dumps(to_scan, indent=4))
+
+    def find_pieces_one_image(self, image):
+        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        thresh = cv.threshold(gray, self.image_binary_threshold, 255, cv.THRESH_BINARY)[1]
+            
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
+        thresh = cv.erode(thresh, kernel)
+        thresh = cv.dilate(thresh, kernel)
+
+        contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)[0]
+    
+        retval = []
+    
+        image_h, image_w = gray.shape
+        margin_px = self.margin_px
+
+        min_size_px = self.min_size_mm * self.image_dpi / 25.4
+        max_size_px = self.max_size_mm * self.image_dpi / 25.4
+    
+        for c in contours:
+            r = cv.boundingRect(c)
+            x, y, w, h = r
+            if min_size_px <= w <= max_size_px and min_size_px <= h <= max_size_px:
+                if margin_px < x and x+w < image_w - margin_px and margin_px < y and y+h < image_h - margin_px:
+                    retval.append(r)
+
+        return retval
+
+class GantryCalibrator:
+
+    def __init__(self, gantry, camera, board, dpi=600.):
+        self.gantry = gantry
+        self.camera = camera
+        self.board = board
+        self.dpi = 600.
+
+    def calibrate(self, coordinates):
+        self.gantry.move_to(z=0, cal=False)
+
+        images = {}
+        for x, y in coordinates:
+            images[(x,y)] = self.find_corners_at(x,y)
+
+        return self.compute_calibration(images)
+
+    def compute_calibration(self, images):
+        
+        square_length = self.board.getSquareLength()
+        board_n_cols, board_n_rows = self.board.getChessboardSize()
+
+        mm_per_pixel = 25.4 / self.dpi
+
+        n_rows = 2 * sum(len(v) for v in images.values())
+        n_cols = 4
+
+        A = np.zeros((n_rows, n_cols))
+        b = np.zeros((n_rows,))
+
+        r = 0
+        for (xm, ym), corners in images.items():
+            for (ii, jj), (u, v) in corners.items():
+                xc = ii * square_length
+                yc = (board_n_rows - 1 - jj) * square_length
+                A[r,1] = -ym
+                A[r,2] = 1
+                b[r] = xc - xm - mm_per_pixel * u
+                r += 1
+                A[r,0] = xm
+                A[r,3] = 1
+                b[r] = yc - ym + mm_per_pixel * v
+                r += 1
+
+        # solve Ax = b
+        x = np.linalg.lstsq(A, b, rcond=None)[0]
+        print(f"{x=}")
+        alpha, beta = x[0], x[1]
+        error = alpha - beta
+        for units, scale in [('radians ', 1.), ('degrees ', 180./math.pi), ('mm/meter', 1000.)]:
+            print(f"{units}: alpha={alpha*scale:7.3f} beta={beta*scale:7.3f} error={error*scale:7.3f}")
+            
+        return {'alpha':x[0], 'beta':x[1]}
+    
+    def find_corners_at(self, x, y):
+            
+        detector = CornerDetector(self.board)
+        
+        self.gantry.move_to(x=x, y=y, cal=False)
+        time.sleep(.5)
+
+        image = self.camera.get_calibrated_image()
+        corners, ids = detector.detect_corners(image)
+        return dict(zip(ids,corners))
+
+class AxesStatus(ttk.LabelFrame):
+
+    def __init__(self, parent, axes_and_labels):
+        def make_light(color):
+            image = PIL.Image.new('RGB', (16,16), color)
+            return PIL.ImageTk.PhotoImage(image=image)
+        super().__init__(parent, text='Axes')
+        self.images = [make_light((200,0,0)), make_light((0,200,0))]
+        self.axes = dict()
+        for i, (axis, label) in enumerate(axes_and_labels):
+            l = ttk.Label(self, image=self.images[0])
+            l.grid(column=i*2, row=0, sticky='W')
+            self.axes[axis] = l
+            l = ttk.Label(self, text=label)
+            l.grid(column=i*2+1, row=0, sticky='W')
+
+    def set_axes(self, axes):
+        for axis, value in axes.items():
+            self.axes[axis].configure(image=self.images[1 if value else 0])
+
+class AxesPosition(ttk.LabelFrame):
+
+    def __init__(self, parent):
+        super().__init__(parent, text='Position')
+        self.axes = dict()
+        for i, axis in enumerate('XYZA'):
+            s = StringVar(value=f"{axis} -")
+            self.axes[axis] = s
+            l = ttk.Label(self, textvar=s, width=12)
+            l.grid(column=i, row=0)
+
+    def set_axes(self, axes):
+        for axis, value in axes.items():
+            self.axes[axis].set(f"{axis}: {value:9.3f}")
+
+class KlipperException(Exception):
+    pass
+
+class Klipper:
+
+    def __init__(self, server):
+        self.server = server
+        self.request_url = self.server + "/bot"
+        self.notifications_url = self.server + "/bot/notifications"
+        self.callbacks = {}
+
+    def request(self, method, params, response=True):
+        o = {'method':method, 'params':params, 'response':response}
+        r = requests.post(self.request_url, json=o)
+        r.raise_for_status()
+        if not response:
+            return
+        o = r.json()
+        if 'result' not in o:
+            raise KlipperException(o)
+        return o['result']
+
+    def gcode_script(self, script):
+        print(f"gcode: {script}")
+        o = self.request('gcode/script', {'script':script})
+        if o != dict():
+            print(o)
+
+    def objects_subscribe(self, callback):
+        key = 'objects/subscribe'
+        params = {
+            'objects': {
+                'idle_timeout':['state'],
+                'toolhead': ['homed_axes'],
+                'motion_report':['live_position'],
+                'stepper_enable':None,
+                'webhooks':None
+            },
+            'response_template': {
+                'key': key
+            }
+        }
+        self.callbacks[key] = callback
+        o = self.request('objects/subscribe', params)
+        callback(o)
+
+    def gcode_subscribe_output(self, callback):
+        key = 'gcode/subscribe_output'
+        params = {
+            'response_template': {
+                'key': key
+            }
+        }
+        self.callbacks[key] = callback
+        return self.request('gcode/subscribe_output', params)
+        
+    def poll_notifications(self):
+        d = twisted_threads.deferToThread(requests.get, self.notifications_url, params={'timeout':5})
+        d.addCallback(self._notifications_callback)
+        return d
+
+    def _notifications_callback(self, notifications):
+        notifications.raise_for_status()
+        for o in notifications.json():
+            key = o.get('key', None)
+            params = o.get('params', None)
+            if key is None or params is None or len(o) != 2:
+                print("klipper notification mystery:", json.dumps(o, indent=4))
+            else:
+                self.callbacks[key](params)
+
+class GantryException(Exception):
+    pass
+
+class Gantry:
+
+    def __init__(self, klipper):
+        self.klipper = klipper
+        self.fwd = np.eye(2)
+        self.inv = np.eye(2)
+
+    def set_calibration(self, cal):
+        alpha, beta = cal['alpha'], cal['beta']
+        # fwd: world_coord = self.fwd @ motor_coord.T
+        self.fwd = np.array([[np.cos(alpha), -np.sin(beta)],
+                             [np.sin(alpha), np.cos(beta)]])
+        # inv: motor_coord = self.inv @ world_coord.T
+        self.inv = np.linalg.inv(self.fwd)
+        
+    def move_to(self, x=None, y=None, z=None, f=None, wait=True, cal=True):
+        
+        if cal:
+            if x is not None and y is not None:
+                x, y = self.inv @ np.array((x,y)).T
+            elif x is not None or y is not None:
+                raise GantryException("move_to: calibrated move must specify X and Y")
+        
+        v = ["G1"]
+        if x is not None:
+            v.append(f"X{x}")
+        if y is not None:
+            v.append(f"Y{y}")
+        if z is not None:
+            v.append(f"Z{z}")
+        if f is not None:
+            v.append(f"F{f}")
+            
+        self.klipper.gcode_script(' '.join(v))
+        if wait:
+            self.klipper.gcode_script('M400')
+    
+class CalibratedCamera:
+
+    def __init__(self, raw_camera):
+        self.raw_camera = raw_camera
+        self.remappers = collections.defaultdict(lambda x: x)
+
+    def set_calibration(self, calibration):
+        self.remappers['main'] = BigHammerRemapper.from_calibration(calibration)
+        self.remappers['lores'] = BigHammerRemapper.from_calibration(calibration, 4)
+
+    def get_raw_image(self, stream='main'):
+        return self.raw_camera.read(stream)
+
+    def get_calibrated_image(self, stream='main'):
+        raw_image = self.get_raw_image(stream)
+        return self.remappers[stream].undistort_image(raw_image)
+
+    def get_image(self, stream='main', calibrated=True):
+        return self.get_calibrated_image(stream) if calibrated else self.get_raw_image(stream)
+
+    @property
+    def frame_size(self):
+        return self.raw_camera.frame_size
 
 class ScantoolTk:
 
     def __init__(self, parent, args, config):
 
-        self.server = args.server
         self.config = config
         self.calibration = self.config.get('calibration', {})
+        
+        self.gantry = Gantry(Klipper(args.server))
+        if 'gantry' in self.calibration:
+            self.gantry.set_calibration(self.calibration['gantry'])
+        
         self._init_charuco_board(config['charuco_board'])
         self._init_camera(args.camera, 4656, 3496)
         self._init_ui(parent)
@@ -100,10 +448,14 @@ class ScantoolTk:
         )
 
     def _init_threads(self, root):
-        self.camera_thread = CameraThread(self.camera, self.notify_camera_event)
-        self.camera_busy = False
-        root.bind("<<camera>>", self.camera_event)
-        self.camera_thread.start()
+        d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
+        d.addBoth(self.notify_camera_event)
+
+        klipper = self.gantry.klipper
+        klipper.objects_subscribe(self.klipper_objects_subscribe_callback)
+        klipper.gcode_subscribe_output(self.klipper_gcode_subscribe_output_callback)
+        poll = twisted.internet.task.LoopingCall(klipper.poll_notifications)
+        poll.start(0)
 
     def _init_camera(self, camera, target_w, target_h):
         import puzzbot.camera.camera as pb
@@ -111,21 +463,21 @@ class ScantoolTk:
         
         iface = camera[:camera.find(':')]
         if iface.lower() in ('http', 'https'):
-            self.camera = pb.WebCamera(camera)
+            raw_camera = pb.WebCamera(camera)
         elif iface.lower() in ('rpi'):
-            self.camera = pb.RPiCamera()
+            raw_camera = pb.RPiCamera()
         elif iface.lower() in ('opencv', 'cv'):
             args = camera[camera.find(':'):]
             camera_id = int(args)
-            self.camera = pb.OpenCVCamera(camera_id, target_w, target_h)
+            raw_camera = pb.OpenCVCamera(camera_id, target_w, target_h)
         else:
             raise Exception(f"bad camera scheme: {scheme}")
 
-        self.remapper = None
-        
+        self.camera = CalibratedCamera(raw_camera)
+
         calibration = self.config['calibration']
         if 'camera' in calibration:
-            self.remapper = BigHammerRemapper.from_calibration(calibration['camera'])
+            self.camera.set_calibration(calibration['camera'])
 
     def _init_ui(self, parent):
         self.frame = ttk.Frame(parent, padding=5)
@@ -139,14 +491,6 @@ class ScantoolTk:
                                     background='gray', highlightthickness=0)
         self.canvas_camera.grid(column=0, row=0, columnspan=2, sticky=(N, W, E, S))
 
-        self.canvas_detail = Canvas(self.frame, width=w//8, height=h//8,
-                                    background='gray', highlightthickness=0)
-        self.canvas_detail.grid(column=0, row=1, sticky=(N, W, E, S))
-
-        self.canvas_binary = Canvas(self.frame, width=w//8, height=h//8,
-                                    background='gray', highlightthickness=0)
-        self.canvas_binary.grid(column=1, row=1, sticky=(N, W, E, S))
-
         parent.bind("<Key>", self.key_event)
 
         controls = ttk.Frame(self.frame, padding=5)
@@ -157,48 +501,81 @@ class ScantoolTk:
         self.var_undistort = IntVar(value=1)
         ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=1, row=0)
 
-        self.var_detect_corners = IntVar(value=1)
+        self.var_detect_corners = IntVar(value=0)
         ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
-
-        self.var_detect_pieces = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Detect Pieces', variable=self.var_detect_pieces).grid(column=3, row=0)
-
-        f = ttk.LabelFrame(controls, text='Exposure')
-        f.grid(column=4, row=0)
-        self.var_exposure = DoubleVar(value=-6)
-        Scale(f, from_=-15, to=0, length=200, resolution=.25, orient=HORIZONTAL,
-              variable=self.var_exposure, command=self.do_exposure).grid(column=0, row=0)
-
-        self.var_frame_counter = StringVar(value="frame")
-        self.frame_no = 0
-        self.frame_skip = 0
-        ttk.Label(controls, textvar=self.var_frame_counter).grid(column=5, row=0)
 
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
-        ttk.Button(f, text='home', command=self.do_home).grid(column=0, row=0)
+        ttk.Button(f, text='Home', command=self.do_home).grid(column=0, row=0)
         ttk.Button(f, text='Gantry Calibrate', command=self.do_gantry_calibrate).grid(column=1, row=0)
-        ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=2, row=0)
-        ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=3, row=0)
-        ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=4, row=0)
-        ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=5, row=0)
+        ttk.Button(f, text='Find Pieces', command=self.do_find_pieces).grid(column=2, row=0)
+        ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=3, row=0)
+        ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=4, row=0)
+        ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=5, row=0)
+        ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=6, row=0)
 
-        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=6, row=0)
+        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=7, row=0)
 
-    def notify_camera_event(self, image):
-        self.image_update = image
-        self.frame.event_generate("<<camera>>")
+        self.axes_status = AxesStatus(self.frame, [
+            ('stepper_x', 'X'),
+            ('stepper_y', 'Y1'),
+            ('stepper_y1', 'Y2'),
+            ('stepper_z', 'Z'),
+            ('manual_stepper stepper_a', 'A')
+        ])
+        self.axes_status.grid(column=0, row=4)
+
+        self.axes_position = AxesPosition(self.frame)
+        self.axes_position.grid(column=1, row=4)
+
+    def klipper_objects_subscribe_callback(self, o):
+        eventtime = o.pop('eventtime')
+        status = o.pop('status')
+        assert len(o) == 0
+        
+        stepper_enable = status.pop('stepper_enable', None)
+        if stepper_enable:
+            self.axes_status.set_axes(stepper_enable['steppers'])
+            
+        motion_report = status.pop('motion_report', None)
+        if motion_report:
+            X, Y, Z = motion_report['live_position'][:3]
+            self.axes_position.set_axes({'X':X, 'Y':Y, 'Z':Z})
+
+        # don't know what to do with this
+        idle_timeout = status.pop('idle_timeout', None)
+
+        if len(status):
+            print("klipper_objects_subscribe:", json.dumps(status, indent=4))
+
+    def klipper_gcode_subscribe_output_callback(self, o):
+        print("klipper_gcode_output:", json.dumps(o, indent=4))
+
+    def notify_camera_event(self, arg):
+        if isinstance(arg, np.ndarray):
+            self.image_update(arg)
+        else:
+            # twisted.python.failure.Failure
+            print(type(arg))
+            print(arg)
+        d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
+        d.addBoth(self.notify_camera_event)
 
     def do_home(self):
+        d = twisted_threads.deferToThread(self.home_impl)
+
+    def home_impl(self):
         print("home!")
         self.send_gcode('G28 Z')
         self.send_gcode('G28 X Y')
+        self.send_gcode('MANUAL_STEPPER STEPPER=stepper_a ENABLE=1 SET_POSITION=0')
         self.send_gcode('M400')
         # in theory we could do a force move on stepper_y or
         # stepper_y1 to account for non-orthogonality of the X and Y
         # axes after homing
         #
         # self.send_gcode('FORCE_MOVE STEPPER=stepper_y DISTANCE=3 VELOCITY=500')
+        print("all done!")
 
     def do_save_config(self):
         o = self.config.copy()
@@ -207,64 +584,20 @@ class ScantoolTk:
             json.dump(o, f, indent=4)
 
     def do_gantry_calibrate(self):
-        print("gantry calibrate!")
+        coordinates = list(itertools.product([0, 70, 140], [70, 140, 210]))
+        calibrator = GantryCalibrator(self.gantry, self.camera, self.charuco_board)
+        d = twisted_threads.deferToThread(calibrator.calibrate, coordinates)
+        d.addCallback(self.set_gantry_calibration)
 
-        all_corners = {}
+    def set_gantry_calibration(self, calibration):
+        self.calibration['gantry'] = calibration
+        self.gantry.set_calibration(calibration)
 
-        board = self.charuco_board
-        detector = CornerDetector(board)
-        
-        for x in [0, 70, 140]:
-            for y in [70, 140, 210]:
-                self.send_gcode(f"G1 X{x} Y{y}")
-                self.send_gcode("M400")
-                time.sleep(.5)
-
-                image = self.get_image()
-                corners, ids = detector.detect_corners(image)
-                print(f"... found {len(corners)} corners")
-                if len(corners):
-                    all_corners[(x,y)] = dict(zip(ids,corners))
-
-        square_length = board.getSquareLength()
-        board_n_cols, board_n_rows = board.getChessboardSize()
-
-        gamma = (25.4 / 600) # mm/pixel
-
-        print(f"{square_length=} {board_n_cols=} {board_n_rows=}")
-
-        n_rows = 2 * sum(len(v) for v in all_corners.values())
-        n_cols = 4
-
-        A = np.zeros((n_rows, n_cols))
-        b = np.zeros((n_rows,))
-
-        r = 0
-        for (xm, ym), image_corners in all_corners.items():
-            for (ii, jj), (u, v) in image_corners.items():
-                xc = ii * square_length
-                yc = (board_n_rows - 1 - jj) * square_length
-                A[r,1] = -ym
-                A[r,2] = 1
-                b[r] = xc - xm - gamma * u
-                r += 1
-                A[r,0] = xm
-                A[r,3] = 1
-                b[r] = yc - ym + gamma * v
-                r += 1
-
-        # solve Ax = b
-        x = np.linalg.lstsq(A, b, rcond=None)[0]
-        print(f"{x=}")
-        alpha, beta = x[0], x[1]
-        error = alpha - beta
-        for units, scale in [('radians ', 1.), ('degrees ', 180./math.pi), ('mm/meter', 1000.)]:
-            print(f"{units}: alpha={alpha*scale:7.3f} beta={beta*scale:7.3f} error={error*scale:7.3f}")
-        
-        print("all done!")
-
-        self.calibration['gantry'] = {'alpha':x[0], 'beta':x[1]}
-
+    def do_find_pieces(self):
+        finder = PieceFinder(self.gantry, self.camera)
+        rect = (135, 475, 676, 701)
+        d = twisted_threads.deferToThread(finder.find_pieces, rect)
+            
     def do_gcode1(self):
         print("gcode1!")
         self.send_gcode("G1 Z0")
@@ -282,10 +615,13 @@ class ScantoolTk:
 
                 path = f'img_{x}_{y}.png'
                 print(f"save {x=} {y=} to {path}")
-                cv.imwrite(path, self.get_image())
+                cv.imwrite(path, self.camera.get_calibrated_image())
         print("All done!")
 
     def do_gcode3(self):
+        d = twisted_threads.deferToThread(self.gcode3_impl)
+
+    def gcode3_impl(self):
         print("gcode3!")
         self.send_gcode("G1 Z0")
 
@@ -297,7 +633,7 @@ class ScantoolTk:
                 
                 path = f'scan_{x}_{y}.png'
                 print(f"save {x=} {y=} to {path}")
-                cv.imwrite(path, self.get_image())
+                cv.imwrite(path, self.camera.get_calibrated_image())
         print("All done!")
         
     def do_gcode4(self):
@@ -320,35 +656,17 @@ class ScantoolTk:
 
             opath = f'scan_x/piece_{i}.png'
             print(f"save piece {i}/{n} to {opath}")
-            cv.imwrite(opath, self.get_image())
+            cv.imwrite(opath, self.get_calibrated_image())
 
         print("All done!")
         
-    def get_image(self):
-
-        image = self.camera.read()
-        
-        if self.remapper and self.var_undistort.get():
-            image = self.remapper.undistort_image(image)
-            
-        return image
-
     def send_gcode(self, script):
-        print(f"gcode: {script}")
-        o = {'method':'gcode/script', 'params':{'script':script}, 'response':True}
-        r = requests.post(self.server + '/bot', json=o)
-        o = r.json()
-        if o.get('result') != dict():
-            print(o)
-
-    def do_exposure(self, arg):
-        self.camera.set_exposure(self.var_exposure.get())
+        self.gantry.klipper.gcode_script(script)
 
     def do_camera_calibrate(self):
         start = time.monotonic()
         print("Calibrating...")
-        image = self.image_update
-        self.remapper = None
+        image = self.camera.get_raw_image()
 
         if image is None:
             print("No image?!")
@@ -356,7 +674,7 @@ class ScantoolTk:
         
         calibration = BigHammerCalibrator(self.charuco_board).calibrate(image)
         if calibration is not None:
-            self.remapper = BigHammerRemapper.from_calibration(calibration)
+            self.camera.set_calibration(calibration)
             
         elapsed = time.monotonic() - start
         print(f"Calibration complete ({elapsed:.3f} seconds)")
@@ -366,133 +684,48 @@ class ScantoolTk:
     def key_event(self, event):
         pass
 
-    def camera_event(self, event):
+    def detect_corners_and_annotate_image(self, image):
 
-        self.var_frame_counter.set(f"Frame {self.frame_no} ({self.frame_skip} skipped)")
-        self.frame_no += 1
-        
-        if self.camera_busy:
-            self.frame_skip += 1
+        corner_detector = CornerDetector(self.charuco_board)
+        corners, ids = corner_detector.detect_corners(image)
+
+        if len(corners) == 0:
             return
-
-        self.camera_busy = True
-        try:
-            self.do_camera_event()
-        finally:
-            self.camera_busy = False
-
-    def do_camera_event(self):
-        image_update = self.image_update
-
-        corners, ids = None, None
         
-        if self.remapper and self.var_undistort.get():
-            
-            image_update = self.remapper.undistort_image(image_update)
-                
+        min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
+        inside = dict()
+        border = dict()
+        outside = dict()
+        for ij, uv in zip(ids, corners):
+            if min_i <= ij[0] <= max_i and min_j <= ij[1] <= max_j:
+                inside[ij] = uv
+            elif min_i-1 <= ij[0] <= max_i+1 and min_j-1 <= ij[1] <= max_j+1:
+                border[ij] = uv
+            else:
+                outside[ij] = uv
+        if inside:
+            draw_detected_corners(image_camera, np.array(list(inside.values())), color=(255,0,0))
+        if border:
+            draw_detected_corners(image_camera, np.array(list(border.values())), color=(0,255,0))
+        if outside:
+            draw_detected_corners(image_camera, np.array(list(outside.values())), color=(0,0,255))
+
+    def image_update(self, image):
+
         if self.var_detect_corners.get():
-            corner_detector = CornerDetector(self.charuco_board)
-            corners, ids = corner_detector.detect_corners(image_update)
-
-        h, w = image_update.shape[:2]
-        dst_size = (w // 4, h // 4)
-        image_binary = image_camera = cv.resize(image_update, dst_size)
-
-        if corners is not None and len(corners) > 0:
-            min_i, min_j, max_i, max_j = BigHammerCalibrator.maximum_rect(ids)
-            inside = dict()
-            border = dict()
-            outside = dict()
-            for ij, uv in zip(ids, corners):
-                if min_i <= ij[0] <= max_i and min_j <= ij[1] <= max_j:
-                    inside[ij] = uv * .25
-                elif min_i-1 <= ij[0] <= max_i+1 and min_j-1 <= ij[1] <= max_j+1:
-                    border[ij] = uv * .25
-                else:
-                    outside[ij] = uv * .25
-            if inside:
-                draw_detected_corners(image_camera, np.array(list(inside.values())), color=(255,0,0))
-            if border:
-                draw_detected_corners(image_camera, np.array(list(border.values())), color=(0,255,0))
-            if outside:
-                draw_detected_corners(image_camera, np.array(list(outside.values())), color=(0,0,255))
-
-        self.update_image_camera(image_camera)
-        self.update_image_detail(image_update)
-        self.update_image_binary(image_binary)
-
-    def update_image_camera(self, image_camera):
+            self.detect_corners_and_annotate_image(image)
         
-        self.image_camera = self.to_photo_image(image_camera)
+        self.image_camera = self.to_photo_image(image)
         self.canvas_camera.delete('all')
         win_w, win_h = self.canvas_camera.winfo_width(), self.canvas_camera.winfo_height()
-        img_h, img_w = image_camera.shape[:2]
+        img_h, img_w = image.shape[:2]
         x, y = (win_w - img_w) // 2, (win_h - img_h) // 2
         self.canvas_camera.create_image((x, y), image=self.image_camera, anchor=NW)
-
-    def update_image_detail(self, image_full):
-
-        dst_w, dst_h = self.canvas_detail.winfo_width(), self.canvas_detail.winfo_height()
-        src_h, src_w = image_full.shape[:2]
-        src_x, src_y = (src_w-dst_w)//2, (src_h-dst_h)//2
-        image_detail = image_full[src_y:src_y+dst_h, src_x:src_x+dst_w]
-
-        self.image_detail = self.to_photo_image(image_detail)
-        self.canvas_detail.delete('all')
-        self.canvas_detail.create_image((0,0), image=self.image_detail, anchor=NW)
-
-    def update_image_binary(self, image_camera):
-
-        if not self.var_detect_pieces.get():
-            self.canvas_binary.delete('all')
-            return
-
-        gray = cv.cvtColor(image_camera, cv.COLOR_BGR2GRAY)
-        hist = np.bincount(image_camera.ravel())
-
-        if False:
-            thresh = cv.adaptiveThreshold(gray, 255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 127, -16)
-        elif True:
-            thresh = cv.threshold(gray, 130, 255, cv.THRESH_BINARY)[1]
-        else:
-            thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY+cv.THRESH_OTSU)[1]
-            
-        kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
-        thresh = cv.erode(thresh, kernel)
-        thresh = cv.dilate(thresh, kernel)
-
-        image_binary = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)
-        
-        if True:
-            contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)[0]
-            cv.drawContours(image_binary, contours, -1, (0,255,0), thickness=2, lineType=cv.LINE_AA)
-            for c in contours:
-                r = cv.boundingRect(c)
-                r = (r[0]-25, r[1]-25, r[2]+50, r[3]+50)
-                if r[0] < 0 or r[1] < 0:
-                    continue
-                if r[0] + r[2] >= thresh.shape[1] or r[1] + r[3] >= thresh.shape[0]:
-                    continue
-                cv.rectangle(image_binary, r, (255,0,0), thickness=2)
-
-        if True:
-            x0 = 20
-            y0 = image_binary.shape[0] - 20
-            x_coords = x0 + np.arange(len(hist))
-            y_coords = y0 - (hist * 200) // np.max(hist)
-            pts = np.array(np.vstack((x_coords, y_coords)).T, dtype=np.int32)
-            cv.polylines(image_binary, [np.array([(x0, y0), (x0+255, y0)])], False, (192, 192, 0), thickness=2)
-            cv.polylines(image_binary, [pts], False, (255, 255, 0), thickness=2)
-        
-        dst_size = (self.camera.frame_size[0]//8, self.camera.frame_size[1]//8)
-        self.image_binary = self.to_photo_image(cv.resize(image_binary, dst_size))
-        self.canvas_binary.delete('all')
-        self.canvas_binary.create_image((0,0), image=self.image_binary, anchor=NW)
 
     @staticmethod
     def to_photo_image(image):
         h, w = image.shape[:2]
-        if len(image.shape) == 3:
+        if image.ndim == 3:
             dst_mode = 'RGB'
             src_mode = 'BGR'
         else:
@@ -535,11 +768,16 @@ def main():
     args.server = config['server']
     if args.camera is None:
         args.camera = args.server + "/camera"
-        
+
     root = Tk()
     ui = ScantoolTk(root, args, config)
     root.title("PuZzLeR: scantool")
-    root.mainloop()
+
+    root.protocol('WM_DELETE_WINDOW', reactor.stop)
+    
+    # root.mainloop()
+    tksupport.install(root)
+    reactor.run()
 
 if __name__ == '__main__':
     main()
