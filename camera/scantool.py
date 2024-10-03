@@ -73,10 +73,9 @@ class ImageProjection:
 
 class PieceFinder:
 
-    def __init__(self, klipper, camera, calibration):
-        self.klipper = klipper
+    def __init__(self, gantry, camera):
+        self.gantry = gantry
         self.camera = camera
-        self.calibration = calibration
         self.image_dpi = 600.
         self.image_binary_threshold = 130
         self.min_size_mm = 10
@@ -89,17 +88,12 @@ class PieceFinder:
 
         x0, y0, x1, y1 = rect
 
-        alpha = self.calibration['alpha']
-        beta = self.calibration['beta']
-        R = np.array([[np.cos(alpha), -np.sin(beta)],
-                      [np.sin(alpha), np.cos(beta)]])
-
-        self.klipper.move_to(z=0)
+        self.gantry.move_to(z=0)
         
         images = []
         for y in range(y0, y1, self.y_step):
             for x in range(x0, x1, self.x_step):
-                self.klipper.move_to(x=x, y=y, f=5000)
+                self.gantry.move_to(x=x, y=y, f=5000)
                 time.sleep(.5)
                 image = self.camera.get_calibrated_image()
 
@@ -110,9 +104,7 @@ class PieceFinder:
         px_per_mm = self.image_dpi / 25.4
         for image_no, (xy, pieces) in enumerate(images):
 
-            xy_mm = R @ np.array(xy).T
-
-            proj = ImageProjection(xy_mm, px_per_mm)
+            proj = ImageProjection(np.array(xy), px_per_mm)
 
             for r in pieces:
                 x, y, w, h = r
@@ -189,14 +181,14 @@ class PieceFinder:
 
 class GantryCalibrator:
 
-    def __init__(self, klipper, camera, board, dpi=600.):
-        self.klipper = klipper
+    def __init__(self, gantry, camera, board, dpi=600.):
+        self.gantry = gantry
         self.camera = camera
         self.board = board
         self.dpi = 600.
 
     def calibrate(self, coordinates):
-        self.klipper.move_to(z=0)
+        self.gantry.move_to(z=0, cal=False)
 
         images = {}
         for x, y in coordinates:
@@ -245,7 +237,7 @@ class GantryCalibrator:
             
         detector = CornerDetector(self.board)
         
-        self.klipper.move_to(x=x, y=y)
+        self.gantry.move_to(x=x, y=y, cal=False)
         time.sleep(.5)
 
         image = self.camera.get_calibrated_image()
@@ -298,21 +290,6 @@ class Klipper:
         self.notifications_url = self.server + "/bot/notifications"
         self.callbacks = {}
 
-    def move_to(self, x=None, y=None, z=None, f=None, wait=True):
-        v = ["G1"]
-        if x is not None:
-            v.append(f"X{x}")
-        if y is not None:
-            v.append(f"Y{y}")
-        if z is not None:
-            v.append(f"Z{z}")
-        if f is not None:
-            v.append(f"F{f}")
-            
-        self.gcode_script(' '.join(v))
-        if wait:
-            self.gcode_script('M400')
-    
     def request(self, method, params, response=True):
         o = {'method':method, 'params':params, 'response':response}
         r = requests.post(self.request_url, json=o)
@@ -373,6 +350,46 @@ class Klipper:
             else:
                 self.callbacks[key](params)
 
+class GantryException(Exception):
+    pass
+
+class Gantry:
+
+    def __init__(self, klipper):
+        self.klipper = klipper
+        self.fwd = np.eye(2)
+        self.inv = np.eye(2)
+
+    def set_calibration(self, cal):
+        alpha, beta = cal['alpha'], cal['beta']
+        # fwd: world_coord = self.fwd @ motor_coord.T
+        self.fwd = np.array([[np.cos(alpha), -np.sin(beta)],
+                             [np.sin(alpha), np.cos(beta)]])
+        # inv: motor_coord = self.inv @ world_coord.T
+        self.inv = np.linalg.inv(self.fwd)
+        
+    def move_to(self, x=None, y=None, z=None, f=None, wait=True, cal=True):
+        
+        if cal:
+            if x is not None and y is not None:
+                x, y = self.inv @ np.array((x,y)).T
+            elif x is not None or y is not None:
+                raise GantryException("move_to: calibrated move must specify X and Y")
+        
+        v = ["G1"]
+        if x is not None:
+            v.append(f"X{x}")
+        if y is not None:
+            v.append(f"Y{y}")
+        if z is not None:
+            v.append(f"Z{z}")
+        if f is not None:
+            v.append(f"F{f}")
+            
+        self.klipper.gcode_script(' '.join(v))
+        if wait:
+            self.klipper.gcode_script('M400')
+    
 class CalibratedCamera:
 
     def __init__(self, raw_camera):
@@ -401,9 +418,13 @@ class ScantoolTk:
 
     def __init__(self, parent, args, config):
 
-        self.klipper = Klipper(args.server)
         self.config = config
         self.calibration = self.config.get('calibration', {})
+        
+        self.gantry = Gantry(Klipper(args.server))
+        if 'gantry' in self.calibration:
+            self.gantry.set_calibration(self.calibration['gantry'])
+        
         self._init_charuco_board(config['charuco_board'])
         self._init_camera(args.camera, 4656, 3496)
         self._init_ui(parent)
@@ -428,11 +449,12 @@ class ScantoolTk:
 
     def _init_threads(self, root):
         d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
-        d.addCallback(self.notify_camera_event)
+        d.addBoth(self.notify_camera_event)
 
-        self.klipper.objects_subscribe(self.klipper_objects_subscribe_callback)
-        self.klipper.gcode_subscribe_output(self.klipper_gcode_subscribe_output_callback)
-        poll = twisted.internet.task.LoopingCall(self.klipper.poll_notifications)
+        klipper = self.gantry.klipper
+        klipper.objects_subscribe(self.klipper_objects_subscribe_callback)
+        klipper.gcode_subscribe_output(self.klipper_gcode_subscribe_output_callback)
+        poll = twisted.internet.task.LoopingCall(klipper.poll_notifications)
         poll.start(0)
 
     def _init_camera(self, camera, target_w, target_h):
@@ -521,7 +543,7 @@ class ScantoolTk:
             self.axes_position.set_axes({'X':X, 'Y':Y, 'Z':Z})
 
         # don't know what to do with this
-        # idle_timeout = status.pop('idle_timeout', None)
+        idle_timeout = status.pop('idle_timeout', None)
 
         if len(status):
             print("klipper_objects_subscribe:", json.dumps(status, indent=4))
@@ -529,10 +551,15 @@ class ScantoolTk:
     def klipper_gcode_subscribe_output_callback(self, o):
         print("klipper_gcode_output:", json.dumps(o, indent=4))
 
-    def notify_camera_event(self, image):
-        self.image_update(image)
+    def notify_camera_event(self, arg):
+        if isinstance(arg, np.ndarray):
+            self.image_update(arg)
+        else:
+            # twisted.python.failure.Failure
+            print(type(arg))
+            print(arg)
         d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
-        d.addCallback(self.notify_camera_event)
+        d.addBoth(self.notify_camera_event)
 
     def do_home(self):
         d = twisted_threads.deferToThread(self.home_impl)
@@ -558,15 +585,16 @@ class ScantoolTk:
 
     def do_gantry_calibrate(self):
         coordinates = list(itertools.product([0, 70, 140], [70, 140, 210]))
-        calibrator = GantryCalibrator(self.klipper, self.camera, self.charuco_board)
+        calibrator = GantryCalibrator(self.gantry, self.camera, self.charuco_board)
         d = twisted_threads.deferToThread(calibrator.calibrate, coordinates)
         d.addCallback(self.set_gantry_calibration)
 
     def set_gantry_calibration(self, calibration):
         self.calibration['gantry'] = calibration
+        self.gantry.set_calibration(calibration)
 
     def do_find_pieces(self):
-        finder = PieceFinder(self.klipper, self.camera, self.calibration['gantry'])
+        finder = PieceFinder(self.gantry, self.camera)
         rect = (135, 475, 676, 701)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
@@ -633,7 +661,7 @@ class ScantoolTk:
         print("All done!")
         
     def send_gcode(self, script):
-        self.klipper.gcode_script(script)
+        self.gantry.klipper.gcode_script(script)
 
     def do_camera_calibrate(self):
         start = time.monotonic()
