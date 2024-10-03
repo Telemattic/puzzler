@@ -71,6 +71,29 @@ class ImageProjection:
     def mm_to_px(self, mm):
         return (np.asarray(mm) - self.coord_mm) * (self.px_per_mm, -self.px_per_mm)
 
+def scan_area_iterator(rect, dxdy):
+
+    # finds an integer number of scans that fits within the rectangle
+    # while maintaining the specified stepover, it would be better to
+    # reduce the stepover as necessary so that the rectangle is
+    # completely covered
+
+    x0, y0, x1, y1 = rect
+    w, h = x1 - x0, y1 - y0
+    dx, dy = dxdy
+
+    c, r = int(w / dx), int(h / dy)
+    x = x0 + 0.5 * (w - c * dx)
+    y = y0 + 0.5 * (h - r * dy)
+
+    for j in range(r):
+        for i in range(c):
+            # even rows are left to right, odds rows are right to left
+            if j & 1:
+                yield (x + (c-1-i)*dx, y + j*dy)
+            else:
+                yield (x + i*dx, y + j*dy)
+                
 class PieceFinder:
 
     def __init__(self, gantry, camera):
@@ -86,19 +109,16 @@ class PieceFinder:
 
     def find_pieces(self, rect):
 
-        x0, y0, x1, y1 = rect
-
         self.gantry.move_to(z=0)
         
         images = []
-        for y in range(y0, y1, self.y_step):
-            for x in range(x0, x1, self.x_step):
-                self.gantry.move_to(x=x, y=y, f=5000)
-                time.sleep(.5)
-                image = self.camera.get_calibrated_image()
+        for x, y in scan_area_iterator(rect, (self.x_step, self.y_step)):
+            self.gantry.move_to(x=x, y=y, f=5000)
+            time.sleep(.5)
+            image = self.camera.get_calibrated_image()
 
-                pieces = self.find_pieces_one_image(image)
-                images.append(((x, y), pieces))
+            pieces = self.find_pieces_one_image(image)
+            images.append(((x, y), pieces))
 
         all_pieces = []
         px_per_mm = self.image_dpi / 25.4
@@ -595,7 +615,7 @@ class ScantoolTk:
 
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
-        rect = (135, 475, 676, 701)
+        rect = (135, 475, 700, 720)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
     def do_gcode1(self):
