@@ -141,6 +141,9 @@ class BotRequestHandler(http.server.BaseHTTPRequestHandler):
         klipper = self.server.klipper
 
         timeout = dict(params).get('timeout', None)
+        if timeout is not None:
+            timeout = float(timeout)
+            
         block = timeout is not None
         notifications = []
         try:
