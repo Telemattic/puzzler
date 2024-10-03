@@ -111,30 +111,9 @@ class PieceFinder:
 
         self.gantry.move_to(z=0)
         
-        images = []
-        for x, y in scan_area_iterator(rect, (self.x_step, self.y_step)):
-            self.gantry.move_to(x=x, y=y, f=5000)
-            time.sleep(.5)
-            image = self.camera.get_calibrated_image()
-
-            pieces = self.find_pieces_one_image(image)
-            images.append(((x, y), pieces))
-
         all_pieces = []
-        px_per_mm = self.image_dpi / 25.4
-        for image_no, (xy, pieces) in enumerate(images):
-
-            proj = ImageProjection(np.array(xy), px_per_mm)
-
-            for r in pieces:
-                x, y, w, h = r
-                center_px = np.array((x + w/2, (y + h/2)))
-                radius_px = math.hypot(w, h) / 2
-
-                center_mm = proj.px_to_mm(center_px)
-                radius_mm = radius_px / px_per_mm
-
-                all_pieces.append((center_mm, radius_mm))
+        for x, y in scan_area_iterator(rect, (self.x_step, self.y_step)):
+            all_pieces += self.find_candidates(x, y)
 
         dist = scipy.spatial.distance.pdist([i for i, _ in all_pieces])
 
@@ -172,6 +151,29 @@ class PieceFinder:
         with open('toscan.json', 'w') as f:
             f.write(json.dumps(to_scan, indent=4))
 
+    def find_candidates(self, x, y):
+        
+        self.gantry.move_to(x=x, y=y, f=5000)
+        time.sleep(.5)
+        image = self.camera.get_calibrated_image()
+        pieces = self.find_pieces_one_image(image)
+        
+        px_per_mm = self.image_dpi / 25.4
+        proj = ImageProjection(np.array((x, y)), px_per_mm)
+
+        retval = []
+        for r in pieces:
+            x, y, w, h = r
+            center_px = np.array((x + w/2, (y + h/2)))
+            radius_px = math.hypot(w, h) / 2
+
+            center_mm = proj.px_to_mm(center_px)
+            radius_mm = radius_px / px_per_mm
+
+            retval.append((center_mm, radius_mm))
+
+        return retval
+            
     def find_pieces_one_image(self, image):
         gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
         thresh = cv.threshold(gray, self.image_binary_threshold, 255, cv.THRESH_BINARY)[1]
