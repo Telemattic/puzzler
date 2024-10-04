@@ -141,8 +141,6 @@ class PieceFinder:
             opath = f"scan_{x:.0f}_{y:.0f}.jpg"
             image = self.capture_image_at_xy(x, y)
             images.append((cv.resize(image, None, fx=panorama_scale, fy=panorama_scale), (x, y)))
-            if len(images) > 3:
-                break
 
         print(f"captured {len(images)} to stitch into panorama")
 
@@ -180,7 +178,7 @@ class PieceFinder:
         contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)[0]
         print(f"Found {len(contours)} contours!")
 
-        retval = []
+        retval_px = []
         for c in contours:
             
             a = cv.contourArea(c)
@@ -190,17 +188,20 @@ class PieceFinder:
             x, y, w, h = cv.boundingRect(c)
             center_px = (x + w/2, y + h/2)
             radius_px = math.hypot(w,h) / 2
-            center_mm = proj.px_to_mm(center_px + offset)
-            radius_mm = radius_px / proj.px_per_mm
-            retval.append((center_mm, radius_mm, c))
-
-            with np.printoptions(precision=1):
-                print(f"Found contour at {center_px=} {radius_px=:.1f} -> {center_mm=} {radius_px=:.1f}")
+            retval_px.append((center_px, radius_px))
 
             cv.circle(image, (int(center_px[0]), int(center_px[1])), int(radius_px), (0, 255, 255))
-            cv.drawContours(image, [c], -1, (0,0,255), 1)
 
-        return retval
+        with open('centers.json', 'w') as f:
+            f.write(json.dumps(retval_px))
+
+        retval_mm = []
+        for center_px, radius_px in retval_px:
+            center_mm = proj.px_to_mm(center_px + offset)
+            radius_mm = radius_px / proj.px_per_mm
+            retval_mm.append((center_mm, radius_mm))
+            
+        return retval_mm
 
     def assemble_panorama(self, images):
         pano_ul_mm = np.array((min(xy[0] for _, xy in images),
