@@ -18,6 +18,7 @@ import math
 import numpy as np
 import PIL.Image
 import PIL.ImageTk
+import pprint
 import requests
 import scipy.spatial.distance
 import time
@@ -83,17 +84,27 @@ def scan_area_iterator(rect, dxdy):
     w, h = x1 - x0, y1 - y0
     dx, dy = dxdy
 
-    c, r = int(w / dx) + 1, int(h / dy) + 1
-    dx = w / (c-1) if c > 1 else 0
-    dy = h / (r-1) if r > 1 else 0
+    c, r = int(math.ceil(w / dx)) + 1, int(math.ceil(h / dy)) + 1
+
+    print(f"scan_area_iterator: {c=} {r=} {dx=:.1f} {dy=:.1f}")
         
     for j in range(r):
         for i in range(c):
             # even rows are left to right, odds rows are right to left
             if j & 1:
-                yield (x0 + (c-1-i)*dx, y0 + j*dy)
+                x = x0 + (c-1-i)*dx
             else:
-                yield (x0 + i*dx, y0 + j*dy)
+                x = x0 + i*dx
+            y = y0 + j*dy
+            if x < x0:
+                x = x0
+            elif x > x1:
+                x = x1
+            if y < y0:
+                y = y0
+            elif y > y1:
+                y = y1
+            yield (x,y)
                 
 class PieceFinder:
 
@@ -113,6 +124,15 @@ class PieceFinder:
         print("Finding pieces")
 
         self.gantry.move_to(z=0)
+
+        dummy_image = self.camera.get_calibrated_image()
+        image_h, image_w = dummy_image.shape[:2]
+
+        mm_per_pixel = 25.4 / self.image_dpi
+        self.x_step = int(image_w * mm_per_pixel)
+        self.y_step = int(image_h * mm_per_pixel)
+
+        print(f"image is {image_w}x{image_h} and {1/mm_per_pixel:.1f} pixels/mm, x_step={self.x_step} y_step={self.y_step}")
         
         all_pieces = []
         for x, y in scan_area_iterator(rect, (self.x_step, self.y_step)):
@@ -159,10 +179,10 @@ class PieceFinder:
         
         self.gantry.move_to(x=image_x, y=image_y, f=5000)
         time.sleep(.5)
-        image = self.camera.get_calibrated_image()
-
+        image, metadata = self.camera.get_calibrated_image_and_metadata()
         if opath:
             print(f"Saving image to {opath}")
+            # pprint.pprint(metadata)
             cv.imwrite(opath, cv.resize(image, None, fx=.25, fy=.25))
         
         pieces = self.find_pieces_one_image(image)
@@ -436,10 +456,17 @@ class CalibratedCamera:
     def get_raw_image(self, stream='main'):
         return self.raw_camera.read(stream)
 
+    def get_raw_image_and_metadata(self, stream='main'):
+        return self.raw_camera.read_image_and_metadata(stream)
+
     def get_calibrated_image(self, stream='main'):
         raw_image = self.get_raw_image(stream)
         return self.remappers[stream].undistort_image(raw_image)
 
+    def get_calibrated_image_and_metadata(self, stream='main'):
+        raw_image, metadata = self.get_raw_image_and_metadata(stream)
+        return (self.remappers[stream].undistort_image(raw_image), metadata)
+    
     def get_image(self, stream='main', calibrated=True):
         return self.get_calibrated_image(stream) if calibrated else self.get_raw_image(stream)
 
@@ -531,17 +558,20 @@ class ScantoolTk:
 
         ttk.Button(controls, text='Camera Calibrate', command=self.do_camera_calibrate).grid(column=0, row=0)
 
+        self.var_AeEnable = IntVar(value=1)
+        ttk.Checkbutton(controls, text='AeEnable', variable=self.var_AeEnable, command=self.do_AeEnable).grid(column=1, row=0)
+
         self.var_undistort = IntVar(value=1)
-        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=1, row=0)
+        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=2, row=0)
 
         self.var_detect_corners = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
+        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=3, row=0)
 
-        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=3, row=0)
+        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=4, row=0)
         self.goto_x = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=4, row=0)
+        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=5, row=0)
         self.goto_y = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=5, row=0)
+        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=6, row=0)
 
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
@@ -724,6 +754,11 @@ class ScantoolTk:
         print(f"Calibration complete ({elapsed:.3f} seconds)")
 
         self.calibration['camera'] = calibration
+
+    def do_AeEnable(self):
+        controls = {'AeEnable': self.var_AeEnable.get() != 0}
+        controls['AwbEnable'] = controls['AeEnable']
+        self.camera.raw_camera.set_controls(controls)
 
     def key_event(self, event):
         pass
