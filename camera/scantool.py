@@ -30,6 +30,7 @@ from twisted.internet import tksupport, reactor
 from twisted.internet import threads as twisted_threads
 
 from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, BigHammerRemapper
+from puzzler.commands.points import PerimeterComputer
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
@@ -71,6 +72,29 @@ class ImageProjection:
     def mm_to_px(self, mm):
         return (np.asarray(mm) - self.coord_mm) * (self.px_per_mm, -self.px_per_mm)
 
+def scan_area_iterator(rect, dxdy):
+
+    # finds an integer number of scans that fits within the rectangle
+    # while maintaining the specified stepover, it would be better to
+    # reduce the stepover as necessary so that the rectangle is
+    # completely covered
+
+    x0, y0, x1, y1 = rect
+    w, h = x1 - x0, y1 - y0
+    dx, dy = dxdy
+
+    c, r = int(w / dx) + 1, int(h / dy) + 1
+    dx = w / (c-1) if c > 1 else 0
+    dy = h / (r-1) if r > 1 else 0
+        
+    for j in range(r):
+        for i in range(c):
+            # even rows are left to right, odds rows are right to left
+            if j & 1:
+                yield (x0 + (c-1-i)*dx, y0 + j*dy)
+            else:
+                yield (x0 + i*dx, y0 + j*dy)
+                
 class PieceFinder:
 
     def __init__(self, gantry, camera):
@@ -79,79 +103,88 @@ class PieceFinder:
         self.image_dpi = 600.
         self.image_binary_threshold = 130
         self.min_size_mm = 10
-        self.max_size_mm = 50
+        self.max_size_mm = 70
         self.margin_px = 5
         self.x_step = 75
-        self.y_step = 50
+        self.y_step = 30
 
     def find_pieces(self, rect):
 
-        x0, y0, x1, y1 = rect
+        print("Finding pieces")
 
         self.gantry.move_to(z=0)
         
-        images = []
-        for y in range(y0, y1, self.y_step):
-            for x in range(x0, x1, self.x_step):
-                self.gantry.move_to(x=x, y=y, f=5000)
-                time.sleep(.5)
-                image = self.camera.get_calibrated_image()
-
-                pieces = self.find_pieces_one_image(image)
-                images.append(((x, y), pieces))
-
         all_pieces = []
+        for x, y in scan_area_iterator(rect, (self.x_step, self.y_step)):
+            print(f"Scanning at {x},{y}")
+            opath = f"scan_{x:.0f}_{y:.0f}.jpg"
+            for center, radius in self.find_candidates(x, y, opath):
+                if any(np.linalg.norm(i[0] - center) < radius for i in all_pieces):
+                    continue
+                opath = f"piece_{len(all_pieces):02d}.jpg"
+                print(f"Found piece at ({center[0]:.1f},{center[1]:.1f}), {radius=:.1f}mm -> {opath}")
+                points = self.get_points_for_piece(center, radius, opath)
+                all_pieces.append((center, radius, points))
+
+        print(f"All done!  Found {len(all_pieces)} pieces")
+        return all_pieces
+
+    def get_points_for_piece(self, center, radius, opath=None):
+        self.gantry.move_to(x=center[0], y=center[1])
+        time.sleep(.5)
+        image = self.camera.get_calibrated_image()
+
+        image_h, image_w = image.shape[:2]
+        pix_per_mm = self.image_dpi / 25.4
+        rect_size = int(radius * pix_per_mm)
+        x0 = image_w // 2 - rect_size
+        y0 = image_h // 2 - rect_size
+        x1 = image_w // 2 + rect_size
+        y1 = image_h // 2 + rect_size
+        sub_image = image[y0:y1,x0:x1]
+
+        contour = PerimeterComputer(sub_image, flip_contour=False).contour
+
+        if opath:
+            print(f"Saving piece with contour to {opath}")
+            cv.drawContours(sub_image, [contour], 0, (0,255,0))
+            cv.imwrite(opath, sub_image)
+
+        # take the center of the points from the center of the
+        # image, as that is how the camera was aligned
+        points = np.squeeze(contour)        
+        return points - (image_w//2, image_h//2)
+    
+    def find_candidates(self, image_x, image_y, opath=None):
+        
+        self.gantry.move_to(x=image_x, y=image_y, f=5000)
+        time.sleep(.5)
+        image = self.camera.get_calibrated_image()
+
+        if opath:
+            print(f"Saving image to {opath}")
+            cv.imwrite(opath, cv.resize(image, None, fx=.25, fy=.25))
+        
+        pieces = self.find_pieces_one_image(image)
+        
         px_per_mm = self.image_dpi / 25.4
-        for image_no, (xy, pieces) in enumerate(images):
+        proj = ImageProjection(np.array((image_x, image_y)), px_per_mm)
 
-            proj = ImageProjection(np.array(xy), px_per_mm)
+        image_size = np.array(image.shape[:2][::-1])
 
-            for r in pieces:
-                x, y, w, h = r
-                center_px = np.array((x + w/2, (y + h/2)))
-                radius_px = math.hypot(w, h) / 2
+        retval = []
+        for r in pieces:
+            x, y, w, h = r
+            center_px = np.array((x + w/2, (y + h/2)))
+            radius_px = math.hypot(w, h) / 2
 
-                center_mm = proj.px_to_mm(center_px)
-                radius_mm = radius_px / px_per_mm
+            center_mm = proj.px_to_mm(center_px - image_size/2)
+            radius_mm = radius_px / px_per_mm
 
-                all_pieces.append((center_mm, radius_mm))
+            retval.append((center_mm, radius_mm))
 
-        dist = scipy.spatial.distance.pdist([i for i, _ in all_pieces])
-
-        n = len(all_pieces)
-
-        uniq_ids = dict((i,i) for i in range(n))
-
-        print("Scanning for redundant pieces, {n} total pieces")
-        k = 0
-        for i in range(n-1):
-            l = n-(i+1)
-            overlaps = np.flatnonzero(dist[k:k+l] < all_pieces[i][1])+i+1
-            if len(overlaps):
-                print(f"piece {i} overlaps pieces {overlaps}")
-                if uniq_ids[i] == i:
-                    for m in overlaps:
-                        uniq_ids[m] = i
-                else:
-                    # we expect all the overlapping pieces of piece 'i' to
-                    # also have overlapped whatever it is that 'i'
-                    # overlapped
-                    assert all(uniq_ids[m] == uniq_ids[i] for m in overlaps)
-            k += l
-        assert k == len(dist)
-
-        keepers = []
-        for k, v in uniq_ids.items():
-            if k == v:
-                keepers.append(all_pieces[k])
-
-        print(f"Found {n} pieces with initial scan, reduced to {len(keepers)} unique pieces")
-
-        to_scan = [k[0].tolist() for k in keepers]
-
-        with open('toscan.json', 'w') as f:
-            f.write(json.dumps(to_scan, indent=4))
-
+        return retval
+            
     def find_pieces_one_image(self, image):
         gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
         thresh = cv.threshold(gray, self.image_binary_threshold, 255, cv.THRESH_BINARY)[1]
@@ -504,6 +537,12 @@ class ScantoolTk:
         self.var_detect_corners = IntVar(value=0)
         ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
 
+        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=3, row=0)
+        self.goto_x = IntVar(value=0)
+        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=4, row=0)
+        self.goto_y = IntVar(value=0)
+        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=5, row=0)
+
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
         ttk.Button(f, text='Home', command=self.do_home).grid(column=0, row=0)
@@ -561,6 +600,11 @@ class ScantoolTk:
         d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
         d.addBoth(self.notify_camera_event)
 
+    def do_goto(self):
+        x = self.goto_x.get()
+        y = self.goto_y.get()
+        self.send_gcode(f'G1 X{x} Y{y}')
+
     def do_home(self):
         d = twisted_threads.deferToThread(self.home_impl)
 
@@ -595,7 +639,7 @@ class ScantoolTk:
 
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
-        rect = (135, 475, 676, 701)
+        rect = (135, 400, 800, 1200)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
     def do_gcode1(self):
