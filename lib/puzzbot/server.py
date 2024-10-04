@@ -191,6 +191,10 @@ class BotRequestHandler(http.server.BaseHTTPRequestHandler):
 
         self.server.camera.set_controls(data)
         
+        self.send_response(HTTPStatus.OK)
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+        
     def get_camera(self, path, params):
 
         if path.startswith('/image/'):
