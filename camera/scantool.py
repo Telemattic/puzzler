@@ -111,13 +111,12 @@ class PieceFinder:
     def __init__(self, gantry, camera):
         self.gantry = gantry
         self.camera = camera
-        self.image_dpi = 600.
-        self.image_binary_threshold = 130
+        self.capture_dpi = 600.
+        self.panorama_dpi = 75.
+        self.image_threshold = 128
         self.min_size_mm = 10
         self.max_size_mm = 70
         self.margin_px = 5
-        self.x_step = 75
-        self.y_step = 30
 
     def find_pieces(self, rect):
 
@@ -128,34 +127,125 @@ class PieceFinder:
         dummy_image = self.camera.get_calibrated_image()
         image_h, image_w = dummy_image.shape[:2]
 
-        mm_per_pixel = 25.4 / self.image_dpi
-        self.x_step = int(image_w * mm_per_pixel)
-        self.y_step = int(image_h * mm_per_pixel)
+        mm_per_pixel = 25.4 / self.capture_dpi
+        x_step = int(image_w * mm_per_pixel)
+        y_step = int(image_h * mm_per_pixel)
 
-        print(f"image is {image_w}x{image_h} and {1/mm_per_pixel:.1f} pixels/mm, x_step={self.x_step} y_step={self.y_step}")
+        print(f"image is {image_w}x{image_h} and {1/mm_per_pixel:.1f} pixels/mm, {x_step=} {y_step=}")
         
-        all_pieces = []
-        for x, y in scan_area_iterator(rect, (self.x_step, self.y_step)):
+        panorama_scale = self.panorama_dpi / self.capture_dpi
+
+        images = []
+        for x, y in scan_area_iterator(rect, (x_step, y_step)):
             print(f"Scanning at {x},{y}")
             opath = f"scan_{x:.0f}_{y:.0f}.jpg"
-            for center, radius in self.find_candidates(x, y, opath):
-                if any(np.linalg.norm(i[0] - center) < radius for i in all_pieces):
-                    continue
-                opath = f"piece_{len(all_pieces):02d}.jpg"
-                print(f"Found piece at ({center[0]:.1f},{center[1]:.1f}), {radius=:.1f}mm -> {opath}")
-                points = self.get_points_for_piece(center, radius, opath)
-                all_pieces.append((center, radius, points))
+            image = self.capture_image_at_xy(x, y)
+            images.append((cv.resize(image, None, fx=panorama_scale, fy=panorama_scale), (x, y)))
+            if len(images) > 3:
+                break
 
-        print(f"All done!  Found {len(all_pieces)} pieces")
-        return all_pieces
+        print(f"captured {len(images)} to stitch into panorama")
+
+        pano, proj = self.assemble_panorama(images)
+
+        cv.imwrite('pano.jpg', pano)
+
+        offset = -np.array((image_w, image_h)) * (self.panorama_dpi / self.capture_dpi) * .5
+        to_scan = self.find_pieces_in_panorama(pano, proj, offset)
+
+        cv.imwrite('pano-contours.png', pano)
+
+        print(f"found {len(to_scan)} pieces in panorama")
+
+        pieces = []
+        for i in to_scan:
+            center, radius = i[:2]
+            opath = f"piece_{len(pieces):02d}.jpg"
+            with np.printoptions(precision=1):
+                print(f"Found piece at {center=} {radius=} mm -> {opath}")
+            points = self.get_points_for_piece(center, radius, opath)
+            pieces.append((center, radius, points))
+
+        print(f"All done!  Found {len(pieces)} pieces")
+        return pieces
+
+    def find_pieces_in_panorama(self, image, proj, offset):
+
+        min_area = (proj.px_per_mm * self.min_size_mm) ** 2
+        max_area = (proj.px_per_mm * self.max_size_mm) ** 2
+
+        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        thresh = cv.threshold(gray, self.image_threshold, 255, cv.THRESH_BINARY)[1]
+
+        contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)[0]
+        print(f"Found {len(contours)} contours!")
+
+        retval = []
+        for c in contours:
+            
+            a = cv.contourArea(c)
+            if not (min_area <= a <= max_area):
+                continue
+
+            x, y, w, h = cv.boundingRect(c)
+            center_px = (x + w/2, y + h/2)
+            radius_px = math.hypot(w,h) / 2
+            center_mm = proj.px_to_mm(center_px + offset)
+            radius_mm = radius_px / proj.px_per_mm
+            retval.append((center_mm, radius_mm, c))
+
+            with np.printoptions(precision=1):
+                print(f"Found contour at {center_px=} {radius_px=:.1f} -> {center_mm=} {radius_px=:.1f}")
+
+            cv.circle(image, (int(center_px[0]), int(center_px[1])), int(radius_px), (0, 255, 255))
+            cv.drawContours(image, [c], -1, (0,0,255), 1)
+
+        return retval
+
+    def assemble_panorama(self, images):
+        pano_ul_mm = np.array((min(xy[0] for _, xy in images),
+                               max(xy[1] for _, xy in images)))
+        px_per_mm = self.panorama_dpi / 25.4
+
+        with np.printoptions(precision=1):
+            print(f"{pano_ul_mm=} {px_per_mm=:.3f}")
+
+        proj = ImageProjection(pano_ul_mm, px_per_mm)
+
+        images_px = []
+        for i, xy_mm in images:
+            xy_px = np.array(proj.mm_to_px(xy_mm), np.int32)
+            images_px.append((i, xy_px))
+
+        min_x = min(xy[0] for i, xy in images_px)
+        max_x = max(xy[0] + i.shape[1] for i, xy in images_px)
+        min_y = min(xy[1] for i, xy in images_px)
+        max_y = max(xy[1] + i.shape[0] for i, xy in images_px)
+
+        print(f"{min_x=} {max_x=} {min_y=} {max_y=}")
+
+        pano = np.zeros((max_y-min_y, max_x-min_x, 3), dtype=np.uint8)
+
+        print(f"{pano.shape=}")
+
+        for img, (x, y) in images_px:
+            x -= min_x
+            y -= min_y
+            h, w = img.shape[:2]
+            pano[y:y+h,x:x+w,:] = img
+
+        return (pano, proj)
+
+    def capture_image_at_xy(self, x, y):
+        self.gantry.move_to(x=x, y=y)
+        time.sleep(.5)
+        return self.camera.get_calibrated_image()
 
     def get_points_for_piece(self, center, radius, opath=None):
-        self.gantry.move_to(x=center[0], y=center[1])
-        time.sleep(.5)
-        image = self.camera.get_calibrated_image()
+        image = self.capture_image_at_xy(center[0], center[1])
 
         image_h, image_w = image.shape[:2]
-        pix_per_mm = self.image_dpi / 25.4
+        pix_per_mm = self.capture_dpi / 25.4
         rect_size = int(radius * pix_per_mm)
         x0 = image_w // 2 - rect_size
         y0 = image_h // 2 - rect_size
@@ -163,11 +253,11 @@ class PieceFinder:
         y1 = image_h // 2 + rect_size
         sub_image = image[y0:y1,x0:x1]
 
-        contour = PerimeterComputer(sub_image, flip_contour=False).contour
+        contour = PerimeterComputer(sub_image, threshold=self.image_threshold, flip_contour=False).contour
 
         if opath:
             print(f"Saving piece with contour to {opath}")
-            cv.drawContours(sub_image, [contour], 0, (0,255,0))
+            cv.drawContours(sub_image, [contour], 0, (0,0,255))
             cv.imwrite(opath, sub_image)
 
         # take the center of the points from the center of the
@@ -187,7 +277,7 @@ class PieceFinder:
         
         pieces = self.find_pieces_one_image(image)
         
-        px_per_mm = self.image_dpi / 25.4
+        px_per_mm = self.capture_dpi / 25.4
         proj = ImageProjection(np.array((image_x, image_y)), px_per_mm)
 
         image_size = np.array(image.shape[:2][::-1])
@@ -207,7 +297,7 @@ class PieceFinder:
             
     def find_pieces_one_image(self, image):
         gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-        thresh = cv.threshold(gray, self.image_binary_threshold, 255, cv.THRESH_BINARY)[1]
+        thresh = cv.threshold(gray, self.image_threshold, 255, cv.THRESH_BINARY)[1]
             
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
         thresh = cv.erode(thresh, kernel)
@@ -220,8 +310,9 @@ class PieceFinder:
         image_h, image_w = gray.shape
         margin_px = self.margin_px
 
-        min_size_px = self.min_size_mm * self.image_dpi / 25.4
-        max_size_px = self.max_size_mm * self.image_dpi / 25.4
+        px_per_mm = self.capture_dpi / 25.4
+        min_size_px = self.min_size_mm * px_per_mm
+        max_size_px = self.max_size_mm * px_per_mm
     
         for c in contours:
             r = cv.boundingRect(c)
