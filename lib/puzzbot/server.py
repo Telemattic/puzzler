@@ -175,6 +175,22 @@ class BotRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Length', '0')
             self.end_headers()
 
+    def post_camera(self, path, params):
+
+        if path == '/controls':
+            self.post_camera_controls(params)
+        else:
+            self.send_error(HTTPStatus.NOT_FOUND)
+
+    def post_camera_controls(self, params):
+        
+        content_length = int(self.headers.get('Content-Length'))
+
+        data = self.rfile.read(content_length)
+        data = json.loads(data.decode('utf-8'))
+
+        self.server.camera.set_controls(data)
+        
     def get_camera(self, path, params):
 
         if path.startswith('/image/'):
