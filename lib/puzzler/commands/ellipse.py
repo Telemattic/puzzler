@@ -77,6 +77,11 @@ class TabComputer:
         self.approx_poly = ApproxPolyComputer(self.perimeter, epsilon)
         self.max_mse   = 500
         self.min_angle = math.radians(220)
+        self.max_semi_major = 90.
+
+        # override for 100 piece puzzle which has significantly larger
+        # pieces
+        self.max_semi_major = 150
 
         self.tabs = []
 
@@ -138,7 +143,7 @@ class TabComputer:
                     print("  ellipse too eccentric, rejecting")
                 continue
 
-            if e.semi_major > 90:
+            if e.semi_major > self.max_semi_major:
                 if self.verbose:
                     print("   ellipse too big, rejecting")
                 continue
@@ -853,10 +858,19 @@ def feature_view(args):
 
 def clean_edges(label, edges):
 
+    def edge_len(e):
+        return np.linalg.norm(e.line.pts[1] - e.line.pts[0])
+
     if len(edges) < 2:
         return edges
+
+    if len(edges) > 2:
+        # should probably figure out if some of the edges should be
+        # merged instead of just blindly keeping the two longest
+        print(f"HACK: piece \"{label}\" has {len(edges)} edges, keeping 2 longest edges")
+        edges = sorted(edges, key=edge_len)[-2:]
     
-    assert len(edges) == 2
+    assert len(edges) == 2, f"piece \"{label}\" has {len(edges)} edges?!"
     e0, e1 = edges
     l0, l1 = e0.line, e1.line
     v0 = puzzler.math.unit_vector(l0.pts[1] - l0.pts[0])
