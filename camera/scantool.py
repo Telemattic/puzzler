@@ -19,6 +19,7 @@ import numpy as np
 import PIL.Image
 import PIL.ImageTk
 import pprint
+import puzzler
 import requests
 import scipy.spatial.distance
 import time
@@ -148,29 +149,80 @@ class PieceFinder:
 
         cv.imwrite('pano.jpg', pano)
 
-        offset = -np.array((image_w, image_h)) * (self.panorama_dpi / self.capture_dpi) * .5
-        to_scan = self.find_pieces_in_panorama(pano, proj, offset)
+        to_scan = self.find_pieces_in_panorama(pano)
 
         cv.imwrite('pano-contours.png', pano)
 
-        print(f"found {len(to_scan)} pieces in panorama")
+        print(f"Found {len(to_scan)} pieces in panorama")
+
+        offset = -np.array((image_w, image_h)) * (self.panorama_dpi / self.capture_dpi) * .5
+        
+        to_scan = self.convert_px_to_mm(proj, offset, to_scan)
+
+        optimized_path = self.optimize_path(to_scan)
+
+        # with open('pano-tsp.json', 'w') as f:
+        #     json.dump({'original':to_scan, 'optimized':optimized_path}, f, indent=4)
+
+        n_cols = int(math.sqrt(len(to_scan)))
+        if n_cols * n_cols < len(to_scan):
+            n_cols += 1
 
         pieces = []
-        for i in to_scan:
-            center, radius = i[:2]
-            opath = f"piece_{len(pieces):02d}.jpg"
+        for center_mm, radius_mm in optimized_path:
+            col = len(pieces) % n_cols
+            row = len(pieces) // n_cols
+            label = f"{chr(ord('A')+row)}{col+1}"
+            opath = f"piece_{label}.jpg"
             with np.printoptions(precision=1):
-                print(f"Found piece at {center=} {radius=} mm -> {opath}")
-            points = self.get_points_for_piece(center, radius, opath)
-            pieces.append((center, radius, points))
+                print(f"Found piece at {center_mm=} {radius_mm=:.1f} mm -> {opath}")
+            points, source = self.get_points_and_source_for_piece(center_mm, radius_mm, opath)
+            pieces.append((center_mm, label, points, source))
+
+        Puzzle = puzzler.puzzle.Puzzle
+
+        fnord = []
+        for i, (_, label, points, source) in enumerate(pieces):
+            fnord.append(Puzzle.Piece(label, source, points, None, None))
+
+        puzzler.file.save('temp-puzzle.json', Puzzle({}, fnord))
 
         print(f"All done!  Found {len(pieces)} pieces")
         return pieces
 
-    def find_pieces_in_panorama(self, image, proj, offset):
+    @staticmethod
+    def optimize_path(to_scan):
+        
+        from python_tsp.heuristics import solve_tsp_simulated_annealing, solve_tsp_local_search
 
-        min_area = (proj.px_per_mm * self.min_size_mm) ** 2
-        max_area = (proj.px_per_mm * self.max_size_mm) ** 2
+        vertexes = np.array([xy for xy, _ in to_scan])
+
+        distance_matrix = scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(vertexes))
+        distance_matrix[:,0] = 0
+
+        permutation, distance = solve_tsp_simulated_annealing(distance_matrix)
+
+        permutation2, distance2 = solve_tsp_local_search(
+            distance_matrix, x0=permutation, perturbation_scheme='ps3')
+
+        return [to_scan[i] for i in permutation2]
+
+    @staticmethod
+    def convert_px_to_mm(proj, offset_px, data):
+
+        retval = []
+        for center_px, radius_px in data:
+            center_mm = proj.px_to_mm(center_px + offset_px)
+            radius_mm = radius_px / proj.px_per_mm
+            retval.append((center_mm, radius_mm))
+
+        return retval
+
+    def find_pieces_in_panorama(self, image):
+
+        px_per_mm = self.panorama_dpi / 25.4
+        min_area = (px_per_mm * self.min_size_mm) ** 2
+        max_area = (px_per_mm * self.max_size_mm) ** 2
 
         gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
         thresh = cv.threshold(gray, self.image_threshold, 255, cv.THRESH_BINARY)[1]
@@ -178,7 +230,7 @@ class PieceFinder:
         contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)[0]
         print(f"Found {len(contours)} contours!")
 
-        retval_px = []
+        retval = []
         for c in contours:
             
             a = cv.contourArea(c)
@@ -186,22 +238,13 @@ class PieceFinder:
                 continue
 
             x, y, w, h = cv.boundingRect(c)
-            center_px = (x + w/2, y + h/2)
-            radius_px = math.hypot(w,h) / 2
-            retval_px.append((center_px, radius_px))
+            center = (x + w/2, y + h/2)
+            radius = math.hypot(w,h) / 2
+            retval.append((center, radius))
 
-            cv.circle(image, (int(center_px[0]), int(center_px[1])), int(radius_px), (0, 255, 255))
+            cv.circle(image, (int(center[0]), int(center[1])), int(radius), (0, 255, 255))
 
-        with open('centers.json', 'w') as f:
-            f.write(json.dumps(retval_px))
-
-        retval_mm = []
-        for center_px, radius_px in retval_px:
-            center_mm = proj.px_to_mm(center_px + offset)
-            radius_mm = radius_px / proj.px_per_mm
-            retval_mm.append((center_mm, radius_mm))
-            
-        return retval_mm
+        return retval
 
     def assemble_panorama(self, images):
         pano_ul_mm = np.array((min(xy[0] for _, xy in images),
@@ -242,7 +285,7 @@ class PieceFinder:
         time.sleep(.5)
         return self.camera.get_calibrated_image()
 
-    def get_points_for_piece(self, center, radius, opath=None):
+    def get_points_and_source_for_piece(self, center, radius, opath=None):
         image = self.capture_image_at_xy(center[0], center[1])
 
         image_h, image_w = image.shape[:2]
@@ -254,17 +297,21 @@ class PieceFinder:
         y1 = image_h // 2 + rect_size
         sub_image = image[y0:y1,x0:x1]
 
-        contour = PerimeterComputer(sub_image, threshold=self.image_threshold, flip_contour=False).contour
+        contour = PerimeterComputer(sub_image, threshold=self.image_threshold).contour
 
         if opath:
-            print(f"Saving piece with contour to {opath}")
-            cv.drawContours(sub_image, [contour], 0, (0,0,255))
+            print(f"Saving piece to {opath}")
+            # cv.drawContours(sub_image, [contour], 0, (0,0,255))
             cv.imwrite(opath, sub_image)
+            
+        Source = puzzler.puzzle.Puzzle.Piece.Source
 
         # take the center of the points from the center of the
         # image, as that is how the camera was aligned
-        points = np.squeeze(contour)        
-        return points - (image_w//2, image_h//2)
+        center = (sub_image.shape[1]//2, sub_image.shape[0]//2)
+        points = np.squeeze(contour) - center
+        source = Source(opath, (0, 0, sub_image.shape[1], sub_image.shape[0]))
+        return points, source
     
     def find_candidates(self, image_x, image_y, opath=None):
         
