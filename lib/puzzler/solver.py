@@ -25,13 +25,14 @@ Size = puzzler.raft.Size
 
 class BorderSolver:
 
-    def __init__(self, pieces):
+    def __init__(self, pieces, expected=None):
         self.pieces = pieces
         self.pred = dict()
         self.succ = dict()
         self.corners = []
         self.edges = []
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
+        self.expected = expected
 
         for p in self.pieces.values():
             n = len(p.edges)
@@ -140,11 +141,22 @@ class BorderSolver:
         pairs = dict()
         used = set()
 
+        max_match_error = 70. if len(candidates) < 50 else 20. 
+
         skipped = set()
         for dst in candidates:
 
             best_src = rescore[dst][0]
             best = best_src[-1]
+
+            # HACK: fix bucks.json puzzle border
+            if dst == 'AA22' and best == 'AA13' and rescore[dst][1][-1] == 'AA21':
+                best_src = rescore[dst][1]
+                best = best_src[-1]
+
+            # skip high error
+            if best_src[0] > max_match_error:
+                continue
 
             all_pairs[dst] = best
             
@@ -158,7 +170,18 @@ class BorderSolver:
             used.add(best)
             pairs[dst] = best
 
-        if False:
+        if True:
+            expected_pairs = dict()
+            if self.expected:
+                for dst in candidates:
+                    dstf = puzzler.raft.Feature(dst, 'tab', self.succ[dst][1])
+                    srcf = self.expected.get(dstf)
+                    print(f"dst={str(dstf)} src={str(srcf)}")
+                    if srcf is not None:
+                        expected_pairs[dst] = srcf.piece
+
+            actual_pairs = all_pairs
+
             with open('temp/rescores.json', 'w') as f:
                 o = dict()
                 o['scores'] = rescore
@@ -169,6 +192,8 @@ class BorderSolver:
                 o['candidates'] = candidates
                 o['pred'] = self.pred
                 o['succ'] = self.succ
+                o['expected_pairs'] = expected_pairs
+                o['actual_pairs'] = actual_pairs
                 f.write(json.dumps(o, indent=4))
     
         # print(f"{pairs=}")
@@ -637,7 +662,7 @@ class FrontierExplorer:
 
 class PuzzleSolver:
 
-    def __init__(self, pieces, dirname = None):
+    def __init__(self, pieces, dirname = None, expected = None):
         self.pieces = pieces
         self.raft = None
         self.frontiers = None
@@ -648,6 +673,7 @@ class PuzzleSolver:
         self.seams = []
         self.start_time = time.monotonic()
         self.dirname = dirname
+        self.expected = expected
 
     def solve(self):
         if self.raft:
@@ -682,8 +708,8 @@ class PuzzleSolver:
             writer.writerows(to_rows(scores))
 
     def solve_border(self):
-        
-        bs = BorderSolver(self.pieces)
+
+        bs = BorderSolver(self.pieces, expected=self.expected)
 
         scores = bs.score_matches()
 
