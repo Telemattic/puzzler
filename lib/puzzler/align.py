@@ -115,7 +115,7 @@ class DistanceImage:
         dist_image = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
 
         # pixels interior to the piece are 0, exterior are 1
-        is_exterior_mask = cv.floodFill(piece_image, None, -self.ll, 0)[1]
+        is_exterior_mask = cv.floodFill(piece_image, None, (w//2, h//2), 0)[1]
 
         # positive distance is distance from the piece (external),
         # negative distance is distance from the boundary of the piece
