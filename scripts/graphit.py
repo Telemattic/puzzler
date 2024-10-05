@@ -68,9 +68,32 @@ def merge_good_runs(good_nodes, node_ids):
 
     return node_ids
 
+def fake_expected():
+
+    expected = dict()
+    for i in range(1,38):
+        expected[f"A{i}"] = f"A{i+1}"
+        expected[f"AA{i+1}"] = f"AA{i}"
+
+    r = {i: chr(ord('A')+i-1) for i in range(1,27)}
+    r[27] = 'AA'
+    
+    for i in range(1,27):
+        expected[f"{r[i]}38"] = f"{r[i+1]}38"
+        expected[f"{r[i+1]}1"] = f"{r[i]}1"
+
+    return expected
+        
 def make_graph(ofile, expected, actual, opt):
 
     # three kinds of edge: good, bad, missing
+
+    # bogus_keys = list(expected.keys() - (actual.keys() | set(actual.values())))
+    # for i in bogus_keys:
+    # expected.pop(i)
+
+    # expected = fake_expected()
+    print(f"{expected=}")
 
     in_edges = collections.defaultdict(list)
     for dst, src in actual.items():
@@ -83,6 +106,14 @@ def make_graph(ofile, expected, actual, opt):
             in_edges[dst].append((src, 'bad'))
             in_edges[dst].append((expected_src, 'missing'))
 
+    # add missing expected edges? I'm not sure why I didn't do this
+    # originally, maybe I had "too much" expected data (e.g. the whole
+    # puzzle instead of just the subset of pieces being analyzed) and
+    # it became a mess?
+    for dst, src in expected.items():
+        if (src, 'good') not in in_edges[dst] and (src, 'missing') not in in_edges[dst]:
+            in_edges[dst].append((src, 'missing'))
+
     out_edges = collections.defaultdict(list)
     for dst, edges in in_edges.items():
         for src, kind in edges:
@@ -92,8 +123,9 @@ def make_graph(ofile, expected, actual, opt):
     id_to_nodes = dict((v, set([k])) for k, v in node_to_id.items())
     ordered_nodes = sorted(node_to_id.keys(), key=lambda x: node_to_id[x])
 
-    # for node in ordered_nodes:
-    #     print(f"{node=} in_edges={in_edges[node]} out_edges={out_edges[node]}")
+    if False:
+        for node in ordered_nodes:
+            print(f"{node=} in_edges={in_edges[node]} out_edges={out_edges[node]}")
     
     def has_single_good_edgex(dst, src):
         return (len(out_edges[src]) == 1 and
