@@ -445,6 +445,13 @@ class RaftAligner:
     def refine_edge_alignment_within_raft(
             self, raft: Raft, seams: Sequence[Seam], edges: FeaturePair, verbose=False) -> Raft:
 
+        def sample_edge(piece_points, fit_indexes):
+            n = len(piece_points)
+            a, b = fit_indexes
+            if b < a:
+                b += n
+            return piece_points[np.arange(a, b, 10) % n]
+
         if len(raft.coords) != 2:
             raise ValueError("expected raft with exactly two pieces")
 
@@ -493,7 +500,12 @@ class RaftAligner:
                                         dst_body, dst_points, dst_normals)
 
             e = src_piece.edges[src_edge.index]
-            icp.add_axis_correspondence(src_body, e.line.pts, axis)
+            if True:
+                src_points = sample_edge(src_piece.points, e.fit_indexes)
+                # print(f"{i.src.piece}: sample_edge={src_points} {e.line.pts=}")
+            else:
+                src_points = e.line.pts
+            icp.add_axis_correspondence(src_body, src_points, axis)
 
         icp.solve()
 
@@ -859,6 +871,13 @@ class Raftinator:
         
         src_coord = self.aligner.rough_align(dst_raft, src_raft, feature_pairs)
         return self.factory.merge_rafts(dst_raft, src_raft, src_coord)
+
+    def refine_edge_alignment_within_raft(self, raft: Raft, edges: FeaturePair, seams: Optional[Seams] = None) -> Raft:
+
+        if seams is None:
+            seams = self.get_seams_for_raft(raft)
+
+        return self.aligner.refine_edge_alignment_within_raft(raft, seams, edges)
 
     def refine_alignment_within_raft(self, raft: Raft, seams: Optional[Seams] = None) -> Raft:
 
