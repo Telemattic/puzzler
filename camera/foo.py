@@ -478,8 +478,10 @@ def compare_moments(path_a, path_b):
     # dict_a = compute_hu_moments_for_pieces(puzzle_a.pieces)
     # dict_b = compute_hu_moments_for_pieces(puzzle_b.pieces)
 
+    summary = []
     for piece_b in puzzle_b.pieces:
 
+        best = []
         for mode in (cv.CONTOURS_MATCH_I1, cv.CONTOURS_MATCH_I2, cv.CONTOURS_MATCH_I3):
 
             scores = []
@@ -488,24 +490,18 @@ def compare_moments(path_a, path_b):
                 scores.append((score, piece_a.label))
 
             scores.sort()
-            print(f"piece_b={piece_b.label}")
-            print(f"{mode=} scores:")
+            print(f"piece_b={piece_b.label}, {mode=} scores:")
             for i, (score, label) in enumerate(scores):
-                print(f"{i} {score:.6f} {label}")
-                if label == piece_b.label:
-                    break
+                print(f"  {i} {score:.6f} {label}")
             print()
 
-    for i in puzzle_a.pieces:
-        best_score = None
-        best_match = None
-        for j in puzzle_a.pieces:
-            if i != j:
-                score = cv.matchShapes(i.points, j.points, cv.CONTOURS_MATCH_I1, 0.)
-                if best_match is None or score < best_score:
-                    best_score = score
-                    best_match = j
-        print(f"i={i.label} j={best_match.label} score={best_score}")
+            best.append(scores[0][1])
+
+        summary.append((piece_b.label, best))
+
+    print("SUMMARY")
+    for b_label, a_labels in summary:
+        print(f"{b_label}:", ', '.join(a_labels))
 
 def find_pieces_in_pano(ipath, opath):
 
@@ -658,8 +654,8 @@ def do_tsp():
 
 def main():
 
-    if False:
-        compare_moments('../bucks.json', '../fnord.json')
+    if True:
+        compare_moments('../100.json', 'temp-puzzle.json')
         return None
 
     if False:
