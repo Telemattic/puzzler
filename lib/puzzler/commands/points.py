@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 class PerimeterComputer:
 
-    def __init__(self, img, save_images = False):
+    def __init__(self, img, save_images = False, threshold=107, flip_contour = True):
         
         self.tempdir = None
         if save_images:
@@ -42,7 +42,7 @@ class PerimeterComputer:
         weight   = np.uint8(weight * 255 / np.max(weight))
         self._add_temp_image("weight.png", weight, "Weight")
         
-        thresh   = cv.threshold(blur, 107, 255, cv.THRESH_BINARY)[1]
+        thresh   = cv.threshold(blur, threshold, 255, cv.THRESH_BINARY)[1]
         
         self._add_temp_image("gray.png", gray, 'Gray')
         self._add_temp_image("blur0.png", blur0, 'Blur 0')
@@ -50,12 +50,10 @@ class PerimeterComputer:
         self._add_temp_image("blur.png", blur, 'Blur')
         self._add_temp_image("thresh.png", thresh, 'Thresh')
 
-        if save_images:
-            kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (9,9))
-            morph = cv.morphologyEx(thresh, cv.MORPH_OPEN, kernel=kernel)
-            self._add_temp_image("morph.png", morph, 'Morph')
-
-        contours = cv.findContours(np.flip(thresh, axis=0), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
+        if flip_contour:
+            thresh = np.flip(thresh, axis=0)
+            
+        contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
 
         assert isinstance(contours, tuple) and 2 == len(contours)
 
