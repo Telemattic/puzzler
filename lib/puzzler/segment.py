@@ -76,7 +76,7 @@ class SegmenterTk:
         scan = self.puzzle.scans[source_id]
         
         img = cv.imread(scan.path)
-        
+
         w, h = img.shape[1], img.shape[0]
         self.image_raw = (w, h)
 
@@ -110,12 +110,12 @@ class SegmenterTk:
 
         # trim off the margin introduced by a bit of overscan around
         # the black background
-        img      = img[0:h-16,0:w-16,:]
+        img = img[0:h-16,0:w-16,:]
 
         self.image_size = (img.shape[1], img.shape[0])
               
         gray     = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        thresh   = cv.threshold(gray, 84, 255, cv.THRESH_BINARY)[1]
+        thresh   = cv.threshold(gray, 128, 255, cv.THRESH_BINARY)[1]
         dilate   = cv.dilate(thresh, cv.getStructuringElement(cv.MORPH_RECT, (2,2)))
 
         print(f"temp={self.tempdir.name}")
