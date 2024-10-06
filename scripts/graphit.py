@@ -286,7 +286,8 @@ def main():
 
     elif args.output.endswith('.dot'):
 
-        make_graph(args.output, o['expected_pairs'], o['actual_pairs'], opt)
+        with open(args.output, 'w') as dotfile:
+            make_graph(dotfile, o['expected_pairs'], o['actual_pairs'], opt)
 
 if __name__ == '__main__':
     main()
