@@ -150,7 +150,8 @@ class BorderSolver:
             best = best_src[-1]
 
             # HACK: fix bucks.json puzzle border
-            if dst == 'AA22' and best == 'AA13' and rescore[dst][1][-1] == 'AA21':
+            if False and dst == 'AA22' and best == 'AA13' and rescore[dst][1][-1] == 'AA21':
+                print(f"HACK: fix AA22 to match to AA21 instead of AA13")
                 best_src = rescore[dst][1]
                 best = best_src[-1]
 
