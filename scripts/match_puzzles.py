@@ -8,6 +8,7 @@ import argparse
 import csv
 import operator
 import puzzler
+from tqdm import tqdm
 
 def score_match2(piece_a, piece_b, fp):
     
@@ -55,32 +56,33 @@ def score_match(piece_a, piece_b):
     
     return best_score
 
-def match_puzzles(puzzle_a, puzzle_b):
+def match_puzzles(puzzle_a, puzzle_b, ofile):
+    
+    writer = csv.DictWriter(ofile, fieldnames='lhs rhs rank score'.split())
+    writer.writeheader()
     
     pieces_a = puzzle_a.pieces
     pieces_b = puzzle_b.pieces
 
-    scores = []
-    for a in pieces_a:
+    for a in tqdm(pieces_a):
 
-        subset = []
+        rows = []
         for b in pieces_b:
             score = score_match(a, b)
             if score is not None:
-                subset.append({'lhs':a.label, 'rhs':b.label, 'rank':None, 'score':score})
+                rows.append({'lhs':a.label, 'rhs':b.label, 'rank':None, 'score':score})
 
-        subset.sort(key=operator.itemgetter('score'))
-        for i, row in enumerate(subset):
-            row['rank'] = i+1
+        rows.sort(key=operator.itemgetter('score'))
+        for rank, row in enumerate(rows, start=1):
+            row['rank'] = rank
 
-        scores += subset
-
-    return scores
+        writer.writerows(rows)
 
 def main():
     parser = argparse.ArgumentParser(prog='match_puzzles')
     parser.add_argument("puzzle_a")
     parser.add_argument("puzzle_b")
+    parser.add_argument("-o", "--output", help="output filename", required=True)
     args = parser.parse_args()
 
     a = puzzler.file.load(args.puzzle_a)
@@ -90,13 +92,9 @@ def main():
     b = puzzler.file.load(args.puzzle_b)
     for i in b.pieces:
         i.label = 'r_' + i.label
-        
-    scores = match_puzzles(a, b)
 
-    keys = 'lhs rhs rank score'.split()
-    print(','.join(keys))
-    for row in scores:
-        print(','.join(str(row[i]) for i in keys))
+    with open(args.output, 'w', newline='') as ofile:
+        match_puzzles(a, b, ofile)
 
 if __name__ == '__main__':
     main()
