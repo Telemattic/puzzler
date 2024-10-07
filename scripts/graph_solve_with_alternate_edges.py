@@ -8,74 +8,73 @@ import os
 import subprocess
 import tempfile
 
+def find_longest_cycles(G):
+
+    l_max = 0
+    longest_cycle = []
+    for cycle in nx.simple_cycles(G):
+        l = len(cycle)
+        if l > l_max:
+            l_max = l
+            longest_cycle = cycle
+
+    return longest_cycle
+
 def make_graph(ofile, data, opt):
 
     G = nx.DiGraph()
 
-    rank1_edges = []
     extra_edges = []
     for prev, choices in data['scores'].items():
         for rank, (mse, _, _, succ) in enumerate(sorted(choices), start=1):
             if mse < opt['max_error']:
                 if rank == 1:
-                    rank1_edges.append((prev, succ, rank, mse))
+                    G.add_edge(prev, succ, mse=mse)
                 else:
-                    extra_edges.append((prev, succ, rank, mse))
+                    extra_edges.append((mse, prev, succ))
 
-    extra_edges.sort(key=operator.itemgetter(3))
-    for prev, succ, rank, mse in rank1_edges + extra_edges[:opt['extra_edges']]:
-        G.add_edge(prev, succ, rank=rank, mse=mse)
+    extra_edges.sort()
 
-    n_cycles = 0
     l_max = 0
     longest_cycles = []
     for cycle in nx.simple_cycles(G):
-        n_cycles += 1
         l = len(cycle)
+        if l < l_max:
+            continue
+
+        cost = nx.path_weight(G, cycle + [cycle[0]], 'mse')
+        s = ' '.join(cycle)
+        print(f"Found cycle len={l}, {cost=:.3f}, path={s}")
+        
         if l > l_max:
             l_max = l
             longest_cycles = [cycle]
-        elif l == l_max:
+        else:
             longest_cycles.append(cycle)
 
-    n_longest = len(longest_cycles)
-    s = ' '.join(longest_cycles[0])
-    print(f"{n_cycles} cycles, {n_longest} of max length={l_max}")
+    for n in range(opt['extra_edges']):
+        mse, prev, succ = extra_edges[n]
+        G.add_edge(prev, succ, mse=mse)
 
-    expected_pairs = set(data['expected_pairs'].items())
+        print(f"Adding extra edge {n}: {prev} -> {succ}")
 
-    scored_cycles = []
-    for cycle in longest_cycles:
-        edges = list(itertools.pairwise(cycle + [cycle[0]]))
-        is_good_path = all(e in expected_pairs for e in edges)
-        error = sum(G.edges[e]['mse'] for e in edges)
-        scored_cycles.append((is_good_path, error, cycle))
+        # we added an edge from prev -> succ, so now we're looking for
+        # the possibility of a cycle that starts at succ and returns
+        # to prev (which may not exist of course):
+        for cycle in nx.all_simple_paths(G, succ, prev):
+            l = len(cycle)
+            if l < l_max:
+                continue
 
-    for is_good_path, error, cycle in sorted(scored_cycles, key=operator.itemgetter(1)):
-        x = '*' if is_good_path else ' '
-        s = ' '.join(cycle)
-        print(f'{x} {error=:8.3f} {s}')
-
-    if False:
-        src = 'A1'
-        dst = 'B1'
-        print(f"all_simple_paths: {src=} {dst=}")
-        for path in sorted(list(nx.all_simple_edge_paths(G, src, dst)), key=len):
-
-            path.append((path[-1][1], path[0][0]))
-
-            cost = 0.
-            nodes = []
-            is_good_path = True
-            for uv in path:
-                cost += G.edges[uv]['mse']
-                nodes.append(uv[0])
-                if uv not in expected_pairs:
-                    is_good_path = False
-
-            path = ' '.join(nodes)
-            is_good_path = '*' if is_good_path else ' '
-            print(f"{is_good_path} len={len(nodes):3d} {cost=:8.3f} {path=}")
+            cost = nx.path_weight(G, cycle + [cycle[0]], 'mse')
+            s = ' '.join(cycle)
+            print(f"Found cycle len={l}, {cost=:.3f}, path={s}")
+            
+            if l > l_max:
+                l_max = l
+                longest_cycles = [l]
+            else:
+                longest_cycles.append(l)
 
     simple_nodes = set()
     for node in G.nodes:
