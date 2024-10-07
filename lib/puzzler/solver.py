@@ -6,6 +6,7 @@ import functools
 import itertools
 import json
 import math
+import networkx as nx
 import numpy as np
 import operator
 import os
@@ -122,6 +123,8 @@ class BorderSolver:
     
     def link_pieces(self, scores):
 
+        return self.link_pieces_nx(scores)
+
         print(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
         
         rescore = dict()
@@ -212,6 +215,126 @@ class BorderSolver:
 
         n = len(retval)
         k = len(skipped) + len(pairs) - len(retval)
+        print(f"Found edge solution of length {n}, which omits {k} edge pieces")
+
+        axis_no = 3
+        axes = [0] * 4
+        for i in retval:
+            if len(self.pieces[i].edges) == 2:
+                axis_no = (axis_no + 1) % 4
+            axes[axis_no] += 1
+
+        # rotate to an assumed landscape orientation
+        print(f"pieces on each axis: {axes}")
+        
+        w, h = axes[:2]
+        if w * 1.1 < h:
+            print("rotating to landscape orientation")
+            retval = retval[w:] + retval[:w]
+
+        return retval[::-1]
+    
+    def link_pieces_nx(self, scores):
+
+        max_mse = 70. if len(self.corners) + len(self.edges) < 50 else 20.
+        num_extra_edges = 10
+
+        print(f"link_pieces_nx: corners={self.corners}, no. edges={len(self.edges)}")
+        
+        rescore = dict()
+        for dst, sources in scores.items():
+            # source is a dict, flatten it into a list so
+            # we can sort it by MSE
+            sources = [(*score, src) for src, score in sources.items()]
+            sources.sort(key=operator.itemgetter(0))
+            rescore[dst] = sources
+
+        G = nx.DiGraph()
+        extra_edges = []
+        
+        for dst in self.corners + self.edges:
+            for rank, score in enumerate(rescore[dst], start=1):
+                mse, _, _, src = score
+                if mse > max_mse:
+                    # really high error is assumed to be a mislabeled edge
+                    pass
+                elif rank == 1:
+                    # every node gets its favorite predecessor
+                    G.add_edge(src, dst, mse=mse)
+                else:
+                    # the remaining predecessors (with tolerable
+                    # error) are kept as backups
+                    extra_edges.append((mse, src, dst))
+
+        # find the longest cycle(s), given just the initial rank 1 edges
+        l_max = 0
+        longest_cycles = []
+        for cycle in nx.simple_cycles(G):
+            l = len(cycle)
+            if l < l_max:
+                continue
+
+            cost = nx.path_weight(G, cycle + [cycle[0]], 'mse')
+            s = ' '.join(cycle)
+            print(f"Found cycle len={l}, {cost=:.3f}, path={s}")
+
+            if l > l_max:
+                l_max = l
+                longest_cycles = [(cost, cycle)]
+            else:
+                longest_cycles.append((cost, cycle))
+
+        # add extra edges in order by lowest error, it's not
+        # necessarily the right order (the best order is of course
+        # adding just the necessary extra edges to get the optimal
+        # solution) but what else can we do?
+        extra_edges.sort()
+
+        for i in range(num_extra_edges):
+
+            if l_max == G.number_of_nodes():
+                # longest_cycles contains maximal length cycles, although
+                # not necessarily the single maximal length cycle with the
+                # lowest cost, N.B. that's an instance of the TSP so we
+                # shouldn't get too fixated on it
+                break
+
+            mse, src, dst = extra_edges[i]
+            G.add_edge(src, dst, mse=mse)
+
+            # we added an edge from src -> dst, so now we're looking
+            # for the possibility of a cycle that starts at dst and
+            # returns to src (which may not exist of course):
+            for cycle in nx.all_simple_paths(G, dst, src):
+                l = len(cycle)
+                if l < l_max:
+                    continue
+
+                cost = nx.path_weight(G, cycle + [cycle[0]], 'mse')
+                s = ' '.join(cycle)
+                print(f"Found cycle len={l}, {cost=:.3f}, path={s}")
+
+                if l > l_max:
+                    l_max = l
+                    longest_cycles = [(cost, cycle)]
+                else:
+                    longest_cycles.append((cost, cycle))
+
+        # put them in order of ascending cost
+        longest_cycles.sort()
+
+        retval = longest_cycles[0][1]
+
+        # HACK: reverse the cycle because the below assumes it's
+        # backward, and we'll reverse it again before returning it
+        retval = retval[::-1]
+
+        # rotate the cycle to start with a deterministic corner
+        if i := retval.index(min(self.corners)):
+            retval = retval[i:] + retval[:i]
+
+        n = len(retval)
+        k = len(self.corners) + len(self.edges) - len(retval)
         print(f"Found edge solution of length {n}, which omits {k} edge pieces")
 
         axis_no = 3
@@ -770,10 +893,17 @@ class PuzzleSolver:
 
         _, _, src_label, feature_pairs = fits[0]
 
+        print(f"Placing {src_label}: {self.raftinator.format_feature_pairs(feature_pairs)}")
+
         dst_raft = self.raft
         src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
+        
+        assert src_label not in dst_raft.coords
+
         new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
             dst_raft, src_raft, feature_pairs)
+
+        assert src_label in new_raft.coords
 
         self.update_raft(new_raft)
         
@@ -818,6 +948,9 @@ class PuzzleSolver:
         for pocket in pockets:
             
             v = self.score_pocket(pocket)
+            # caching means we have to filter out any fits that are
+            # invalid
+            v = [i for i in v if i[1] not in raft.coords]
             
             if len(v) > 1:
                 r = v[0][0] / v[1][0]
