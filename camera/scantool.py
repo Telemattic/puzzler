@@ -118,6 +118,7 @@ class PieceFinder:
         self.min_size_mm = 10
         self.max_size_mm = 70
         self.margin_px = 5
+        self.feedrate = 5000
 
     def find_pieces(self, rect):
 
@@ -281,7 +282,7 @@ class PieceFinder:
         return (pano, proj)
 
     def capture_image_at_xy(self, x, y):
-        self.gantry.move_to(x=x, y=y)
+        self.gantry.move_to(x=x, y=y, f=self.feedrate)
         time.sleep(.5)
         return self.camera.get_calibrated_image()
 
@@ -315,7 +316,7 @@ class PieceFinder:
     
     def find_candidates(self, image_x, image_y, opath=None):
         
-        self.gantry.move_to(x=image_x, y=image_y, f=5000)
+        self.gantry.move_to(x=image_x, y=image_y, f=self.feedrate)
         time.sleep(.5)
         image, metadata = self.camera.get_calibrated_image_and_metadata()
         if opath:
@@ -698,19 +699,30 @@ class ScantoolTk:
         ttk.Button(controls, text='Camera Calibrate', command=self.do_camera_calibrate).grid(column=0, row=0)
 
         self.var_AeEnable = IntVar(value=1)
-        ttk.Checkbutton(controls, text='AeEnable', variable=self.var_AeEnable, command=self.do_AeEnable).grid(column=1, row=0)
+        ttk.Checkbutton(controls, text='AE+AWB', variable=self.var_AeEnable, command=self.do_AeEnable).grid(column=1, row=0)
+
+        self.var_camera_lights = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Lights', variable=self.var_camera_lights, command=self.do_camera_lights).grid(column=2, row=0)
 
         self.var_undistort = IntVar(value=1)
-        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=2, row=0)
+        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=3, row=0)
 
         self.var_detect_corners = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=3, row=0)
+        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=4, row=0)
 
-        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=4, row=0)
+        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=5, row=0)
         self.goto_x = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=5, row=0)
+        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=6, row=0)
         self.goto_y = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=6, row=0)
+        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=7, row=0)
+        self.goto_z = IntVar(value=0)
+        ttk.Entry(controls, textvar=self.goto_z, width=6).grid(column=8, row=0)
+
+        self.var_pump = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Pump', variable=self.var_pump, command=self.do_pump).grid(column=9, row=0)
+        
+        self.var_valve = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Valve', variable=self.var_valve, command=self.do_valve).grid(column=10, row=0)
 
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
@@ -772,7 +784,8 @@ class ScantoolTk:
     def do_goto(self):
         x = self.goto_x.get()
         y = self.goto_y.get()
-        self.send_gcode(f'G1 X{x} Y{y}')
+        z = self.goto_z.get()
+        self.send_gcode(f'G1 X{x} Y{y} Z{z}')
 
     def do_home(self):
         d = twisted_threads.deferToThread(self.home_impl)
@@ -808,7 +821,7 @@ class ScantoolTk:
 
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
-        rect = (135, 400, 800, 1200)
+        rect = (135, 400, 720, 1150)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
     def do_gcode1(self):
@@ -899,6 +912,21 @@ class ScantoolTk:
         controls['AwbEnable'] = controls['AeEnable']
         self.camera.raw_camera.set_controls(controls)
 
+    def do_camera_lights(self):
+        speed = 1 if self.var_camera_lights.get() else 0
+        script = f"SET_FAN_SPEED FAN=camera_lights SPEED={speed}"
+        self.send_gcode(script)
+
+    def do_pump(self):
+        value = 1 if self.var_pump.get() else 0
+        script = f"SET_PIN PIN=pump VALUE={value}"
+        self.send_gcode(script)
+
+    def do_valve(self):
+        value = 1 if self.var_valve.get() else 0
+        script = f"SET_PIN PIN=valve VALUE={value}"
+        self.send_gcode(script)
+
     def key_event(self, event):
         pass
 
@@ -922,11 +950,11 @@ class ScantoolTk:
             else:
                 outside[ij] = uv
         if inside:
-            draw_detected_corners(image_camera, np.array(list(inside.values())), color=(255,0,0))
+            draw_detected_corners(image, np.array(list(inside.values())), color=(255,0,0))
         if border:
-            draw_detected_corners(image_camera, np.array(list(border.values())), color=(0,255,0))
+            draw_detected_corners(image, np.array(list(border.values())), color=(0,255,0))
         if outside:
-            draw_detected_corners(image_camera, np.array(list(outside.values())), color=(0,0,255))
+            draw_detected_corners(image, np.array(list(outside.values())), color=(0,0,255))
 
     def image_update(self, image):
 
@@ -980,7 +1008,7 @@ def main():
         config['calibration'] = {}
 
     if 'server' not in config:
-        print("Must specific server, either on command line or in configuration")
+        print("Must specify server, either on command line or in configuration")
         return
 
     args.server = config['server']
