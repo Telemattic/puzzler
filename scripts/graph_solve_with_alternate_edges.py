@@ -26,6 +26,7 @@ def make_graph(ofile, data, opt):
 
     extra_edges = []
     for prev, choices in data['scores'].items():
+        G.add_node(prev)
         for rank, (mse, _, _, succ) in enumerate(sorted(choices), start=1):
             if mse < opt['max_error']:
                 if rank == 1:
@@ -76,21 +77,26 @@ def make_graph(ofile, data, opt):
             else:
                 longest_cycles.append(l)
 
-    simple_nodes = set()
-    for node in G.nodes:
-        if G.in_degree(node) == 1 and G.out_degree(node) == 1:
-            simple_nodes.add(node)
+    if opt['merge']:
+        simple_nodes = set()
+        for node in G.nodes:
+            if G.in_degree(node) == 1 and G.out_degree(node) == 1:
+                simple_nodes.add(node)
 
-    for node in simple_nodes:
-        pred = next(G.predecessors(node))
-        succ = next(G.successors(node))
-        if pred in simple_nodes and succ in simple_nodes:
-            # print(f"Removing {node=}, {pred=} {succ=}")
-            mse = G.edges[pred,node]['mse'] + G.edges[node,succ]['mse']
-            G.remove_node(node)
-            G.add_edge(pred, succ, style='dotted', mse=mse)
+        for node in simple_nodes:
+            pred = next(G.predecessors(node))
+            succ = next(G.successors(node))
+            if pred in simple_nodes and succ in simple_nodes:
+                # print(f"Removing {node=}, {pred=} {succ=}")
+                mse = G.edges[pred,node]['mse'] + G.edges[node,succ]['mse']
+                G.remove_node(node)
+                G.add_edge(pred, succ, style='dotted', mse=mse)
 
     print("digraph G {", file=ofile)
+    
+    for n in G.nodes:
+        print(f"  {n}", file=ofile)
+        
     for e in G.edges:
         src, dst = e
         attr = G.edges[e]
@@ -101,13 +107,13 @@ def make_graph(ofile, data, opt):
         props.append(f'style={style}')
         
         if G.out_degree(src) > 1:
-            rank = attr.get('rank',-1)
             mse = attr.get('mse',-1)
-            props.append(f'label="{rank}: {mse:.3f}"')
+            props.append(f'label="{mse:.3f}"')
 
         props = '[' + ' '.join(props) + ']'
             
         print(f"  {src} -> {dst} {props}", file=ofile)
+
     print("}", file=ofile)
 
 def make_pdf(dotpath, pdfpath):
