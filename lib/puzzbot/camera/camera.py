@@ -121,7 +121,15 @@ class WebCamera(ICamera):
     def frame_size(self):
         return tuple(self.config['main']['size'])
 
+    def set_controls(self, controls):
+        r = self.session.post(
+            self.host + f'/controls', params={}, timeout=5, json=controls)
+        r.raise_for_status()
+        
     def read(self, stream = 'main'):
+        return self.read_image_and_metadata(stream)[0]
+    
+    def read_image_and_metadata(self, stream = 'main'):
         r = self.session.get(
             self.host + f'/image/{stream}.jpeg', params={}, timeout=5)
         r.raise_for_status()
@@ -137,9 +145,12 @@ class WebCamera(ICamera):
         buf = np.frombuffer(r.content, dtype=np.uint8)
         # cv.imdecode derives the format from the bytestream and there
         # is no mechanism to force a format, :shrug:
-        return cv.imdecode(buf, cv.IMREAD_COLOR)
+        image = cv.imdecode(buf, cv.IMREAD_COLOR)
+        
+        return (image, metadata)
 
     def _get_config(self):
         r = self.session.get(self.host + '/config', timeout=5)
+        r.raise_for_status()
         return json.loads(r.content)
 

@@ -18,6 +18,8 @@ import math
 import numpy as np
 import PIL.Image
 import PIL.ImageTk
+import pprint
+import puzzler
 import requests
 import scipy.spatial.distance
 import time
@@ -83,59 +85,212 @@ def scan_area_iterator(rect, dxdy):
     w, h = x1 - x0, y1 - y0
     dx, dy = dxdy
 
-    c, r = int(w / dx) + 1, int(h / dy) + 1
-    dx = w / (c-1) if c > 1 else 0
-    dy = h / (r-1) if r > 1 else 0
+    c, r = int(math.ceil(w / dx)) + 1, int(math.ceil(h / dy)) + 1
+
+    print(f"scan_area_iterator: {c=} {r=} {dx=:.1f} {dy=:.1f}")
         
     for j in range(r):
         for i in range(c):
             # even rows are left to right, odds rows are right to left
             if j & 1:
-                yield (x0 + (c-1-i)*dx, y0 + j*dy)
+                x = x0 + (c-1-i)*dx
             else:
-                yield (x0 + i*dx, y0 + j*dy)
+                x = x0 + i*dx
+            y = y0 + j*dy
+            if x < x0:
+                x = x0
+            elif x > x1:
+                x = x1
+            if y < y0:
+                y = y0
+            elif y > y1:
+                y = y1
+            yield (x,y)
                 
 class PieceFinder:
 
     def __init__(self, gantry, camera):
         self.gantry = gantry
         self.camera = camera
-        self.image_dpi = 600.
-        self.image_binary_threshold = 130
+        self.capture_dpi = 600.
+        self.panorama_dpi = 75.
+        self.image_threshold = 128
         self.min_size_mm = 10
         self.max_size_mm = 70
         self.margin_px = 5
-        self.x_step = 75
-        self.y_step = 30
+        self.feedrate = 5000
 
     def find_pieces(self, rect):
 
         print("Finding pieces")
 
         self.gantry.move_to(z=0)
+
+        dummy_image = self.camera.get_calibrated_image()
+        image_h, image_w = dummy_image.shape[:2]
+
+        mm_per_pixel = 25.4 / self.capture_dpi
+        x_step = int(image_w * mm_per_pixel)
+        y_step = int(image_h * mm_per_pixel)
+
+        print(f"image is {image_w}x{image_h} and {1/mm_per_pixel:.1f} pixels/mm, {x_step=} {y_step=}")
         
-        all_pieces = []
-        for x, y in scan_area_iterator(rect, (self.x_step, self.y_step)):
+        panorama_scale = self.panorama_dpi / self.capture_dpi
+
+        images = []
+        for x, y in scan_area_iterator(rect, (x_step, y_step)):
             print(f"Scanning at {x},{y}")
             opath = f"scan_{x:.0f}_{y:.0f}.jpg"
-            for center, radius in self.find_candidates(x, y, opath):
-                if any(np.linalg.norm(i[0] - center) < radius for i in all_pieces):
-                    continue
-                opath = f"piece_{len(all_pieces):02d}.jpg"
-                print(f"Found piece at ({center[0]:.1f},{center[1]:.1f}), {radius=:.1f}mm -> {opath}")
-                points = self.get_points_for_piece(center, radius, opath)
-                all_pieces.append((center, radius, points))
+            image = self.capture_image_at_xy(x, y)
+            images.append((cv.resize(image, None, fx=panorama_scale, fy=panorama_scale), (x, y)))
 
-        print(f"All done!  Found {len(all_pieces)} pieces")
-        return all_pieces
+        print(f"captured {len(images)} to stitch into panorama")
 
-    def get_points_for_piece(self, center, radius, opath=None):
-        self.gantry.move_to(x=center[0], y=center[1])
+        pano, proj = self.assemble_panorama(images)
+
+        cv.imwrite('pano.jpg', pano)
+
+        to_scan = self.find_pieces_in_panorama(pano)
+
+        cv.imwrite('pano-contours.png', pano)
+
+        print(f"Found {len(to_scan)} pieces in panorama")
+
+        offset = -np.array((image_w, image_h)) * (self.panorama_dpi / self.capture_dpi) * .5
+        
+        to_scan = self.convert_px_to_mm(proj, offset, to_scan)
+
+        optimized_path = self.optimize_path(to_scan)
+
+        # with open('pano-tsp.json', 'w') as f:
+        #     json.dump({'original':to_scan, 'optimized':optimized_path}, f, indent=4)
+
+        n_cols = int(math.sqrt(len(to_scan)))
+        if n_cols * n_cols < len(to_scan):
+            n_cols += 1
+
+        pieces = []
+        for center_mm, radius_mm in optimized_path:
+            col = len(pieces) % n_cols
+            row = len(pieces) // n_cols
+            label = f"{chr(ord('A')+row)}{col+1}"
+            opath = f"piece_{label}.jpg"
+            with np.printoptions(precision=1):
+                print(f"Found piece at {center_mm=} {radius_mm=:.1f} mm -> {opath}")
+            points, source = self.get_points_and_source_for_piece(center_mm, radius_mm, opath)
+            pieces.append((center_mm, label, points, source))
+
+        Puzzle = puzzler.puzzle.Puzzle
+
+        fnord = []
+        for i, (_, label, points, source) in enumerate(pieces):
+            fnord.append(Puzzle.Piece(label, source, points, None, None))
+
+        puzzler.file.save('temp-puzzle.json', Puzzle({}, fnord))
+
+        print(f"All done!  Found {len(pieces)} pieces")
+        return pieces
+
+    @staticmethod
+    def optimize_path(to_scan):
+        
+        from python_tsp.heuristics import solve_tsp_simulated_annealing, solve_tsp_local_search
+
+        vertexes = np.array([xy for xy, _ in to_scan])
+
+        distance_matrix = scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(vertexes))
+        distance_matrix[:,0] = 0
+
+        permutation, distance = solve_tsp_simulated_annealing(distance_matrix)
+
+        permutation2, distance2 = solve_tsp_local_search(
+            distance_matrix, x0=permutation, perturbation_scheme='ps3')
+
+        return [to_scan[i] for i in permutation2]
+
+    @staticmethod
+    def convert_px_to_mm(proj, offset_px, data):
+
+        retval = []
+        for center_px, radius_px in data:
+            center_mm = proj.px_to_mm(center_px + offset_px)
+            radius_mm = radius_px / proj.px_per_mm
+            retval.append((center_mm, radius_mm))
+
+        return retval
+
+    def find_pieces_in_panorama(self, image):
+
+        px_per_mm = self.panorama_dpi / 25.4
+        min_area = (px_per_mm * self.min_size_mm) ** 2
+        max_area = (px_per_mm * self.max_size_mm) ** 2
+
+        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        thresh = cv.threshold(gray, self.image_threshold, 255, cv.THRESH_BINARY)[1]
+
+        contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)[0]
+        print(f"Found {len(contours)} contours!")
+
+        retval = []
+        for c in contours:
+            
+            a = cv.contourArea(c)
+            if not (min_area <= a <= max_area):
+                continue
+
+            x, y, w, h = cv.boundingRect(c)
+            center = (x + w/2, y + h/2)
+            radius = math.hypot(w,h) / 2
+            retval.append((center, radius))
+
+            cv.circle(image, (int(center[0]), int(center[1])), int(radius), (0, 255, 255))
+
+        return retval
+
+    def assemble_panorama(self, images):
+        pano_ul_mm = np.array((min(xy[0] for _, xy in images),
+                               max(xy[1] for _, xy in images)))
+        px_per_mm = self.panorama_dpi / 25.4
+
+        with np.printoptions(precision=1):
+            print(f"{pano_ul_mm=} {px_per_mm=:.3f}")
+
+        proj = ImageProjection(pano_ul_mm, px_per_mm)
+
+        images_px = []
+        for i, xy_mm in images:
+            xy_px = np.array(proj.mm_to_px(xy_mm), np.int32)
+            images_px.append((i, xy_px))
+
+        min_x = min(xy[0] for i, xy in images_px)
+        max_x = max(xy[0] + i.shape[1] for i, xy in images_px)
+        min_y = min(xy[1] for i, xy in images_px)
+        max_y = max(xy[1] + i.shape[0] for i, xy in images_px)
+
+        print(f"{min_x=} {max_x=} {min_y=} {max_y=}")
+
+        pano = np.zeros((max_y-min_y, max_x-min_x, 3), dtype=np.uint8)
+
+        print(f"{pano.shape=}")
+
+        for img, (x, y) in images_px:
+            x -= min_x
+            y -= min_y
+            h, w = img.shape[:2]
+            pano[y:y+h,x:x+w,:] = img
+
+        return (pano, proj)
+
+    def capture_image_at_xy(self, x, y):
+        self.gantry.move_to(x=x, y=y, f=self.feedrate)
         time.sleep(.5)
-        image = self.camera.get_calibrated_image()
+        return self.camera.get_calibrated_image()
+
+    def get_points_and_source_for_piece(self, center, radius, opath=None):
+        image = self.capture_image_at_xy(center[0], center[1])
 
         image_h, image_w = image.shape[:2]
-        pix_per_mm = self.image_dpi / 25.4
+        pix_per_mm = self.capture_dpi / 25.4
         rect_size = int(radius * pix_per_mm)
         x0 = image_w // 2 - rect_size
         y0 = image_h // 2 - rect_size
@@ -143,31 +298,35 @@ class PieceFinder:
         y1 = image_h // 2 + rect_size
         sub_image = image[y0:y1,x0:x1]
 
-        contour = PerimeterComputer(sub_image, flip_contour=False).contour
+        contour = PerimeterComputer(sub_image, threshold=self.image_threshold).contour
 
         if opath:
-            print(f"Saving piece with contour to {opath}")
-            cv.drawContours(sub_image, [contour], 0, (0,255,0))
+            print(f"Saving piece to {opath}")
+            # cv.drawContours(sub_image, [contour], 0, (0,0,255))
             cv.imwrite(opath, sub_image)
+            
+        Source = puzzler.puzzle.Puzzle.Piece.Source
 
         # take the center of the points from the center of the
         # image, as that is how the camera was aligned
-        points = np.squeeze(contour)        
-        return points - (image_w//2, image_h//2)
+        center = (sub_image.shape[1]//2, sub_image.shape[0]//2)
+        points = np.squeeze(contour) - center
+        source = Source(opath, (0, 0, sub_image.shape[1], sub_image.shape[0]))
+        return points, source
     
     def find_candidates(self, image_x, image_y, opath=None):
         
-        self.gantry.move_to(x=image_x, y=image_y, f=5000)
+        self.gantry.move_to(x=image_x, y=image_y, f=self.feedrate)
         time.sleep(.5)
-        image = self.camera.get_calibrated_image()
-
+        image, metadata = self.camera.get_calibrated_image_and_metadata()
         if opath:
             print(f"Saving image to {opath}")
+            # pprint.pprint(metadata)
             cv.imwrite(opath, cv.resize(image, None, fx=.25, fy=.25))
         
         pieces = self.find_pieces_one_image(image)
         
-        px_per_mm = self.image_dpi / 25.4
+        px_per_mm = self.capture_dpi / 25.4
         proj = ImageProjection(np.array((image_x, image_y)), px_per_mm)
 
         image_size = np.array(image.shape[:2][::-1])
@@ -187,7 +346,7 @@ class PieceFinder:
             
     def find_pieces_one_image(self, image):
         gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-        thresh = cv.threshold(gray, self.image_binary_threshold, 255, cv.THRESH_BINARY)[1]
+        thresh = cv.threshold(gray, self.image_threshold, 255, cv.THRESH_BINARY)[1]
             
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
         thresh = cv.erode(thresh, kernel)
@@ -200,8 +359,9 @@ class PieceFinder:
         image_h, image_w = gray.shape
         margin_px = self.margin_px
 
-        min_size_px = self.min_size_mm * self.image_dpi / 25.4
-        max_size_px = self.max_size_mm * self.image_dpi / 25.4
+        px_per_mm = self.capture_dpi / 25.4
+        min_size_px = self.min_size_mm * px_per_mm
+        max_size_px = self.max_size_mm * px_per_mm
     
         for c in contours:
             r = cv.boundingRect(c)
@@ -436,10 +596,17 @@ class CalibratedCamera:
     def get_raw_image(self, stream='main'):
         return self.raw_camera.read(stream)
 
+    def get_raw_image_and_metadata(self, stream='main'):
+        return self.raw_camera.read_image_and_metadata(stream)
+
     def get_calibrated_image(self, stream='main'):
         raw_image = self.get_raw_image(stream)
         return self.remappers[stream].undistort_image(raw_image)
 
+    def get_calibrated_image_and_metadata(self, stream='main'):
+        raw_image, metadata = self.get_raw_image_and_metadata(stream)
+        return (self.remappers[stream].undistort_image(raw_image), metadata)
+    
     def get_image(self, stream='main', calibrated=True):
         return self.get_calibrated_image(stream) if calibrated else self.get_raw_image(stream)
 
@@ -531,17 +698,31 @@ class ScantoolTk:
 
         ttk.Button(controls, text='Camera Calibrate', command=self.do_camera_calibrate).grid(column=0, row=0)
 
+        self.var_AeEnable = IntVar(value=1)
+        ttk.Checkbutton(controls, text='AE+AWB', variable=self.var_AeEnable, command=self.do_AeEnable).grid(column=1, row=0)
+
+        self.var_camera_lights = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Lights', variable=self.var_camera_lights, command=self.do_camera_lights).grid(column=2, row=0)
+
         self.var_undistort = IntVar(value=1)
-        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=1, row=0)
+        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=3, row=0)
 
         self.var_detect_corners = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=2, row=0)
+        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=4, row=0)
 
-        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=3, row=0)
+        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=5, row=0)
         self.goto_x = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=4, row=0)
+        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=6, row=0)
         self.goto_y = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=5, row=0)
+        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=7, row=0)
+        self.goto_z = IntVar(value=0)
+        ttk.Entry(controls, textvar=self.goto_z, width=6).grid(column=8, row=0)
+
+        self.var_pump = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Pump', variable=self.var_pump, command=self.do_pump).grid(column=9, row=0)
+        
+        self.var_valve = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Valve', variable=self.var_valve, command=self.do_valve).grid(column=10, row=0)
 
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
@@ -603,7 +784,8 @@ class ScantoolTk:
     def do_goto(self):
         x = self.goto_x.get()
         y = self.goto_y.get()
-        self.send_gcode(f'G1 X{x} Y{y}')
+        z = self.goto_z.get()
+        self.send_gcode(f'G1 X{x} Y{y} Z{z}')
 
     def do_home(self):
         d = twisted_threads.deferToThread(self.home_impl)
@@ -639,7 +821,7 @@ class ScantoolTk:
 
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
-        rect = (135, 400, 800, 1200)
+        rect = (135, 400, 720, 1150)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
     def do_gcode1(self):
@@ -725,6 +907,26 @@ class ScantoolTk:
 
         self.calibration['camera'] = calibration
 
+    def do_AeEnable(self):
+        controls = {'AeEnable': self.var_AeEnable.get() != 0}
+        controls['AwbEnable'] = controls['AeEnable']
+        self.camera.raw_camera.set_controls(controls)
+
+    def do_camera_lights(self):
+        speed = 1 if self.var_camera_lights.get() else 0
+        script = f"SET_FAN_SPEED FAN=camera_lights SPEED={speed}"
+        self.send_gcode(script)
+
+    def do_pump(self):
+        value = 1 if self.var_pump.get() else 0
+        script = f"SET_PIN PIN=pump VALUE={value}"
+        self.send_gcode(script)
+
+    def do_valve(self):
+        value = 1 if self.var_valve.get() else 0
+        script = f"SET_PIN PIN=valve VALUE={value}"
+        self.send_gcode(script)
+
     def key_event(self, event):
         pass
 
@@ -748,11 +950,11 @@ class ScantoolTk:
             else:
                 outside[ij] = uv
         if inside:
-            draw_detected_corners(image_camera, np.array(list(inside.values())), color=(255,0,0))
+            draw_detected_corners(image, np.array(list(inside.values())), color=(255,0,0))
         if border:
-            draw_detected_corners(image_camera, np.array(list(border.values())), color=(0,255,0))
+            draw_detected_corners(image, np.array(list(border.values())), color=(0,255,0))
         if outside:
-            draw_detected_corners(image_camera, np.array(list(outside.values())), color=(0,0,255))
+            draw_detected_corners(image, np.array(list(outside.values())), color=(0,0,255))
 
     def image_update(self, image):
 
@@ -806,7 +1008,7 @@ def main():
         config['calibration'] = {}
 
     if 'server' not in config:
-        print("Must specific server, either on command line or in configuration")
+        print("Must specify server, either on command line or in configuration")
         return
 
     args.server = config['server']

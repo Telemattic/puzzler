@@ -389,12 +389,12 @@ class CanvasHitTester:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces, directory):
+    def __init__(self, parent, pieces, directory, expected):
         
         self.pieces = pieces
 
         pieces_dict = {i.piece.label: i.piece for i in pieces}
-        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, dirname=directory)
+        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, dirname=directory, expected=expected)
 
         self.draggable = None
         self.selection = None
@@ -800,7 +800,8 @@ class AlignTk:
                 print(f"{k}: angle={v.angle:.3f} xy=({x:.3f},{y:.3f})")
         
         r = puzzler.raft.Raftinator(pieces)
-        raft = r.make_raft_from_string(s)
+        fp = r.parse_feature_pairs(s)
+        raft = r.make_raft_from_feature_pairs(fp)
         
         seams = r.get_seams_for_raft(raft)
         mse = r.get_cumulative_error_for_seams(seams)
@@ -809,9 +810,12 @@ class AlignTk:
         print(f"MSE={mse:.3f} MSE2={mse2:.3f}")
 
         if self.var_refine_raft_alignment.get():
-            for pass_no in range(5):
+            for pass_no in range(2):
                 print(f"Taking *REFINED* alignment! {pass_no=}")
-                raft = r.refine_alignment_within_raft(raft)
+                if fp[0][0].kind == 'edge':
+                    raft = r.refine_edge_alignment_within_raft(raft, fp[0])
+                else:
+                    raft = r.refine_alignment_within_raft(raft)
                 seams = r.get_seams_for_raft(raft)
                 mse = r.get_cumulative_error_for_seams(seams)
                 mse2 = r.get_total_error_for_raft_and_seams(raft, seams)
@@ -909,7 +913,7 @@ def align_ui(args):
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, args.directory)
+    ui = AlignTk(root, pieces, args.directory, expected)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 

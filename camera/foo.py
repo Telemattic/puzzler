@@ -202,17 +202,99 @@ def find_pieces(scanpath, crop=None, alpha=0., beta=0.):
     with open(opath, 'w') as f:
         f.write(json.dumps(to_scan, indent=4))
             
+def find_pieces_in_image(image, proj):
 
-def make_pano(path, crop = None):
+    min_size_mm = 10
+    max_size_mm = 60
+    threshold   = 128
+
+    min_area = (proj.px_per_mm * min_size_mm) ** 2
+    max_area = (proj.px_per_mm * max_size_mm) ** 2
+
+    gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    thresh = cv.threshold(gray, threshold, 255, cv.THRESH_BINARY)[1]
+    
+    contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)[0]
+    print(f"Found {len(contours)} contours!")
+
+    retval = []
+    for i, c in enumerate(contours):
+        a = cv.contourArea(c)
+        if not (min_area <= a <= max_area):
+            continue
+        
+        x, y, w, h = cv.boundingRect(c)
+        center_px = (x + w/2, y + h/2)
+        radius_px = math.hypot(w,h) / 2
+        center_mm = proj.px_to_mm(center_px)
+        radius_mm = radius_px / proj.px_per_mm
+        retval.append((center_mm, radius_mm, c))
+
+    return retval
+
+def make_pano(scanpath, blend=False, dpi=150.):
+
+    images = []
+    for i in os.scandir(scanpath):
+        if m := re.match('scan_(\d+)_(\d+)\.(jpg|png)', i.name):
+            x, y = int(m[1]), int(m[2])
+            print(f"{i.path=} {x=} {y=}")
+            img = cv.imread(i.path)
+            images.append((img, np.array((x,y))))
+
+    dpi = 150.
+    blend = True
+
+    #
+    
+    pano_ul_mm = np.array((min(xy[0] for _, xy in images),
+                           max(xy[1] for _, xy in images)))
+    px_per_mm = dpi / 25.4
+
+    proj = ImageProjection(pano_ul_mm, px_per_mm)
+        
+    images_px = []
+    for i, xy_mm in images:
+        xy_px = np.array(proj.mm_to_px(xy_mm), np.int32)
+        images_px.append((i, xy_px))
+
+    min_x = min(xy[0] for i, xy in images_px)
+    max_x = max(xy[0] + i.shape[1] for i, xy in images_px)
+    min_y = min(xy[1] for i, xy in images_px)
+    max_y = max(xy[1] + i.shape[0] for i, xy in images_px)
+
+    print(f"{min_x=} {max_x=} {min_y=} {max_y=}")
+
+    if blend:
+        pano = np.zeros((max_y-min_y, max_x-min_x, 3), dtype=np.uint16)
+        counts = np.zeros(pano.shape, dtype=np.uint8)
+    else:
+        pano = np.zeros((max_y-min_y, max_x-min_x, 3), dtype=np.uint8)
+        
+    print(f"{pano.shape=}")
+
+    for img, (x, y) in images_px:
+        x -= min_x
+        y -= min_y
+        h, w = img.shape[:2]
+        if blend:
+            pano[y:y+h,x:x+w,:] += img
+            counts[y:y+h,x:x+w,:] += 1
+        else:
+            pano[y:y+h,x:x+w,:] = img
+
+    if blend:
+        pano = np.array(pano // np.maximum(counts,1), dtype=np.uint8)
+        
+    cv.imwrite('pano.jpg', pano)
+
+def stitch_pano(path):
 
     images = []
     for i in os.scandir(path):
-        if re.match('scan_.*\.png', i.name):
+        if re.match('scan_.*\.(jpg|png)', i.name):
             print(i.path)
             img = cv.imread(i.path)
-            if crop is not None:
-                x1, y1, x2, y2 = crop
-                img = img[y1:y2,x1:x2].copy()
             images.append(img)
 
     stitcher = cv.Stitcher.create(cv.Stitcher_SCANS)
@@ -396,8 +478,10 @@ def compare_moments(path_a, path_b):
     # dict_a = compute_hu_moments_for_pieces(puzzle_a.pieces)
     # dict_b = compute_hu_moments_for_pieces(puzzle_b.pieces)
 
+    summary = []
     for piece_b in puzzle_b.pieces:
 
+        best = []
         for mode in (cv.CONTOURS_MATCH_I1, cv.CONTOURS_MATCH_I2, cv.CONTOURS_MATCH_I3):
 
             scores = []
@@ -406,29 +490,172 @@ def compare_moments(path_a, path_b):
                 scores.append((score, piece_a.label))
 
             scores.sort()
-            print(f"piece_b={piece_b.label}")
-            print(f"{mode=} scores:")
+            print(f"piece_b={piece_b.label}, {mode=} scores:")
             for i, (score, label) in enumerate(scores):
-                print(f"{i} {score:.6f} {label}")
-                if label == piece_b.label:
-                    break
+                print(f"  {i} {score:.6f} {label}")
             print()
 
-    for i in puzzle_a.pieces:
-        best_score = None
-        best_match = None
-        for j in puzzle_a.pieces:
-            if i != j:
-                score = cv.matchShapes(i.points, j.points, cv.CONTOURS_MATCH_I1, 0.)
-                if best_match is None or score < best_score:
-                    best_score = score
-                    best_match = j
-        print(f"i={i.label} j={best_match.label} score={best_score}")
+            best.append(scores[0][1])
+
+        summary.append((piece_b.label, best))
+
+    print("SUMMARY")
+    for b_label, a_labels in summary:
+        print(f"{b_label}:", ', '.join(a_labels))
+
+def find_pieces_in_pano(ipath, opath):
+
+    image = cv.imread(ipath)
+    scale = .5
+    image = cv.resize(image, None, fx=scale, fy=scale)
+    
+    gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    thresh = cv.threshold(gray, 128, 255, cv.THRESH_BINARY)[1]
+    
+    contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)[0]
+    print(f"Found {len(contours)} contours!")
+
+    scale2 = scale * scale
+    min_size = 3600 * scale2
+    little_guy = 20_000 * scale2
+    big_guy = 50_000 * scale2
+
+    keep = []
+    for i, c in enumerate(contours):
+        a = cv.contourArea(c)
+        if a < min_size:
+            continue
+        keep.append(c)
+        print(f"contour[{i}]: length={len(c)} area={a}")
+        
+    print(f"Keeping {len(keep)} contours")
+
+    for c in keep:
+        a = cv.contourArea(c)
+        color = (0, 0, 255)
+        if a < little_guy:
+            color = (0, 255, 255)
+        if a > big_guy:
+            color = (255, 255, 0)
+        cv.drawContours(image, [c], -1, color, 2)
+
+    cv.imwrite('pano-gray.png', gray)
+    cv.imwrite(opath, image)
+
+def find_pieces_in_pano2(ipath, opath):
+
+    image = cv.imread(ipath)
+    scale = .5
+    image = cv.resize(image, None, fx=scale, fy=scale)
+    
+    gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    thresh = cv.threshold(gray, 128, 255, cv.THRESH_BINARY)[1]
+    
+    contours, links = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    links = np.squeeze(links)
+    print(f"Found {len(contours)} contours! {len(links)=}")
+    pprint(links)
+
+    # hierarchy "record" is [next,prev,first_child,parent], -1 is a sentinel value for None
+    # next: next child at same level of hierarchy with same parent
+    # prev: prev child at same level of hierarchy with same parent
+    # first_child: index of first child of this contour (i.e. child with prev==-1)
+    # parent: index of parent contour
+    parents = links[:,3]
+
+    scale2 = scale * scale
+    min_size = 3600 * scale2
+    little_guy = 20_000 * scale2
+    big_guy = 50_000 * scale2
+
+    keep = []
+    for i, c in enumerate(contours):
+        a = cv.contourArea(c)
+        if a < min_size:
+            continue
+        keep.append(i)
+        print(f"contour[{i}]: length={len(c)} area={a}")
+
+    print(f"Keeping {len(keep)} contours")
+
+    nodes = set()
+    edges = []
+    for i in keep:
+        if i in nodes:
+            continue
+        nodes.add(i)
+        p = parents[i]
+        while p != -1:
+            if p != 1:
+                edges.append((i, p))
+            if p in nodes:
+                break
+            nodes.add(p)
+            i = p
+            p = parents[i]
+
+    with open('pano-graph.dot', 'w') as f:
+        print("digraph G {", file=f)
+        for i, j in edges:
+            print(f"  {j} -> {i}", file=f)
+        print("}", file=f)
+            
+    for i in keep:
+        c = contours[i]
+        a = cv.contourArea(c)
+        color = (0, 0, 255)
+        if a < little_guy:
+            color = (0, 255, 255)
+        if a > big_guy:
+            color = (255, 255, 0)
+        cv.drawContours(image, [c], -1, color, 2)
+
+    cv.imwrite('pano-gray.png', gray)
+    cv.imwrite(opath, image)
+
+def do_tsp():
+
+    from python_tsp.heuristics import solve_tsp_simulated_annealing, solve_tsp_local_search
+    from python_tsp.utils import compute_permutation_distance
+
+    image = cv.imread('pano.jpg')
+    
+    with open('centers.json') as f:
+        nodes = json.load(f)
+    vertexes = np.array([xy for xy, _ in nodes])
+
+    print(f"{vertexes.shape=}")
+
+    distance_matrix = scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(vertexes))
+
+    distance_matrix[:,0] = 0
+
+    naive_path = list(range(len(vertexes)))
+    naive_distance = compute_permutation_distance(distance_matrix, naive_path)
+
+    print(f"{naive_distance=}")
+
+    permutation, distance = solve_tsp_simulated_annealing(distance_matrix)
+
+    print(f"{distance=}")
+
+    permutation2, distance2 = solve_tsp_local_search(
+        distance_matrix, x0=permutation, perturbation_scheme='ps3')
+
+    print(f"{distance2=}")
+
+    vertexes = vertexes.astype(np.int32)
+
+    cv.polylines(image, [vertexes], False, (255, 0, 0))
+    cv.polylines(image, [vertexes[permutation]], False, (0, 0, 180), thickness=5)
+    cv.polylines(image, [vertexes[permutation2]], False, (0, 255, 0), thickness=2)
+
+    cv.imwrite('pano-tsp.jpg', image)
 
 def main():
 
-    if False:
-        compare_moments('../bucks.json', '../fnord.json')
+    if True:
+        compare_moments('../100.json', 'temp-puzzle.json')
         return None
 
     if False:
@@ -436,9 +663,17 @@ def main():
         # scan_x: crop=(741, 245, 3716, 2653) alpha=-.0369759 beta=-0.0371328
         find_pieces('scan_q', crop=None, alpha=.00429247, beta=.00293304)
         return None
-    
+
+    if True:
+        do_tsp()
+        return None
+
     if False:
-        make_pano('.', (883, 245, 3575, 2653))
+        find_pieces_in_pano2('pano.jpg', 'pano-contours.jpg')
+        return None
+    
+    if True:
+        make_pano('.')
         return None
 
     aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_1000)

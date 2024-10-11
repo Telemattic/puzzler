@@ -41,22 +41,32 @@ def annotate_tabs_file(good_matches, input_path, output_path):
     ifile.close()
 
 def parse_constraint(s):
-    m = re.fullmatch("(\w+):(\d+)=(\w+):(\d+)", s)
-    if m is None:
+    if m := re.fullmatch("(\w+):(\d+)=(\w+):(\d+)", s):
+        return (m[1], m[2], m[3], m[4])
+    elif re.fullmatch("(\w+)/(\d+)=(\w+)/(\d+)", s):
+        # ignore edge constraints
+        return None
+    else:
         raise ValueError(f"bad constraint: {s}")
 
-    return (m[1], m[2], m[3], m[4])
-
 def parse_raft(s):
+    retval = []
+    for i in s.split(','):
+        x = parse_constraint(i)
+        if x is not None:
+            retval.append(x)
+    return retval
     return [parse_constraint(i) for i in s.split(',')]
 
 def annotate_raft_file(good_matches, input_path, output_path):
 
     def is_good_raft(raft):
         return all(i in good_matches for i in parse_raft(raft))
+
+    dialect = get_dialect(input_path)
     
     ifile = open(input_path, 'r', newline='')
-    reader = csv.DictReader(ifile)
+    reader = csv.DictReader(ifile, dialect=dialect)
             
     ofile = open(output_path, 'w', newline='')
     ofields = reader.fieldnames.copy()
@@ -116,10 +126,18 @@ def annotate_raft_file(good_matches, input_path, output_path):
     ofile.close()
     ifile.close()
 
-def detect_input_file_type(path):
+def get_dialect(path):
 
     with open(path, 'r', newline='') as f:
-        reader = csv.DictReader(f)
+        dialect = csv.Sniffer().sniff(f.read(1024))
+
+    return dialect
+
+def detect_input_file_type(path):
+
+    dialect = get_dialect(path)
+    with open(path, 'r', newline='') as f:
+        reader = csv.DictReader(f, dialect=dialect)
         fn = set(reader.fieldnames)
 
     if 'raft' in fn:
