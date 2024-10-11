@@ -10,7 +10,7 @@ import operator
 import puzzler
 from tqdm import tqdm
 
-def score_match2(piece_a, piece_b, fp):
+def score_pair2(piece_a, piece_b, fp):
     
     r = puzzler.raft.Raftinator({piece_a.label:piece_a, piece_b.label:piece_b})
     raft = r.make_raft_from_feature_pairs(fp)
@@ -23,7 +23,7 @@ def score_match2(piece_a, piece_b, fp):
 
     return mse2
 
-def score_match(piece_a, piece_b):
+def score_pair(piece_a, piece_b):
 
     Feature = puzzler.raft.Feature
     
@@ -50,51 +50,79 @@ def score_match(piece_a, piece_b):
         if tab_mismatch:
             continue
 
-        score = score_match2(piece_a, piece_b, feature_pairs)
+        score = score_pair2(piece_a, piece_b, feature_pairs)
         if best_score is None or score < best_score:
             best_score = score
     
     return best_score
 
-def match_puzzles(puzzle_a, puzzle_b, ofile):
+def score_pair_alt(piece_a, piece_b):
+
+    Feature = puzzler.raft.Feature
+    
+    label_a = piece_a.label
+    label_b = piece_b.label
+
+    best_score = None
+
+    for i, tab_a in enumerate(piece_a.tabs):
+        for j, tab_b in enumerate(piece_b.tabs):
+            if tab_a.indent != tab_b.indent:
+                continue
+
+            fp = (Feature(label_a, 'tab', i), Feature(label_b, 'tab', j))
+            score = score_pair2(piece_a, piece_b, [fp])
+            if best_score is None or score < best_score:
+                best_score = score
+    
+    return best_score
+
+def score_puzzles(lhs, rhs, ofile):
+    
+    no_matches = []
     
     writer = csv.DictWriter(ofile, fieldnames='lhs rhs rank score'.split())
     writer.writeheader()
-    
-    pieces_a = puzzle_a.pieces
-    pieces_b = puzzle_b.pieces
 
-    for a in tqdm(pieces_a):
+    for l in tqdm(lhs.pieces):
 
         rows = []
-        for b in pieces_b:
-            score = score_match(a, b)
+        for r in rhs.pieces:
+            score = score_pair_alt(l, r)
             if score is not None:
-                rows.append({'lhs':a.label, 'rhs':b.label, 'rank':None, 'score':score})
+                rows.append({'lhs':l.label, 'rhs':r.label, 'rank':None, 'score':score})
+
+        if not rows:
+            no_matches.append(l.label)
 
         rows.sort(key=operator.itemgetter('score'))
         for rank, row in enumerate(rows, start=1):
+            row['lhs'] = row['lhs'][2:]
+            row['rhs'] = row['rhs'][2:]
             row['rank'] = rank
 
         writer.writerows(rows)
 
+    if no_matches:
+        print(f"LHS pieces with no matches in RHS: {', '.join(no_matches)}")
+
 def main():
     parser = argparse.ArgumentParser(prog='match_puzzles')
-    parser.add_argument("puzzle_a")
-    parser.add_argument("puzzle_b")
+    parser.add_argument("-l", "--left", help="left puzzle", required=True)
+    parser.add_argument("-r", "--right", help="right puzzle", required=True)
     parser.add_argument("-o", "--output", help="output filename", required=True)
     args = parser.parse_args()
 
-    a = puzzler.file.load(args.puzzle_a)
-    for i in a.pieces:
+    lhs = puzzler.file.load(args.left)
+    for i in lhs.pieces:
         i.label = 'l_' + i.label
     
-    b = puzzler.file.load(args.puzzle_b)
-    for i in b.pieces:
+    rhs = puzzler.file.load(args.right)
+    for i in rhs.pieces:
         i.label = 'r_' + i.label
 
     with open(args.output, 'w', newline='') as ofile:
-        match_puzzles(a, b, ofile)
+        score_puzzles(lhs, rhs, ofile)
 
 if __name__ == '__main__':
     main()
