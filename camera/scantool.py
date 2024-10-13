@@ -372,6 +372,55 @@ class PieceFinder:
 
         return retval
 
+class FingerCalibrator:
+
+    def __init__(self, gantry, camera):
+        self.gantry = gantry
+        self.camera = camera
+        self.board_height = -70.
+        self.rotate_height = -60
+
+    def calibrate(self):
+        print("Finger calibrate!")
+
+        time.sleep(20.)
+        
+        self.gantry.valve(True)
+        time.sleep(.5)
+        self.gantry.move_to(z=0)
+        self.gantry.valve(False)
+        time.sleep(.5)
+
+        self.take_image("0")
+
+        self.gantry.move_to(z=self.board_height)
+        time.sleep(.5)
+
+        self.take_image("1")
+
+        self.gantry.move_to(z=self.rotate_height)
+        self.gantry.rotate(50)
+        self.gantry.move_to(z=self.board_height)
+        time.sleep(.5)
+
+        self.take_image("2")
+
+        self.gantry.valve(True)
+        time.sleep(2.)
+        self.gantry.move_to(z=0)
+        self.gantry.valve(False)
+        time.sleep(.5)
+
+        self.take_image("3")
+
+        print("All done!")
+
+    def take_image(self, suffix):
+        image = self.camera.get_calibrated_image()
+        path = f"finger_{suffix}.jpg"
+        print(f"  save image to {path}")
+        cv.imwrite(path, image)
+        
 class GantryCalibrator:
 
     def __init__(self, gantry, camera, board, dpi=600.):
@@ -508,7 +557,10 @@ class Klipper:
                 'toolhead': ['homed_axes'],
                 'motion_report':['live_position'],
                 'stepper_enable':None,
-                'webhooks':None
+                'webhooks':None,
+                'output_pin lights':None,
+                'output_pin pump':None,
+                'output_pin valve':None
             },
             'response_template': {
                 'key': key
@@ -582,6 +634,16 @@ class Gantry:
         self.klipper.gcode_script(' '.join(v))
         if wait:
             self.klipper.gcode_script('M400')
+
+    def rotate(self, angle, wait=True):
+        self.klipper.gcode_script("MANUAL_STEPPER STEPPER=stepper_a SET_POSITION=0")
+        self.klipper.gcode_script(f"MANUAL_STEPPER STEPPER=stepper_a MOVE={angle} ACCEL=100")
+        if wait:
+            self.klipper.gcode_script('M400')
+            
+    def valve(self, open_valve):
+        value = 1 if open_valve else 0
+        self.klipper.gcode_script(f"SET_PIN PIN=valve VALUE={value}")
     
 class CalibratedCamera:
 
@@ -657,6 +719,12 @@ class ScantoolTk:
         poll = twisted.internet.task.LoopingCall(klipper.poll_notifications)
         poll.start(0)
 
+        o = klipper.request('objects/list', {})
+        print("objects/list:", o)
+
+        o = klipper.request('objects/query', {'objects': {'output_pin pump':None, 'output_pin valve':None, 'output_pin lights':None}})
+        print("objects/query:", o)
+
     def _init_camera(self, camera, target_w, target_h):
         import puzzbot.camera.camera as pb
         self.camera = None
@@ -701,8 +769,8 @@ class ScantoolTk:
         self.var_AeEnable = IntVar(value=1)
         ttk.Checkbutton(controls, text='AE+AWB', variable=self.var_AeEnable, command=self.do_AeEnable).grid(column=1, row=0)
 
-        self.var_camera_lights = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Lights', variable=self.var_camera_lights, command=self.do_camera_lights).grid(column=2, row=0)
+        self.var_lights = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Lights', variable=self.var_lights, command=self.do_lights).grid(column=2, row=0)
 
         self.var_undistort = IntVar(value=1)
         ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=3, row=0)
@@ -733,8 +801,9 @@ class ScantoolTk:
         ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=4, row=0)
         ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=5, row=0)
         ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=6, row=0)
+        ttk.Button(f, text='Finger Calibrate', command=self.do_finger_calibrate).grid(column=7, row=0)
 
-        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=7, row=0)
+        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=8, row=0)
 
         self.axes_status = AxesStatus(self.frame, [
             ('stepper_x', 'X'),
@@ -764,6 +833,18 @@ class ScantoolTk:
 
         # don't know what to do with this
         idle_timeout = status.pop('idle_timeout', None)
+
+        lights = status.pop('output_pin lights', None)
+        if lights:
+            self.var_lights.set(1 if lights['value'] != 0. else 0)
+
+        pump = status.pop('output_pin pump', None)
+        if pump:
+            self.var_pump.set(1 if pump['value'] != 0. else 0)
+
+        valve = status.pop('output_pin valve', None)
+        if valve:
+            self.var_valve.set(1 if valve['value'] != 0. else 0)
 
         if len(status):
             print("klipper_objects_subscribe:", json.dumps(status, indent=4))
@@ -818,6 +899,10 @@ class ScantoolTk:
     def set_gantry_calibration(self, calibration):
         self.calibration['gantry'] = calibration
         self.gantry.set_calibration(calibration)
+
+    def do_finger_calibrate(self):
+        calibrator = FingerCalibrator(self.gantry, self.camera)
+        twisted_threads.deferToThread(calibrator.calibrate)
 
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
@@ -912,9 +997,9 @@ class ScantoolTk:
         controls['AwbEnable'] = controls['AeEnable']
         self.camera.raw_camera.set_controls(controls)
 
-    def do_camera_lights(self):
-        speed = 1 if self.var_camera_lights.get() else 0
-        script = f"SET_FAN_SPEED FAN=camera_lights SPEED={speed}"
+    def do_lights(self):
+        value = 1 if self.var_lights.get() else 0
+        script = f"SET_PIN PIN=lights VALUE={value}"
         self.send_gcode(script)
 
     def do_pump(self):
