@@ -377,10 +377,38 @@ class FingerCalibrator:
     def __init__(self, gantry, camera):
         self.gantry = gantry
         self.camera = camera
+        self.board = cv.aruco.CharucoBoard(
+            (8, 8), 6., 3., cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_100))
         self.board_height = -70.
         self.rotate_height = -60
 
-    def calibrate(self):
+    def calibrate(self, steps=50):
+
+        # motor is 200 steps per revolution
+        theta = steps * (math.pi / 100.)
+        
+        print("Finger calibrate!")
+
+        self.gantry.pump(1)
+        time.sleep(10.)
+        self.touch()
+
+        image0 = self.camera.get_calibrated_image()
+        
+        self.rotate(steps)
+
+        image1 = self.camera.get_calibrated_image()
+
+        self.gantry.pump(0)
+        self.release()
+
+        center = self.compute_finger_center(theta, image0, image1)
+
+        print("All done!")
+
+        return center
+        
+    def calibration_test(self):
         print("Finger calibrate!")
 
         self.gantry.pump(1)
@@ -422,6 +450,76 @@ class FingerCalibrator:
         path = f"finger_{suffix}.jpg"
         print(f"  save image to {path}")
         cv.imwrite(path, image)
+
+    def get_corners(self, image):
+        cd = CornerDetector(self.board)
+        corners, ids = cd.detect_corners(image)
+        return dict(zip(ids,corners))
+
+    def compute_finger_center(self, initial_theta, image0, image1):
+        corners0 = self.get_corners(image0)
+        corners1 = self.get_corners(image1)
+
+        overlap = set(corners0) & set(corners1)
+
+        print(f"{len(overlap)} common corners")
+
+        n_rows = 2 * len(overlap)
+        n_cols = 3
+
+        theta = initial_theta
+        u_center, v_center = 0., 0.
+        for i in range(5):
+
+            theta_deg = theta * 180. / math.pi
+            print(f"iteration {i}, {theta=:.5f} rad ({theta_deg:.2f} deg)")
+
+            A = np.zeros((n_rows, n_cols))
+            b = np.zeros((n_rows,))
+
+            c = math.cos(theta)
+            s = math.sin(theta)
+
+            r = 0
+            for i in overlap:
+                u0, v0 = corners0[i]
+                u1, v1 = corners1[i]
+
+                A[r][0] = -u0*s - v0*c
+                A[r][1] = 1
+                b[r] = u1 - u0*c + v0*s
+                r += 1
+
+                A[r][0] = u0*c - v0*s
+                A[r][2] = 1
+                b[r] = v1 - u0*s - v0*c
+                r += 1
+
+            # print("A=", A)
+            # print("b=", b)
+
+            # solve Ax = b
+            alpha, x, y = np.linalg.lstsq(A, b, rcond=None)[0]
+
+            alpha_deg = alpha * 180. / math.pi
+            print(f"{alpha=:.5f} rad ({alpha_deg:.2f} deg), {x=:.1f} px, {y=:.1f} px")
+
+            theta += alpha
+
+            c = math.cos(theta)
+            s = math.sin(theta)
+
+            denom = (1-c)**2 + s**2
+            u_center = (x*(1-c) - y*s) / denom
+            v_center = (x*s + y*(1-c)) / denom
+
+            print(f"center: ({u_center:.3f},{v_center:.3f})")
+            print()
+
+            if math.fabs(alpha) < .001:
+                break
+
+        return np.array((u_center, v_center))
         
 class GantryCalibrator:
 
@@ -657,9 +755,13 @@ class Gantry:
     
 class CalibratedCamera:
 
+    class IdentityRemapper:
+        def undistort_image(self, image):
+            return image
+
     def __init__(self, raw_camera):
         self.raw_camera = raw_camera
-        self.remappers = collections.defaultdict(lambda x: x)
+        self.remappers = collections.defaultdict(CalibratedCamera.IdentityRemapper)
 
     def set_calibration(self, calibration):
         self.remappers['main'] = BigHammerRemapper.from_calibration(calibration)
