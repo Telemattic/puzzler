@@ -383,37 +383,39 @@ class FingerCalibrator:
     def calibrate(self):
         print("Finger calibrate!")
 
+        self.gantry.pump(1)
         time.sleep(20.)
+        self.release()
+
+        for steps in range(0,51,5):
         
-        self.gantry.valve(True)
-        time.sleep(.5)
-        self.gantry.move_to(z=0)
-        self.gantry.valve(False)
-        time.sleep(.5)
+            self.take_image(f"{steps}_A")
+            self.touch()
+            self.take_image(f"{steps}_B")
+            self.rotate(steps)
+            self.take_image(f"{steps}_C")
+            self.release()
+            self.take_image(f"{steps}_D")
 
-        self.take_image("0")
+        self.gantry.pump(0)
+        print("All done!")
 
+    def touch(self):
         self.gantry.move_to(z=self.board_height)
         time.sleep(.5)
 
-        self.take_image("1")
-
+    def rotate(self, angle):
         self.gantry.move_to(z=self.rotate_height)
-        self.gantry.rotate(50)
+        self.gantry.rotate(angle)
         self.gantry.move_to(z=self.board_height)
         time.sleep(.5)
 
-        self.take_image("2")
-
+    def release(self):
         self.gantry.valve(True)
         time.sleep(2.)
         self.gantry.move_to(z=0)
         self.gantry.valve(False)
         time.sleep(.5)
-
-        self.take_image("3")
-
-        print("All done!")
 
     def take_image(self, suffix):
         image = self.camera.get_calibrated_image()
@@ -640,6 +642,14 @@ class Gantry:
         self.klipper.gcode_script(f"MANUAL_STEPPER STEPPER=stepper_a MOVE={angle} ACCEL=100")
         if wait:
             self.klipper.gcode_script('M400')
+
+    def lights(self, lights_on):
+        value = 1 if lights_on else 0
+        self.klipper.gcode_script(f"SET_PIN PIN=lights VALUE={value}")
+
+    def pump(self, pump_on):
+        value = 1 if pump_on else 0
+        self.klipper.gcode_script(f"SET_PIN PIN=pump VALUE={value}")
             
     def valve(self, open_valve):
         value = 1 if open_valve else 0
@@ -998,19 +1008,13 @@ class ScantoolTk:
         self.camera.raw_camera.set_controls(controls)
 
     def do_lights(self):
-        value = 1 if self.var_lights.get() else 0
-        script = f"SET_PIN PIN=lights VALUE={value}"
-        self.send_gcode(script)
+        self.gantry.lights(self.var_lights.get())
 
     def do_pump(self):
-        value = 1 if self.var_pump.get() else 0
-        script = f"SET_PIN PIN=pump VALUE={value}"
-        self.send_gcode(script)
+        self.gantry.pump(self.var_pump.get())
 
     def do_valve(self):
-        value = 1 if self.var_valve.get() else 0
-        script = f"SET_PIN PIN=valve VALUE={value}"
-        self.send_gcode(script)
+        self.gantry.valve(self.var_valve.get())
 
     def key_event(self, event):
         pass
