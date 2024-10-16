@@ -12,15 +12,6 @@ import re
 from puzzler.commands.points import PerimeterComputer
 from matplotlib.pylab import cm
 
-def find_polygon_interior_point(polygon):
-    for x, y in polygon:
-        for i, j in ((x+1, y), (x-1, y), (x, y+1), (x, y-1)):
-            test = cv.pointPolygonTest(polygon, (i+0., j+0.), False)
-            print(f"  at {(x,y)} on contour, testing {(i,j)} -> {test:+f}")
-            if test > 0:
-                return (i, j)
-    raise ValueException("no interior point in polygon")
-
 def find_center_point(contour, dpath):
 
     dpi = 600.
@@ -29,38 +20,38 @@ def find_center_point(contour, dpath):
     px_per_mm = dpi / 25.4
     finger_radius_px = px_per_mm * finger_diameter_mm / 2.
     
-    m = cv.moments(contour)
-    m_cx = int(m['m10']/m['m00'])
-    m_cy = int(m['m01']/m['m00'])
-
     pp = np.squeeze(contour)
-    ll = np.min(pp, axis=0) - 1
-    ur = np.max(pp, axis=0) + 1
+    ll = np.min(pp, axis=0) - 5
+    ur = np.max(pp, axis=0) + 5
     w, h = ur + 1 - ll
     print(f"{ll=} {ur=} {w=} {h=}")
+
+    # center-of-mass in image coordinates
+    m = cv.moments(contour)
+    m_cx = int(m['m10']/m['m00']) - ll[0]
+    m_cy = int(m['m01']/m['m00']) - ll[1]
 
     cols = pp[:,0] - ll[0]
     rows = pp[:,1] - ll[1]
 
     piece_image = np.ones((h, w), dtype=np.uint8)
     piece_image[rows, cols] = 0
-    #cv.imwrite('derp1.png', np.uint8(piece_image*255))
+
+    piece_image = cv.floodFill(piece_image, None, (0,0), 0)[1]
     
     di = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
 
-    # make sure that the seed of the flood fill is inside the contour!
-    x, y = w // 2, h // 2
-    if cv.pointPolygonTest(pp, (x+ll[0]+0.,y+ll[1]+0.), False) <= 0.:
-        print(f"{(x,y)} is not in the polygon, going to try harder I guess...")
-        x, y = find_polygon_interior_point(pp) - ll
-        print(f"{(x,y)} looks good")
-        
-    is_exterior_mask = cv.floodFill(piece_image, None, (x,y), 0)[1]
-    #derp2 = cv.cvtColor(is_exterior_mask * 255, cv.COLOR_GRAY2BGR)
-    #cv.circle(derp2, (x,y), 9, (255,0,127), thickness=2)
-    #cv.imwrite('derp2.png', derp2)
-
-    di = np.where(is_exterior_mask, 0., di)
+    f_cx, f_cy = None, None
+    if di[m_cy,m_cx] < finger_radius_px:
+        # center-of-mass is too close to the edge of the piece, find
+        # the point closest to the center of mass that is workable
+        print("*** center of mass not within 'safe' zone, trying to improve it!")
+        dx2 = np.square(np.arange(w) - m_cx)
+        dy2 = np.square(np.arange(h) - m_cy)
+        di2 = np.sqrt(np.atleast_2d(dx2) + np.atleast_2d(dy2).T)
+        assert di.shape == di2.shape
+        f_cy, f_cx = np.unravel_index(np.argmin(np.where(di >= finger_radius_px, di2, np.inf)), di.shape)
+        print(f"best finger location: {(f_cx,f_cy)}")
 
     cy, cx = np.unravel_index(np.argmax(di, axis=None), di.shape)
     c = (cx, cy)
@@ -68,10 +59,6 @@ def find_center_point(contour, dpath):
 
     finger_okay = np.uint8(np.where(di >= finger_radius_px, 255, 0))
     finger_contours = cv.findContours(finger_okay, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)[0]
-
-    mar = cv.minAreaRect(contour)
-    r_cx, r_cy = mar[0]
-    print(f"minAreaRect={mar}, center: ({r_cx:.1f},{r_cy:.1f})")
 
     s = 255 / np.max(di)
     di8 = np.array(di * s, dtype=np.uint8)
@@ -84,8 +71,9 @@ def find_center_point(contour, dpath):
     cv.drawContours(di8, [contour-ll], 0, (127,0,127), thickness=2, lineType=cv.LINE_AA)
     cv.drawContours(di8, finger_contours, -1, (0,127,0), thickness=2, lineType=cv.LINE_AA)
     cv.circle(di8, c, 9, (255, 0, 127), thickness=2, lineType=cv.LINE_AA)
-    cv.circle(di8, (m_cx, m_cy) - ll, 9, (255, 255, 0), thickness=2, lineType=cv.LINE_AA)
-    cv.circle(di8, np.int32(np.round((r_cx, r_cy) - ll)), 9, (0,255,0), thickness=2, lineType=cv.LINE_AA)
+    cv.circle(di8, (m_cx, m_cy), 9, (255, 255, 0), thickness=2, lineType=cv.LINE_AA)
+    if f_cx is not None:
+        cv.circle(di8, (f_cx, f_cy), 9, (0,255,0), thickness=2, lineType=cv.LINE_AA)
 
     print(f"Saving distance to {dpath}")
     cv.imwrite(dpath, di8)
