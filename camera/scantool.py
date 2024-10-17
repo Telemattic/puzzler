@@ -453,7 +453,7 @@ class FingerCalibrator:
 
         print("All done!")
 
-        return center
+        return {'x': center[0], 'y': center[1]}
         
     def calibration_test(self):
         print("Finger calibrate!")
@@ -1088,7 +1088,11 @@ class ScantoolTk:
 
     def do_finger_calibrate(self):
         calibrator = FingerCalibrator(self.gantry, self.camera)
-        twisted_threads.deferToThread(calibrator.calibrate)
+        d = twisted_threads.deferToThread(calibrator.calibrate)
+        d.addCallback(self.set_finger_calibration)
+
+    def set_finger_calibration(self, calibration):
+        self.calibration['finger'] = calibration    
 
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
