@@ -18,6 +18,9 @@ def compute_contour_center_of_mass(contour):
     y = int(m['m01']/m['m00'])
     return (x, y)
 
+def distance_to_contour(contour, pt):
+    return cv.pointPolygonTest(contour, np.float32(pt), True)
+    
 class ContourDistanceImage:
 
     def __init__(self, contour, finger_radius_px):
@@ -54,7 +57,7 @@ class ContourDistanceImage:
         # if the piece is so small that there are no safe points within it
         # then we get a meaningless answer, make sure we don't blindly
         # accept it
-        dist_to_edge = cv.pointPolygonTest(self.contour, np.float32(opt_center), True)
+        dist_to_edge = distance_to_contour(self.contour, opt_center)
         assert dist_to_edge >= self.finger_radius_px
 
         return opt_center
@@ -92,7 +95,7 @@ def choose_contour_center(contour, dpath = None):
     # the nearest edge we're happy
     
     # points interior to the polygon have a positive distance
-    if cv.pointPolygonTest(contour, center, True) >= finger_radius_px:
+    if distance_to_contour(contour, center) >= finger_radius_px:
         return center
 
     # center of mass is too close to the edge of the piece, find the
