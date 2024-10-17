@@ -61,6 +61,75 @@ def draw_grid(image):
     for y in range(s,h,s):
         cv.polylines(image, [np.array([(0,y), (w-1,y)])], False, (192, 192, 0))
 
+def compute_contour_center_of_mass(contour):
+    m = cv.moments(contour)
+    x = int(m['m10']/m['m00'])
+    y = int(m['m01']/m['m00'])
+    return (x, y)
+
+def distance_to_contour(contour, pt):
+    return cv.pointPolygonTest(contour, np.float32(pt), True)
+    
+class ContourDistanceImage:
+
+    def __init__(self, contour, finger_radius_px):
+        self.contour = contour
+        self.finger_radius_px = finger_radius_px
+        
+        self.ll = np.min(contour, axis=0) - 5
+        self.ur = np.max(contour, axis=0) + 5
+        w, h = self.ur + 1 - self.ll
+
+        # construct a new vector of points offset by ll, do _not_ modify
+        # the existing points in place, this is purely local bookkeeping
+        pp = self.contour - self.ll
+
+        piece_image = np.ones((h, w), dtype=np.uint8)
+        piece_image[pp[:,1], pp[:,0]] = 0
+
+        piece_image = cv.floodFill(piece_image, None, (0,0), 0)[1]
+
+        self.di = cv.distanceTransform(piece_image, cv.DIST_L2, cv.DIST_MASK_PRECISE)
+
+    def optimize_center(self, center):
+        di = self.di
+        h, w = di.shape
+        dx2 = np.square(np.arange(w) - (center[0] - self.ll[0]))
+        dy2 = np.square(np.arange(h) - (center[1] - self.ll[1]))
+        center_di = np.sqrt(np.atleast_2d(dx2) + np.atleast_2d(dy2).T)
+
+        opt_index = np.argmin(np.where(di >= self.finger_radius_px, center_di, np.inf))
+
+        # reverse the unraveled index to change from (y,x) to (x,y) tuple
+        opt_center = np.unravel_index(opt_index, di.shape)[::-1] + self.ll
+
+        # if the piece is so small that there are no safe points within it
+        # then we get a meaningless answer, make sure we don't blindly
+        # accept it
+        dist_to_edge = distance_to_contour(self.contour, opt_center)
+        assert dist_to_edge >= self.finger_radius_px
+
+        return opt_center
+
+    def make_color_image(self, center, optimized_center):
+
+        di, ll = self.di, self.ll
+
+        finger_okay = np.uint8(np.where(di >= self.finger_radius_px, 255, 0))
+        finger_contours = cv.findContours(finger_okay, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)[0]
+
+        img = np.uint8(di * (255 / np.max(di)))
+        img = cv.cvtColor(np.uint8(cm.afmhot(img) * 255), cv.COLOR_RGBA2BGR)
+
+        cv.drawContours(img, [self.contour-ll], 0, (127,0,127), thickness=2, lineType=cv.LINE_AA)
+        cv.drawContours(img, finger_contours, -1, (0,127,0), thickness=2, lineType=cv.LINE_AA)
+        if center is not None:
+            cv.circle(img, center-ll, 9, (255, 0, 127), thickness=2, lineType=cv.LINE_AA)
+        if optimized_center is not None:
+            cv.circle(img, optimized_center-ll, 9, (127, 255, 0), thickness=2, lineType=cv.LINE_AA)
+
+        return img
+        
 class ImageProjection:
 
     def __init__(self, coord_mm, px_per_mm):
@@ -119,6 +188,7 @@ class PieceFinder:
         self.max_size_mm = 70
         self.margin_px = 125
         self.feedrate = 5000
+        self.finger_diameter_mm = 11.7
 
         self.image_threshold = 75
 
@@ -308,31 +378,46 @@ class PieceFinder:
 
         contour = PerimeterComputer(sub_image, threshold=self.image_threshold).contour
 
-        m = cv.moments(contour)
-        r = cv.boundingRect(contour)
-        cx = int(m['m10']/m['m00'])
-        cy = int(m['m01']/m['m00'])
+        center = self.choose_contour_center(np.squeeze(contour))
 
         if opath:
             print(f"Saving piece to {opath}")
-            #sub_image = np.copy(np.flip(sub_image, axis=0))
-            #cv.drawContours(sub_image, [contour], 0, (0,0,255))
-            #cv.circle(sub_image, (cx,cy), 6, (255,255,0), thickness=2, lineType=cv.LINE_AA)
-            #sub_image = np.copy(np.flip(sub_image, axis=0))
+            sub_image = np.copy(np.flipud(sub_image))
+            cv.drawContours(sub_image, [contour], 0, (0,0,255), thickness=2, lineType=cv.LINE_AA)
+            cv.circle(sub_image, center, 6, (255,255,0), thickness=2, lineType=cv.LINE_AA)
+            sub_image = np.copy(np.flipud(sub_image))
             if os.path.exists(opath):
                 os.unlink(opath)
             cv.imwrite(opath, sub_image)
             
-        print(f"  sub_image={(x0,y0,x1,y1)} boundingRect={r} center={(cx,cy)}")
+        print(f"  sub_image={(x0,y0,x1,y1)} {center=}")
 
         Source = puzzler.puzzle.Puzzle.Piece.Source
 
         # take the center of the points from the center of the
         # image, as that is how the camera was aligned
-        center = (sub_image.shape[1]//2, sub_image.shape[0]//2)
         points = np.squeeze(contour) - center
         source = Source(opath, (0, 0, sub_image.shape[1], sub_image.shape[0]))
         return points, source
+
+    def choose_contour_center(self, contour):
+        px_per_mm = self.capture_dpi / 25.4
+        finger_radius_px = px_per_mm * self.finger_diameter_mm / 2.
+
+        center = compute_contour_center_of_mass(contour)
+
+        # as long as we are at least the radius of the finger away from
+        # the nearest edge we're happy
+
+        # points interior to the polygon have a positive distance
+        if distance_to_contour(contour, center) >= finger_radius_px:
+            return center
+
+        # center of mass is too close to the edge of the piece, find the
+        # point closest to the center of mass that isn't too close to an
+        # edge
+        cdi = ContourDistanceImage(contour, finger_radius_px)
+        return cdi.optimize_center(center)
     
 class FingerCalibrator:
 
