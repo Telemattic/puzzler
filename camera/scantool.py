@@ -117,8 +117,10 @@ class PieceFinder:
         self.image_threshold = 128
         self.min_size_mm = 10
         self.max_size_mm = 70
-        self.margin_px = 5
+        self.margin_px = 125
         self.feedrate = 5000
+
+        self.image_threshold = 75
 
     def find_pieces(self, rect):
 
@@ -238,12 +240,18 @@ class PieceFinder:
             if not (min_area <= a <= max_area):
                 continue
 
-            x, y, w, h = cv.boundingRect(c)
-            center = (x + w/2, y + h/2)
-            radius = math.hypot(w,h) / 2
+            center, radius = cv.minEnclosingCircle(c)
             retval.append((center, radius))
 
-            cv.circle(image, (int(center[0]), int(center[1])), int(radius), (0, 255, 255))
+            # draw the identified contour in red
+            cv.drawContours(image, [c], 0, (0,0,255))
+            
+            # draw the bounding circle in yellow, (fractional coordinates, anti-aliasing)
+            shift = 4
+            scale = 1 << shift
+            ix, iy = int(round(center[0] * scale)), int(round(center[1] * scale))
+            ir = int(round(radius * scale))
+            cv.circle(image, (ix, iy), ir, (0, 255, 255), lineType=cv.LINE_AA, shift=shift)
 
         return retval
 
@@ -291,7 +299,7 @@ class PieceFinder:
 
         image_h, image_w = image.shape[:2]
         pix_per_mm = self.capture_dpi / 25.4
-        rect_size = int(radius * pix_per_mm)
+        rect_size = int(radius * pix_per_mm) + self.margin_px
         x0 = image_w // 2 - rect_size
         y0 = image_h // 2 - rect_size
         x1 = image_w // 2 + rect_size
@@ -300,11 +308,23 @@ class PieceFinder:
 
         contour = PerimeterComputer(sub_image, threshold=self.image_threshold).contour
 
+        m = cv.moments(contour)
+        r = cv.boundingRect(contour)
+        cx = int(m['m10']/m['m00'])
+        cy = int(m['m01']/m['m00'])
+
         if opath:
             print(f"Saving piece to {opath}")
-            # cv.drawContours(sub_image, [contour], 0, (0,0,255))
+            #sub_image = np.copy(np.flip(sub_image, axis=0))
+            #cv.drawContours(sub_image, [contour], 0, (0,0,255))
+            #cv.circle(sub_image, (cx,cy), 6, (255,255,0), thickness=2, lineType=cv.LINE_AA)
+            #sub_image = np.copy(np.flip(sub_image, axis=0))
+            if os.path.exists(opath):
+                os.unlink(opath)
             cv.imwrite(opath, sub_image)
             
+        print(f"  sub_image={(x0,y0,x1,y1)} boundingRect={r} center={(cx,cy)}")
+
         Source = puzzler.puzzle.Puzzle.Piece.Source
 
         # take the center of the points from the center of the
@@ -314,64 +334,6 @@ class PieceFinder:
         source = Source(opath, (0, 0, sub_image.shape[1], sub_image.shape[0]))
         return points, source
     
-    def find_candidates(self, image_x, image_y, opath=None):
-        
-        self.gantry.move_to(x=image_x, y=image_y, f=self.feedrate)
-        time.sleep(.5)
-        image, metadata = self.camera.get_calibrated_image_and_metadata()
-        if opath:
-            print(f"Saving image to {opath}")
-            # pprint.pprint(metadata)
-            cv.imwrite(opath, cv.resize(image, None, fx=.25, fy=.25))
-        
-        pieces = self.find_pieces_one_image(image)
-        
-        px_per_mm = self.capture_dpi / 25.4
-        proj = ImageProjection(np.array((image_x, image_y)), px_per_mm)
-
-        image_size = np.array(image.shape[:2][::-1])
-
-        retval = []
-        for r in pieces:
-            x, y, w, h = r
-            center_px = np.array((x + w/2, (y + h/2)))
-            radius_px = math.hypot(w, h) / 2
-
-            center_mm = proj.px_to_mm(center_px - image_size/2)
-            radius_mm = radius_px / px_per_mm
-
-            retval.append((center_mm, radius_mm))
-
-        return retval
-            
-    def find_pieces_one_image(self, image):
-        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-        thresh = cv.threshold(gray, self.image_threshold, 255, cv.THRESH_BINARY)[1]
-            
-        kernel = cv.getStructuringElement(cv.MORPH_RECT, (4,4))
-        thresh = cv.erode(thresh, kernel)
-        thresh = cv.dilate(thresh, kernel)
-
-        contours = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)[0]
-    
-        retval = []
-    
-        image_h, image_w = gray.shape
-        margin_px = self.margin_px
-
-        px_per_mm = self.capture_dpi / 25.4
-        min_size_px = self.min_size_mm * px_per_mm
-        max_size_px = self.max_size_mm * px_per_mm
-    
-        for c in contours:
-            r = cv.boundingRect(c)
-            x, y, w, h = r
-            if min_size_px <= w <= max_size_px and min_size_px <= h <= max_size_px:
-                if margin_px < x and x+w < image_w - margin_px and margin_px < y and y+h < image_h - margin_px:
-                    retval.append(r)
-
-        return retval
-
 class FingerCalibrator:
 
     def __init__(self, gantry, camera):
@@ -929,6 +891,33 @@ class ScantoolTk:
         self.axes_position = AxesPosition(self.frame)
         self.axes_position.grid(column=1, row=4)
 
+        f = ttk.LabelFrame(self.frame, text='White Balance')
+        f.grid(column=0, row=5, columnspan=2)
+        
+        self.var_awb_enable = IntVar(value=1)
+        b = ttk.Checkbutton(f, text='AWB', variable=self.var_awb_enable, command=self.do_awb_enable)
+        b.grid(column=0, row=0)
+
+        self.var_red_gain = DoubleVar(value=1.)
+        ttk.Label(f, textvar=self.var_red_gain, width=12).grid(column=1, row=0)
+        s = ttk.Scale(f, from_=0., to=32., length=200, variable=self.var_red_gain, orient=HORIZONTAL, command=self.do_colourgains)
+        s.grid(column=2, row=0)
+        
+        self.var_blue_gain = DoubleVar(value=1.)
+        ttk.Label(f, textvar=self.var_blue_gain, width=12).grid(column=3, row=0)
+        s = ttk.Scale(f, from_=0., to=32., length=200, variable=self.var_blue_gain, orient=HORIZONTAL, command=self.do_colourgains)
+        s.grid(column=4, row=0)
+
+    def do_awb_enable(self):
+        value = self.var_awb_enable.get() != 0
+        self.camera.raw_camera.set_controls({'AeEnable':value})
+
+    def do_colourgains(self, unused):
+        self.var_awb_enable.set(0)
+        red = self.var_red_gain.get()
+        blue = self.var_blue_gain.get()
+        self.camera.raw_camera.set_controls({'AeEnable':False, 'ColourGains':(red,blue)})
+
     def klipper_objects_subscribe_callback(self, o):
         eventtime = o.pop('eventtime')
         status = o.pop('status')
@@ -1019,6 +1008,7 @@ class ScantoolTk:
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
         rect = (135, 400, 720, 1150)
+        # rect = (135, 400, 170, 435)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
     def do_gcode1(self):
