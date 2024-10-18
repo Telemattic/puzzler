@@ -93,12 +93,16 @@ class ContourDistanceImage:
 
     def optimize_center(self, center):
         di = self.di
-        h, w = di.shape
-        dx2 = np.square(np.arange(w) - (center[0] - self.ll[0]))
-        dy2 = np.square(np.arange(h) - (center[1] - self.ll[1]))
-        center_di = np.sqrt(np.atleast_2d(dx2) + np.atleast_2d(dy2).T)
+        if np.max(di) >= self.finger_radius_px:
+            
+            h, w = di.shape
+            dx2 = np.square(np.arange(w) - (center[0] - self.ll[0]))
+            dy2 = np.square(np.arange(h) - (center[1] - self.ll[1]))
+            center_di = np.sqrt(np.atleast_2d(dx2) + np.atleast_2d(dy2).T)
 
-        opt_index = np.argmin(np.where(di >= self.finger_radius_px, center_di, np.inf))
+            opt_index = np.argmin(np.where(di >= self.finger_radius_px, center_di, np.inf))
+        else:
+            opt_index = np.argmax(di)
 
         # reverse the unraveled index to change from (y,x) to (x,y) tuple
         opt_center = np.unravel_index(opt_index, di.shape)[::-1] + self.ll
@@ -107,7 +111,8 @@ class ContourDistanceImage:
         # then we get a meaningless answer, make sure we don't blindly
         # accept it
         dist_to_edge = distance_to_contour(self.contour, opt_center)
-        assert dist_to_edge >= self.finger_radius_px
+        if dist_to_edge < self.finger_radius_px:
+            print(f"WARNING: {opt_center=} {dist_to_edge=:.1f}")
 
         return opt_center
 
@@ -190,7 +195,7 @@ class PieceFinder:
         self.feedrate = 5000
         self.finger_diameter_mm = 11.7
 
-        self.image_threshold = 75
+        #self.image_threshold = 75
 
     def find_pieces(self, rect):
 
@@ -633,41 +638,6 @@ class GantryCalibrator:
         corners, ids = detector.detect_corners(image)
         return dict(zip(ids,corners))
 
-class AxesStatus(ttk.LabelFrame):
-
-    def __init__(self, parent, axes_and_labels):
-        def make_light(color):
-            image = PIL.Image.new('RGB', (16,16), color)
-            return PIL.ImageTk.PhotoImage(image=image)
-        super().__init__(parent, text='Axes')
-        self.images = [make_light((200,0,0)), make_light((0,200,0))]
-        self.axes = dict()
-        for i, (axis, label) in enumerate(axes_and_labels):
-            l = ttk.Label(self, image=self.images[0])
-            l.grid(column=i*2, row=0, sticky='W')
-            self.axes[axis] = l
-            l = ttk.Label(self, text=label)
-            l.grid(column=i*2+1, row=0, sticky='W')
-
-    def set_axes(self, axes):
-        for axis, value in axes.items():
-            self.axes[axis].configure(image=self.images[1 if value else 0])
-
-class AxesPosition(ttk.LabelFrame):
-
-    def __init__(self, parent):
-        super().__init__(parent, text='Position')
-        self.axes = dict()
-        for i, axis in enumerate('XYZA'):
-            s = StringVar(value=f"{axis} -")
-            self.axes[axis] = s
-            l = ttk.Label(self, textvar=s, width=12)
-            l.grid(column=i, row=0)
-
-    def set_axes(self, axes):
-        for axis, value in axes.items():
-            self.axes[axis].set(f"{axis}: {value:9.3f}")
-
 class KlipperException(Exception):
     pass
 
@@ -747,10 +717,12 @@ class GantryException(Exception):
 
 class Gantry:
 
-    def __init__(self, klipper):
+    def __init__(self, klipper, calibration = None):
         self.klipper = klipper
         self.fwd = np.eye(2)
         self.inv = np.eye(2)
+        if calibration is not None:
+            self.set_calibration(calibration)
 
     def set_calibration(self, cal):
         alpha, beta = cal['alpha'], cal['beta']
@@ -806,9 +778,11 @@ class CalibratedCamera:
         def undistort_image(self, image):
             return image
 
-    def __init__(self, raw_camera):
+    def __init__(self, raw_camera, calibration = None):
         self.raw_camera = raw_camera
         self.remappers = collections.defaultdict(CalibratedCamera.IdentityRemapper)
+        if calibration is not None:
+            self.set_calibration(calibration)
 
     def set_calibration(self, calibration):
         self.remappers['main'] = BigHammerRemapper.from_calibration(calibration)
@@ -834,6 +808,174 @@ class CalibratedCamera:
     @property
     def frame_size(self):
         return self.raw_camera.frame_size
+
+class Bot:
+
+    def __init__(self, server, calibration):
+        self.server = server
+        self.calibration = calibration
+        
+        self.gantry = Gantry(Klipper(server), self.calibration.get('gantry'))
+        
+        import puzzbot.camera.camera as pb
+        raw_camera = pb.WebCamera(self.server + "/camera")
+        
+        self.camera = CalibratedCamera(raw_camera, self.calibration.get('camera'))
+
+class AxesHoming(ttk.LabelFrame):
+
+    def __init__(self, parent, axes_and_labels):
+        def make_light(color):
+            image = PIL.Image.new('RGB', (16,16), color)
+            return PIL.ImageTk.PhotoImage(image=image)
+        super().__init__(parent, text='Homing')
+        self.images = [make_light((200,0,0)), make_light((0,200,0))]
+        self.axes = dict()
+        for i, (axis, label) in enumerate(axes_and_labels):
+            l = ttk.Label(self, image=self.images[0])
+            l.grid(column=i*2, row=0, sticky='W')
+            self.axes[axis] = l
+            l = ttk.Label(self, text=label)
+            l.grid(column=i*2+1, row=0, sticky='W')
+
+    def set_axes(self, axes):
+        for axis, value in axes.items():
+            self.axes[axis].configure(image=self.images[1 if value else 0])
+
+class AxesPosition(ttk.LabelFrame):
+
+    def __init__(self, parent):
+        super().__init__(parent, text='Position')
+        self.axes = dict()
+        for i, axis in enumerate('XYZA'):
+            s = StringVar(value=f"{axis} -")
+            self.axes[axis] = s
+            l = ttk.Label(self, textvar=s, width=12)
+            l.grid(column=i, row=0)
+
+    def set_axes(self, axes):
+        for axis, value in axes.items():
+            self.axes[axis].set(f"{axis}: {value:9.3f}")
+
+class AxesStatus(ttk.Frame):
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        
+        self.home_button = ttk.Button(self, text='Home', command=self.do_home)
+        self.home_button.grid(column=0, row=0, sticky=(N,S))
+        
+        self.homing = AxesHoming(self, [
+            ('stepper_x', 'X'),
+            ('stepper_y', 'Y1'),
+            ('stepper_y1', 'Y2'),
+            ('stepper_z', 'Z'),
+            ('manual_stepper stepper_a', 'A')
+        ])
+        self.homing.grid(column=1, row=0)
+
+        self.position = AxesPosition(self)
+        self.position.grid(column=2, row=0)
+
+    def do_home(self):
+        self.event_generate("<<home>>")
+
+class NumberSlider(ttk.Frame):
+
+    def __init__(self, parent, var, options):
+        super().__init__(parent)
+
+        self.var = var
+
+        kwargs = {}
+        for opt, kw in {'textwidth':'width'}.items():
+            if opt in options:
+                kwargs[kw] = options[opt]
+            
+        self.label_format = options.get('format', str)
+        self.label = ttk.Label(self, text=self.label_format(self.var.get()), anchor=E, **kwargs)
+        self.label.grid(column=0, row=0)
+
+        kwargs = {}
+        for kw in ('from_', 'to', 'length', 'orient'):
+            if kw in options:
+                kwargs[kw] = options[kw]
+            
+        self.scale = ttk.Scale(self, variable=self.var, **kwargs, command=self.do_scale)
+        self.scale.grid(column=1, row=0)
+
+    def do_scale(self, unused):
+        self.label['text'] = self.label_format(self.var.get())
+        self.event_generate("<<slider>>")
+
+class CameraControls(ttk.LabelFrame):
+
+    def __init__(self, parent):
+        super().__init__(parent, text='Camera Controls')
+
+        f = ttk.LabelFrame(self, text='Exposure Time')
+        f.grid(column=0, row=0)
+
+        self.var_ae_enable = IntVar(value=1)
+        b = ttk.Checkbutton(f, text='Auto Exposure', variable=self.var_ae_enable, command=self.do_ae_enable)
+        b.grid(column=0, row=0)
+
+        slider_options = {
+            'from_': 1000,
+            'to': 100000,
+            'length': 200,
+            'orient': HORIZONTAL,
+            'textwidth': 8
+        }
+
+        self.var_exposure_slider = NumberSlider(f, IntVar(value=8000), slider_options)
+        self.var_exposure_slider.grid(column=1, row=0)
+        self.var_exposure_slider.bind("<<slider>>", lambda x: self.do_exposure_time())
+
+        f = ttk.LabelFrame(self, text='White Balance')
+        f.grid(column=1, row=0)
+        
+        self.var_awb_enable = IntVar(value=1)
+        b = ttk.Checkbutton(f, text='Auto WB', variable=self.var_awb_enable, command=self.do_awb_enable)
+        b.grid(column=0, row=0)
+
+        slider_options |= {'from_':0., 'to':32., 'format': lambda x: f"{x:.4f}", 'textwidth':12}
+
+        self.var_red_slider = NumberSlider(f, DoubleVar(value=1.), slider_options)
+        self.var_red_slider.grid(column=1, row=0)
+        self.var_red_slider.bind("<<slider>>", lambda x: self.do_colour_gains())
+        
+        self.var_blue_slider = NumberSlider(f, DoubleVar(value=1.), slider_options)
+        self.var_blue_slider.grid(column=2, row=0)
+        self.var_blue_slider.bind("<<slider>>", lambda x: self.do_colour_gains())
+
+    @property
+    def ae_enable(self):
+        return self.var_ae_enable.get() != 0
+
+    @property
+    def exposure_time(self):
+        return self.var_exposure_slider.var.get()
+
+    @property
+    def awb_enable(self):
+        return self.var_awb_enable.get() != 0
+
+    @property
+    def colour_gains(self):
+        return (self.var_red_slider.var.get(), self.var_blue_slider.var.get())
+
+    def do_ae_enable(self):
+        self.event_generate("<<ae_enable>>")
+
+    def do_exposure_time(self):
+        self.event_generate("<<exposure_time>>")
+
+    def do_awb_enable(self):
+        self.event_generate("<<awb_enable>>")
+
+    def do_colour_gains(self):
+        self.event_generate("<<colour_gains>>")
 
 class ScantoolTk:
 
@@ -878,12 +1020,6 @@ class ScantoolTk:
         poll = twisted.internet.task.LoopingCall(klipper.poll_notifications)
         poll.start(0)
 
-        o = klipper.request('objects/list', {})
-        print("objects/list:", o)
-
-        o = klipper.request('objects/query', {'objects': {'output_pin pump':None, 'output_pin valve':None, 'output_pin lights':None}})
-        print("objects/query:", o)
-
     def _init_camera(self, camera, target_w, target_h):
         import puzzbot.camera.camera as pb
         self.camera = None
@@ -925,9 +1061,6 @@ class ScantoolTk:
 
         ttk.Button(controls, text='Camera Calibrate', command=self.do_camera_calibrate).grid(column=0, row=0)
 
-        self.var_AeEnable = IntVar(value=1)
-        ttk.Checkbutton(controls, text='AE+AWB', variable=self.var_AeEnable, command=self.do_AeEnable).grid(column=1, row=0)
-
         self.var_lights = IntVar(value=0)
         ttk.Checkbutton(controls, text='Lights', variable=self.var_lights, command=self.do_lights).grid(column=2, row=0)
 
@@ -953,55 +1086,52 @@ class ScantoolTk:
 
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
-        ttk.Button(f, text='Home', command=self.do_home).grid(column=0, row=0)
         ttk.Button(f, text='Gantry Calibrate', command=self.do_gantry_calibrate).grid(column=1, row=0)
         ttk.Button(f, text='Find Pieces', command=self.do_find_pieces).grid(column=2, row=0)
-        ttk.Button(f, text='gcode1', command=self.do_gcode1).grid(column=3, row=0)
-        ttk.Button(f, text='gcode2', command=self.do_gcode2).grid(column=4, row=0)
-        ttk.Button(f, text='gcode3', command=self.do_gcode3).grid(column=5, row=0)
-        ttk.Button(f, text='gcode4', command=self.do_gcode4).grid(column=6, row=0)
         ttk.Button(f, text='Finger Calibrate', command=self.do_finger_calibrate).grid(column=7, row=0)
 
         ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=8, row=0)
 
-        self.axes_status = AxesStatus(self.frame, [
-            ('stepper_x', 'X'),
-            ('stepper_y', 'Y1'),
-            ('stepper_y1', 'Y2'),
-            ('stepper_z', 'Z'),
-            ('manual_stepper stepper_a', 'A')
-        ])
-        self.axes_status.grid(column=0, row=4)
+        self.axes_status = AxesStatus(self.frame)
+        self.axes_status.grid(column=0, row=4, columnspan=2, sticky=(N, W))
+        self.axes_status.bind("<<home>>", lambda event: self.do_home())
 
-        self.axes_position = AxesPosition(self.frame)
-        self.axes_position.grid(column=1, row=4)
+        self.camera_controls = CameraControls(self.frame)
+        self.camera_controls.grid(column=0, row=5, columnspan=2, sticky=(W))
+        self.camera_controls.bind("<<ae_enable>>", lambda x: self.do_ae_enable())
+        self.camera_controls.bind("<<exposure_time>>", lambda x: self.do_exposure_time())
+        self.camera_controls.bind("<<awb_enable>>", lambda x: self.do_awb_enable())
+        self.camera_controls.bind("<<colour_gains>>", lambda x: self.do_colour_gains())
 
-        f = ttk.LabelFrame(self.frame, text='White Balance')
-        f.grid(column=0, row=5, columnspan=2)
-        
-        self.var_awb_enable = IntVar(value=1)
-        b = ttk.Checkbutton(f, text='AWB', variable=self.var_awb_enable, command=self.do_awb_enable)
-        b.grid(column=0, row=0)
+    def do_ae_enable(self):
+        cc = self.camera_controls
+        cam = self.camera.raw_camera
+        if cc.ae_enable:
+            cam.set_controls({'AeEnable': cc.ae_enable})
+        else:
+            cam.set_controls({'ExposureTime': cc.exposure_time})
 
-        self.var_red_gain = DoubleVar(value=1.)
-        ttk.Label(f, textvar=self.var_red_gain, width=12).grid(column=1, row=0)
-        s = ttk.Scale(f, from_=0., to=32., length=200, variable=self.var_red_gain, orient=HORIZONTAL, command=self.do_colourgains)
-        s.grid(column=2, row=0)
-        
-        self.var_blue_gain = DoubleVar(value=1.)
-        ttk.Label(f, textvar=self.var_blue_gain, width=12).grid(column=3, row=0)
-        s = ttk.Scale(f, from_=0., to=32., length=200, variable=self.var_blue_gain, orient=HORIZONTAL, command=self.do_colourgains)
-        s.grid(column=4, row=0)
+    def do_exposure_time(self):
+        cc = self.camera_controls
+        if cc.ae_enable:
+            cc.var_ae_enable.set(0)
+        else:
+            self.do_ae_enable()
 
     def do_awb_enable(self):
-        value = self.var_awb_enable.get() != 0
-        self.camera.raw_camera.set_controls({'AeEnable':value})
+        cc = self.camera_controls
+        cam = self.camera.raw_camera
+        if cc.awb_enable:
+            cam.set_controls({'AwbEnable': cc.awb_enable})
+        else:
+            cam.set_controls({'ColourGains': cc.colour_gains})
 
-    def do_colourgains(self, unused):
-        self.var_awb_enable.set(0)
-        red = self.var_red_gain.get()
-        blue = self.var_blue_gain.get()
-        self.camera.raw_camera.set_controls({'AeEnable':False, 'ColourGains':(red,blue)})
+    def do_colour_gains(self):
+        cc = self.camera_controls
+        if cc.awb_enable:
+            cc.var_awb_enable.set(0)
+        else:
+            self.do_awb_enable()
 
     def klipper_objects_subscribe_callback(self, o):
         eventtime = o.pop('eventtime')
@@ -1010,12 +1140,12 @@ class ScantoolTk:
         
         stepper_enable = status.pop('stepper_enable', None)
         if stepper_enable:
-            self.axes_status.set_axes(stepper_enable['steppers'])
+            self.axes_status.homing.set_axes(stepper_enable['steppers'])
             
         motion_report = status.pop('motion_report', None)
         if motion_report:
             X, Y, Z = motion_report['live_position'][:3]
-            self.axes_position.set_axes({'X':X, 'Y':Y, 'Z':Z})
+            self.axes_status.position.set_axes({'X':X, 'Y':Y, 'Z':Z})
 
         # don't know what to do with this
         idle_timeout = status.pop('idle_timeout', None)
@@ -1052,15 +1182,15 @@ class ScantoolTk:
         x = self.goto_x.get()
         y = self.goto_y.get()
         z = self.goto_z.get()
-        self.send_gcode(f'G1 X{x} Y{y} Z{z}')
+        self.gantry.move_to(x=x, y=y, z=z)
 
     def do_home(self):
         d = twisted_threads.deferToThread(self.home_impl)
 
     def home_impl(self):
         print("home!")
-        self.send_gcode('G28 Z')
-        self.send_gcode('G28 X Y')
+        self.send_gcode('G28 Z\nG28 X Y')
+        # self.send_gcode('G28 X Y')
         self.send_gcode('MANUAL_STEPPER STEPPER=stepper_a ENABLE=1 SET_POSITION=0')
         self.send_gcode('M400')
         # in theory we could do a force move on stepper_y or
@@ -1100,68 +1230,6 @@ class ScantoolTk:
         # rect = (135, 400, 170, 435)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
-    def do_gcode1(self):
-        print("gcode1!")
-        self.send_gcode("G1 Z0")
-        self.send_gcode("G1 X0 Y70")
-
-    def do_gcode2(self):
-        print("gcode2!")
-        self.send_gcode("G1 Z0")
-
-        for x in [0, 70, 140]:
-            for y in [70, 140, 210]:
-                self.send_gcode(f"G1 X{x} Y{y}")
-                self.send_gcode("M400")
-                time.sleep(.5)
-
-                path = f'img_{x}_{y}.png'
-                print(f"save {x=} {y=} to {path}")
-                cv.imwrite(path, self.camera.get_calibrated_image())
-        print("All done!")
-
-    def do_gcode3(self):
-        d = twisted_threads.deferToThread(self.gcode3_impl)
-
-    def gcode3_impl(self):
-        print("gcode3!")
-        self.send_gcode("G1 Z0")
-
-        for y in range(475,701,50):
-            for x in range(135,676,75):
-                self.send_gcode(f"G1 X{x} Y{y} F5000")
-                self.send_gcode("M400")
-                time.sleep(.5)
-                
-                path = f'scan_{x}_{y}.png'
-                print(f"save {x=} {y=} to {path}")
-                cv.imwrite(path, self.camera.get_calibrated_image())
-        print("All done!")
-        
-    def do_gcode4(self):
-        print("gcode4!")
-
-        with open('scan_x/toscan.json') as f:
-            coords = json.loads(f.read())
-
-        mm_per_pix = 25.4 / 600
-        image_w, image_h = 4000, 3000
-        x_offset = -(image_w / 2) * mm_per_pix
-        y_offset = (image_h / 2) * mm_per_pix
-        
-        self.send_gcode("G1 Z0")
-        n = len(coords)
-        for i, (x, y) in enumerate(coords):
-            self.send_gcode(f"G1 X{x+x_offset} Y{y+y_offset} F5000")
-            self.send_gcode("M400")
-            time.sleep(.5)
-
-            opath = f'scan_x/piece_{i}.png'
-            print(f"save piece {i}/{n} to {opath}")
-            cv.imwrite(opath, self.get_calibrated_image())
-
-        print("All done!")
-        
     def send_gcode(self, script):
         self.gantry.klipper.gcode_script(script)
 
