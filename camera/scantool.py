@@ -1048,30 +1048,42 @@ class CameraControls(ttk.LabelFrame):
 
         slider_options = {
             'from_': 1000,
-            'to': 100000,
+            'to': 30000,
             'length': 200,
             'orient': HORIZONTAL,
             'textwidth': 8
         }
 
-        self.var_exposure_slider = NumberSlider(f, IntVar(value=8000), slider_options)
+        # full range is 1_000 to 100_000
+        self.var_exposure_slider = NumberSlider(f, IntVar(value=6322), slider_options)
         self.var_exposure_slider.grid(column=1, row=0)
         self.var_exposure_slider.bind("<<slider>>", lambda x: self.do_exposure_time())
 
-        f = ttk.LabelFrame(self, text='White Balance')
+        f = ttk.LabelFrame(self, text='Threshold')
         f.grid(column=1, row=0)
+
+        slider_options |= {'from_':0, 'to':255}
+
+        self.var_threshold_slider = NumberSlider(f, IntVar(value=128), slider_options)
+        self.var_threshold_slider.grid(column=0, row=0)
+        self.var_threshold_slider.bind("<<slider>>", lambda x: self.do_threshold())
+
+        f = ttk.LabelFrame(self, text='White Balance')
+        f.grid(column=0, row=1, columnspan=2)
         
         self.var_awb_enable = IntVar(value=1)
         b = ttk.Checkbutton(f, text='Auto WB', variable=self.var_awb_enable, command=self.do_awb_enable)
         b.grid(column=0, row=0)
 
-        slider_options |= {'from_':0., 'to':32., 'format': lambda x: f"{x:.4f}", 'textwidth':12}
+        slider_options |= {'from_':0., 'to':5., 'format': lambda x: f"{x:.4f}", 'textwidth':12}
 
-        self.var_red_slider = NumberSlider(f, DoubleVar(value=1.), slider_options)
+        # full range is 0. to 32.
+        self.var_red_slider = NumberSlider(f, DoubleVar(value=3.2688), slider_options)
         self.var_red_slider.grid(column=1, row=0)
         self.var_red_slider.bind("<<slider>>", lambda x: self.do_colour_gains())
         
-        self.var_blue_slider = NumberSlider(f, DoubleVar(value=1.), slider_options)
+        # full range is 0. to 32.
+        self.var_blue_slider = NumberSlider(f, DoubleVar(value=1.2043), slider_options)
         self.var_blue_slider.grid(column=2, row=0)
         self.var_blue_slider.bind("<<slider>>", lambda x: self.do_colour_gains())
 
@@ -1091,6 +1103,10 @@ class CameraControls(ttk.LabelFrame):
     def colour_gains(self):
         return (self.var_red_slider.var.get(), self.var_blue_slider.var.get())
 
+    @property
+    def threshold(self):
+        return self.var_threshold_slider.var.get()
+
     def do_ae_enable(self):
         self.event_generate("<<ae_enable>>")
 
@@ -1102,6 +1118,9 @@ class CameraControls(ttk.LabelFrame):
 
     def do_colour_gains(self):
         self.event_generate("<<colour_gains>>")
+
+    def do_threshold(self):
+        self.event_generate("<<threshold>>")
 
 class ScantoolTk:
 
@@ -1188,14 +1207,17 @@ class ScantoolTk:
         ttk.Button(controls, text='Camera Calibrate', command=self.do_camera_calibrate).grid(column=0, row=0)
 
         self.var_lights = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Lights', variable=self.var_lights, command=self.do_lights).grid(column=2, row=0)
+        ttk.Checkbutton(controls, text='Lights', variable=self.var_lights, command=self.do_lights).grid(column=1, row=0)
 
         self.var_undistort = IntVar(value=1)
-        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=3, row=0)
+        ttk.Checkbutton(controls, text='Undistort', variable=self.var_undistort).grid(column=2, row=0)
 
         self.var_detect_corners = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=4, row=0)
+        ttk.Checkbutton(controls, text='Detect Corners', variable=self.var_detect_corners).grid(column=3, row=0)
 
+        self.var_find_contours = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Find Contours', variable=self.var_find_contours).grid(column=4, row=0)
+                                                                                                
         ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=5, row=0)
         self.goto_x = IntVar(value=0)
         ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=6, row=0)
@@ -1352,6 +1374,7 @@ class ScantoolTk:
 
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
+        finder.threshold = self.camera_controls.threshold
         rect = (135, 400, 720, 1150)
         # rect = (135, 400, 170, 435)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
@@ -1426,10 +1449,36 @@ class ScantoolTk:
         if outside:
             draw_detected_corners(image, np.array(list(outside.values())), color=(0,0,255))
 
+    def find_contours_and_annotate_image(self, image, threshold):
+
+        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        h, w = gray.shape
+
+        if False:
+            blur0 = cv.medianBlur(gray, 7)
+            blur1 = cv.medianBlur(gray, 31)
+
+            xweight = np.sin(np.linspace(0, math.pi, num=w))
+            yweight = np.sin(np.linspace(0, math.pi, num=h))
+            weight = yweight[:,np.newaxis] @ xweight[np.newaxis,:]
+
+            blur = np.uint8(blur0 * (1. - weight) + blur1 * weight)
+
+            thresh = cv.threshold(blur, threshold, 255, cv.THRESH_BINARY)[1]
+        else:
+            thresh = cv.threshold(gray, threshold, 255, cv.THRESH_BINARY)[1]
+
+        contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)[0]
+
+        cv.drawContours(image, contours, -1, (0,0,255))
+        
     def image_update(self, image):
 
         if self.var_detect_corners.get():
             self.detect_corners_and_annotate_image(image)
+
+        if self.var_find_contours.get():
+            self.find_contours_and_annotate_image(image, self.camera_controls.threshold)
         
         self.image_camera = self.to_photo_image(image)
         self.canvas_camera.delete('all')
