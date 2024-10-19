@@ -23,6 +23,7 @@ import puzzler
 import requests
 import scipy.spatial.distance
 import time
+import traceback
 
 from tkinter import *
 from tkinter import font
@@ -193,7 +194,10 @@ class PieceFinder:
         self.max_size_mm = 70
         self.margin_px = 125
         self.feedrate = 5000
+        self.finger_xy = np.array((448.97, 777.38))
         self.finger_diameter_mm = 11.7
+        self.board_height = -70.
+        self.retract_height = 0.
 
         #self.image_threshold = 75
 
@@ -247,15 +251,20 @@ class PieceFinder:
             n_cols += 1
 
         pieces = []
-        for center_mm, radius_mm in optimized_path:
+        for capture_mm, radius_mm in optimized_path:
             col = len(pieces) % n_cols
             row = len(pieces) // n_cols
             label = f"{chr(ord('A')+row)}{col+1}"
             opath = f"piece_{label}.jpg"
             with np.printoptions(precision=1):
-                print(f"Found piece at {center_mm=} {radius_mm=:.1f} mm -> {opath}")
-            points, source = self.get_points_and_source_for_piece(center_mm, radius_mm, opath)
-            pieces.append((center_mm, label, points, source))
+                print(f"\nFound piece at {capture_mm=} {radius_mm=:.1f} mm -> {opath}")
+            try:
+                points, source, center_mm = self.get_points_and_source_for_piece(capture_mm, radius_mm, opath)
+                pieces.append((center_mm, label, points, source))
+                
+                self.touch_picture(center_mm, f"piece_{label}_touch.jpg", source.rect)
+            except Exception as exc:
+                traceback.print_exception(exc)
 
         Puzzle = puzzler.puzzle.Puzzle
 
@@ -369,16 +378,16 @@ class PieceFinder:
         time.sleep(.5)
         return self.camera.get_calibrated_image()
 
-    def get_points_and_source_for_piece(self, center, radius, opath=None):
-        image = self.capture_image_at_xy(center[0], center[1])
+    def get_points_and_source_for_piece(self, capture_xy, radius, opath=None):
+        image = self.capture_image_at_xy(capture_xy[0], capture_xy[1])
 
         image_h, image_w = image.shape[:2]
         pix_per_mm = self.capture_dpi / 25.4
         rect_size = int(radius * pix_per_mm) + self.margin_px
-        x0 = image_w // 2 - rect_size
-        y0 = image_h // 2 - rect_size
-        x1 = image_w // 2 + rect_size
-        y1 = image_h // 2 + rect_size
+        x0 = max(0, image_w // 2 - rect_size)
+        y0 = max(0, image_h // 2 - rect_size)
+        x1 = min(image_w, image_w // 2 + rect_size)
+        y1 = min(image_h, image_h // 2 + rect_size)
         sub_image = image[y0:y1,x0:x1]
 
         contour = PerimeterComputer(sub_image, threshold=self.image_threshold).contour
@@ -388,14 +397,31 @@ class PieceFinder:
         if opath:
             print(f"Saving piece to {opath}")
             sub_image = np.copy(np.flipud(sub_image))
-            cv.drawContours(sub_image, [contour], 0, (0,0,255), thickness=2, lineType=cv.LINE_AA)
-            cv.circle(sub_image, center, 6, (255,255,0), thickness=2, lineType=cv.LINE_AA)
+            cv.drawContours(sub_image, [contour], 0, (0,64,192), thickness=2, lineType=cv.LINE_AA)
+            cv.circle(sub_image, center, 6, (64,192,0), thickness=2, lineType=cv.LINE_AA)
+            finger_radius_px = int(self.finger_diameter_mm * .5 * pix_per_mm)
+            cv.circle(sub_image, center, finger_radius_px, (64,192,0), thickness=2, lineType=cv.LINE_AA)
             sub_image = np.copy(np.flipud(sub_image))
+            # show where the finger might end up if we've got a Y flip issue.  argh.
+            cv.circle(sub_image, center, finger_radius_px, (32,96,0), thickness=2, lineType=cv.LINE_AA)
             if os.path.exists(opath):
                 os.unlink(opath)
             cv.imwrite(opath, sub_image)
-            
-        print(f"  sub_image={(x0,y0,x1,y1)} {center=}")
+
+        dx, dy = center + np.array((x0,y0)) - self.finger_xy
+        
+        dx = center[0] + x0 - self.finger_xy[0]
+        dy = y1 - center[1] - self.finger_xy[1]
+        
+        center_xy = capture_xy + np.array((dx,-dy)) / pix_per_mm
+
+        sub_image_center = np.array(((x1-x0)/2,(y1-y0)/2))
+        dxdy_px = center - sub_image_center
+        dxdy_mm = dxdy_px / pix_per_mm
+
+        with np.printoptions(precision=2):
+            print(f"  sub_image={(x0,y0,x1,y1)} {center=} {center_xy=}")
+            print(f"  {sub_image_center=} {dxdy_px=} {dxdy_mm=}")
 
         Source = puzzler.puzzle.Puzzle.Piece.Source
 
@@ -403,7 +429,18 @@ class PieceFinder:
         # image, as that is how the camera was aligned
         points = np.squeeze(contour) - center
         source = Source(opath, (0, 0, sub_image.shape[1], sub_image.shape[0]))
-        return points, source
+        return points, source, center_xy
+
+    def touch_picture(self, xy, opath, rect):
+        self.gantry.move_to(x=xy[0], y=xy[1])
+        self.gantry.move_to(z=self.board_height)
+        
+        time.sleep(.5)
+        img = self.camera.get_calibrated_image()
+        x0, y0, x1, y1 = rect
+        cv.imwrite(opath, img[y0:y1,x0:x1,:])
+        
+        self.gantry.move_to(z=self.retract_height)
 
     def choose_contour_center(self, contour):
         px_per_mm = self.capture_dpi / 25.4
@@ -572,6 +609,95 @@ class FingerCalibrator:
                 break
 
         return np.array((u_center, v_center))
+        
+class RepeatabilityTester:
+
+    def __init__(self, gantry, camera, board):
+        self.gantry = gantry
+        self.camera = camera
+        self.board = board
+        self.dpi = 600.
+
+    def test(self, xy0, xy1):
+
+        print("Repeatability Tester!")
+
+        self.gantry.move_to(x=xy0[0], y=xy0[1])
+        time.sleep(1)
+        image0 = self.camera.get_calibrated_image()
+        
+        self.gantry.move_to(x=xy1[0], y=xy1[1])
+        time.sleep(1)
+        image1 = self.camera.get_calibrated_image()
+
+        self.gantry.move_to(x=xy0[0], y=xy0[1])
+        time.sleep(1)
+        image2 = self.camera.get_calibrated_image()
+        
+        print("Test 0:")
+        offset = self.compute_offset(image0, image1)
+
+        with np.printoptions(precision=2):
+            print(f"commanded offset: {xy1-xy0}")
+            print(f"observed offset:  {offset * 25.4/self.dpi}")
+
+        print("Test 1:")
+        offset = self.compute_offset(image1, image2)
+
+        with np.printoptions(precision=2):
+            print(f"commanded offset: {xy0-xy1}")
+            print(f"observed offset:  {offset * 25.4/self.dpi}")
+            
+        print("Test 2:")
+        offset = self.compute_offset(image2, image0)
+
+        with np.printoptions(precision=2):
+            print(f"commanded offset: {xy0-xy0}")
+            print(f"observed offset:  {offset * 25.4/self.dpi}")
+            
+        print("All done!")
+        
+    def get_corners(self, image):
+        cd = CornerDetector(self.board)
+        corners, ids = cd.detect_corners(image)
+        return dict(zip(ids,corners))
+
+    def compute_offset(self, image0, image1):
+        corners0 = self.get_corners(image0)
+        corners1 = self.get_corners(image1)
+
+        overlap = set(corners0) & set(corners1)
+
+        print(f"{len(overlap)} common corners")
+
+        n_rows = 2 * len(overlap)
+        n_cols = 3
+
+        A = np.zeros((n_rows, n_cols))
+        b = np.zeros((n_rows,))
+
+        r = 0
+        for i in overlap:
+            u0, v0 = corners0[i]
+            u1, v1 = corners1[i]
+
+            A[r][0] = -v0
+            A[r][1] = 1
+            b[r] = u1 - u0
+            r += 1
+
+            A[r][0] = u0
+            A[r][2] = 1
+            b[r] = v1 - v0
+            r += 1
+
+        # solve Ax = b
+        alpha, x, y = np.linalg.lstsq(A, b, rcond=None)[0]
+
+        alpha_deg = alpha * 180. / math.pi
+        print(f"{alpha=:.5f} rad ({alpha_deg:.2f} deg), {x=:.1f} px, {y=:.1f} px")
+
+        return np.array((-x,y))
         
 class GantryCalibrator:
 
@@ -742,11 +868,11 @@ class Gantry:
         
         v = ["G1"]
         if x is not None:
-            v.append(f"X{x}")
+            v.append(f"X{float(x):.2f}")
         if y is not None:
-            v.append(f"Y{y}")
+            v.append(f"Y{float(y):.2f}")
         if z is not None:
-            v.append(f"Z{z}")
+            v.append(f"Z{float(z):.2f}")
         if f is not None:
             v.append(f"F{f}")
             
@@ -1089,8 +1215,8 @@ class ScantoolTk:
         ttk.Button(f, text='Gantry Calibrate', command=self.do_gantry_calibrate).grid(column=1, row=0)
         ttk.Button(f, text='Find Pieces', command=self.do_find_pieces).grid(column=2, row=0)
         ttk.Button(f, text='Finger Calibrate', command=self.do_finger_calibrate).grid(column=7, row=0)
-
         ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=8, row=0)
+        ttk.Button(f, text='Test Repeatability', command=self.do_test_repeatability).grid(column=9, row=0)
 
         self.axes_status = AxesStatus(self.frame)
         self.axes_status.grid(column=0, row=4, columnspan=2, sticky=(N, W))
@@ -1230,6 +1356,12 @@ class ScantoolTk:
         # rect = (135, 400, 170, 435)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
+    def do_test_repeatability(self):
+        tester = RepeatabilityTester(self.gantry, self.camera, self.charuco_board)
+        xy0 = np.array((10,100))
+        xy1 = xy0 + np.array((46.53, -19.37))
+        d = twisted_threads.deferToThread(tester.test, xy0, xy1)
+
     def send_gcode(self, script):
         self.gantry.klipper.gcode_script(script)
 
