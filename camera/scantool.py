@@ -32,6 +32,7 @@ import twisted.internet
 from twisted.internet import tksupport, reactor
 from twisted.internet import threads as twisted_threads
 
+import puzzbot.camera.ffc as ffc
 from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, BigHammerRemapper
 from puzzler.commands.points import PerimeterComputer
 
@@ -40,27 +41,11 @@ def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,2
     shift = 4
     size = size << shift
     for x, y in np.array(corners * (1 << shift), dtype=np.int32):
-        cv.rectangle(image, (x-size, y-size), (x+size, y+size), color, thickness=thickness, lineType=cv.LINE_AA, shift=shift)
+        ll, ur = (x-size, y-size), (x+size, y+size)
+        cv.rectangle(image, ll, ur, color, thickness=thickness, lineType=cv.LINE_AA, shift=shift)
     if ids is not None:
         for (x, y), id in zip(corners, ids):
             cv.putText(image, str(id), (int(x)+5, int(y)-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color)
-
-def draw_homography_points(image, corners, mask):
-    shift = 4
-    size = 8 << shift
-    for (x, y), m in zip(np.array(np.squeeze(corners) * (1 << shift), dtype=np.int32), mask):
-        color = (0,255,255) if m else (255,255,0)
-        cv.rectangle(image, (x-size, y-size), (x+size, y+size), color,
-                     thickness=1, lineType=cv.LINE_AA, shift=shift)
-
-def draw_grid(image):
-
-    h, w = image.shape[:2]
-    s = 128
-    for x in range(s,w,s):
-        cv.polylines(image, [np.array([(x,0), (x,h-1)])], False, (192, 192, 0))
-    for y in range(s,h,s):
-        cv.polylines(image, [np.array([(0,y), (w-1,y)])], False, (192, 192, 0))
 
 def compute_contour_center_of_mass(contour):
     m = cv.moments(contour)
@@ -262,7 +247,7 @@ class PieceFinder:
                 points, source, center_mm = self.get_points_and_source_for_piece(capture_mm, radius_mm, opath)
                 pieces.append((center_mm, label, points, source))
                 
-                self.touch_picture(center_mm, f"piece_{label}_touch.jpg", source.rect)
+                # self.touch_picture(center_mm, f"piece_{label}_touch.jpg", source.rect)
             except Exception as exc:
                 traceback.print_exception(exc)
 
@@ -402,8 +387,6 @@ class PieceFinder:
             finger_radius_px = int(self.finger_diameter_mm * .5 * pix_per_mm)
             cv.circle(sub_image, center, finger_radius_px, (64,192,0), thickness=2, lineType=cv.LINE_AA)
             sub_image = np.copy(np.flipud(sub_image))
-            # show where the finger might end up if we've got a Y flip issue.  argh.
-            cv.circle(sub_image, center, finger_radius_px, (32,96,0), thickness=2, lineType=cv.LINE_AA)
             if os.path.exists(opath):
                 os.unlink(opath)
             cv.imwrite(opath, sub_image)
@@ -909,6 +892,7 @@ class CalibratedCamera:
         self.remappers = collections.defaultdict(CalibratedCamera.IdentityRemapper)
         if calibration is not None:
             self.set_calibration(calibration)
+        self.ffc = None
 
     def set_calibration(self, calibration):
         self.remappers['main'] = BigHammerRemapper.from_calibration(calibration)
@@ -922,15 +906,22 @@ class CalibratedCamera:
 
     def get_calibrated_image(self, stream='main'):
         raw_image = self.get_raw_image(stream)
-        return self.remappers[stream].undistort_image(raw_image)
+        image = self.remappers[stream].undistort_image(raw_image)
+        return self.ffc(image) if self.ffc else image
 
     def get_calibrated_image_and_metadata(self, stream='main'):
         raw_image, metadata = self.get_raw_image_and_metadata(stream)
-        return (self.remappers[stream].undistort_image(raw_image), metadata)
+        image = self.remappers[stream].undistort_image(raw_image)
+        if self.ffc:
+            image = self.ffc(image)
+        return (image, metadata)
     
     def get_image(self, stream='main', calibrated=True):
         return self.get_calibrated_image(stream) if calibrated else self.get_raw_image(stream)
 
+    def get_image_and_metadata(self, stream='main', calibrated=True):
+        return self.get_calibrated_image_and_metadata(stream) if calibrated else self.get_raw_image_and_metadata(stream)
+    
     @property
     def frame_size(self):
         return self.raw_camera.frame_size
@@ -1156,8 +1147,7 @@ class ScantoolTk:
         )
 
     def _init_threads(self, root):
-        d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
-        d.addBoth(self.notify_camera_event)
+        self.background_get_image_and_metadata()
 
         klipper = self.gantry.klipper
         klipper.objects_subscribe(self.klipper_objects_subscribe_callback)
@@ -1182,6 +1172,47 @@ class ScantoolTk:
             raise Exception(f"bad camera scheme: {scheme}")
 
         self.camera = CalibratedCamera(raw_camera)
+
+        coeffs = np.array(
+            [
+                [
+                    0.8646420515154035,
+                    -0.20292869195007895,
+                    0.9624986597624194,
+                    -1.0081731504881113,
+                    0.1565141117932741
+                ],
+                [
+                    0.04042921482042296,
+                    5.371389821872379,
+                    -18.465929614475783,
+                    21.381616567449356,
+                    -7.602724632853767
+                ],
+                [
+                    1.2551261867543497,
+                    -18.165740801546644,
+                    74.40251557645153,
+                    -97.83233478066012,
+                    39.09967353076903
+                ],
+                [
+                    -2.1595905909907165,
+                    23.789326236276644,
+                    -98.36057063995587,
+                    129.98894019257824,
+                    -52.04681934375789
+                ],
+                [
+                    0.9316561999340427,
+                    -10.477828331787656,
+                    41.39240541911454,
+                    -53.10421751042184,
+                    20.634210836500802
+                ]
+            ]
+        )
+        self.ffc = ffc.FlatFieldCorrector(coeffs)
 
         calibration = self.config['calibration']
         if 'camera' in calibration:
@@ -1217,28 +1248,39 @@ class ScantoolTk:
 
         self.var_find_contours = IntVar(value=0)
         ttk.Checkbutton(controls, text='Find Contours', variable=self.var_find_contours).grid(column=4, row=0)
+
+        self.var_flat_field_correct = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Flat Field Correction',
+                        variable=self.var_flat_field_correct,
+                        command=self.do_flat_field_correct).grid(column=5, row=0)
+
+        self.var_histogram = IntVar(value=0)
+        ttk.Checkbutton(controls, text='Histogram',
+                        variable=self.var_histogram).grid(column=6, row=0)
                                                                                                 
-        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=5, row=0)
+        ttk.Button(controls, text='Goto', command=self.do_goto).grid(column=7, row=0)
         self.goto_x = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=6, row=0)
+        ttk.Entry(controls, textvar=self.goto_x, width=6).grid(column=8, row=0)
         self.goto_y = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=7, row=0)
+        ttk.Entry(controls, textvar=self.goto_y, width=6).grid(column=9, row=0)
         self.goto_z = IntVar(value=0)
-        ttk.Entry(controls, textvar=self.goto_z, width=6).grid(column=8, row=0)
+        ttk.Entry(controls, textvar=self.goto_z, width=6).grid(column=10, row=0)
 
         self.var_pump = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Pump', variable=self.var_pump, command=self.do_pump).grid(column=9, row=0)
+        ttk.Checkbutton(controls, text='Pump', variable=self.var_pump, command=self.do_pump).grid(column=11, row=0)
         
         self.var_valve = IntVar(value=0)
-        ttk.Checkbutton(controls, text='Valve', variable=self.var_valve, command=self.do_valve).grid(column=10, row=0)
+        ttk.Checkbutton(controls, text='Valve', variable=self.var_valve, command=self.do_valve).grid(column=12, row=0)
 
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
-        ttk.Button(f, text='Gantry Calibrate', command=self.do_gantry_calibrate).grid(column=1, row=0)
-        ttk.Button(f, text='Find Pieces', command=self.do_find_pieces).grid(column=2, row=0)
-        ttk.Button(f, text='Finger Calibrate', command=self.do_finger_calibrate).grid(column=7, row=0)
-        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=8, row=0)
-        ttk.Button(f, text='Test Repeatability', command=self.do_test_repeatability).grid(column=9, row=0)
+        ttk.Button(f, text='Gantry Calibrate', command=self.do_gantry_calibrate).grid(column=0, row=0)
+        ttk.Button(f, text='Find Pieces', command=self.do_find_pieces).grid(column=1, row=0)
+        ttk.Button(f, text='Finger Calibrate', command=self.do_finger_calibrate).grid(column=2, row=0)
+        ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=3, row=0)
+        ttk.Button(f, text='Test Repeatability', command=self.do_test_repeatability).grid(column=4, row=0)
+        ttk.Button(f, text='Capture Image', command=self.do_capture_image).grid(column=5, row=0)
+        ttk.Button(f, text='Firmware Restart', command=self.do_firmware_restart).grid(column=6, row=0)
 
         self.axes_status = AxesStatus(self.frame)
         self.axes_status.grid(column=0, row=4, columnspan=2, sticky=(N, W))
@@ -1251,13 +1293,23 @@ class ScantoolTk:
         self.camera_controls.bind("<<awb_enable>>", lambda x: self.do_awb_enable())
         self.camera_controls.bind("<<colour_gains>>", lambda x: self.do_colour_gains())
 
+    def do_firmware_restart(self):
+        self.gantry.klipper.request('gcode/firmware_restart', {})
+
+    def do_capture_image(self):
+        img = self.camera.get_calibrated_image()
+        cv.imwrite('capture.png', img)
+
+    def do_flat_field_correct(self):
+        self.camera.ffc = self.ffc if self.var_flat_field_correct.get() else None
+
     def do_ae_enable(self):
         cc = self.camera_controls
         cam = self.camera.raw_camera
         if cc.ae_enable:
             cam.set_controls({'AeEnable': cc.ae_enable})
         else:
-            cam.set_controls({'ExposureTime': cc.exposure_time})
+            cam.set_controls({'ExposureTime': cc.exposure_time, 'AnalogueGain': 2.5})
 
     def do_exposure_time(self):
         cc = self.camera_controls
@@ -1316,21 +1368,22 @@ class ScantoolTk:
     def klipper_gcode_subscribe_output_callback(self, o):
         print("klipper_gcode_output:", json.dumps(o, indent=4))
 
-    def notify_camera_event(self, arg):
-        if isinstance(arg, np.ndarray):
-            self.image_update(arg)
-        else:
-            # twisted.python.failure.Failure
-            print(type(arg))
-            print(arg)
-        d = twisted_threads.deferToThread(self.camera.get_image, 'lores', self.var_undistort.get() != 0)
-        d.addBoth(self.notify_camera_event)
+    def background_get_image_and_metadata(self, *args):
+        d = twisted_threads.deferToThread(self.camera.get_image_and_metadata, 'lores', self.var_undistort.get() != 0)
+        d.addCallback(self.image_update)
+        d.addErrback(self.notify_camera_error)
+        d.addBoth(self.background_get_image_and_metadata)
+
+    def notify_camera_error(self, arg):
+        # twisted.python.failure.Failure
+        print(type(arg))
+        print(arg)
 
     def do_goto(self):
         x = self.goto_x.get()
         y = self.goto_y.get()
         z = self.goto_z.get()
-        self.gantry.move_to(x=x, y=y, z=z)
+        d = twisted_threads.deferToThread(self.gantry.move_to, x=x, y=y, z=z)
 
     def do_home(self):
         d = twisted_threads.deferToThread(self.home_impl)
@@ -1376,7 +1429,7 @@ class ScantoolTk:
         finder = PieceFinder(self.gantry, self.camera)
         finder.threshold = self.camera_controls.threshold
         rect = (135, 400, 720, 1150)
-        # rect = (135, 400, 170, 435)
+        rect = (14, 750, 750, 1330)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
             
     def do_test_repeatability(self):
@@ -1423,10 +1476,10 @@ class ScantoolTk:
     def key_event(self, event):
         pass
 
-    def detect_corners_and_annotate_image(self, image):
+    def detect_corners_and_annotate_image(self, src_image, dst_image):
 
         corner_detector = CornerDetector(self.charuco_board)
-        corners, ids = corner_detector.detect_corners(image)
+        corners, ids = corner_detector.detect_corners(src_image)
 
         if len(corners) == 0:
             return
@@ -1443,15 +1496,15 @@ class ScantoolTk:
             else:
                 outside[ij] = uv
         if inside:
-            draw_detected_corners(image, np.array(list(inside.values())), color=(255,0,0))
+            draw_detected_corners(dst_image, np.array(list(inside.values())), color=(255,0,0))
         if border:
-            draw_detected_corners(image, np.array(list(border.values())), color=(0,255,0))
+            draw_detected_corners(dst_image, np.array(list(border.values())), color=(0,255,0))
         if outside:
-            draw_detected_corners(image, np.array(list(outside.values())), color=(0,0,255))
+            draw_detected_corners(dst_image, np.array(list(outside.values())), color=(0,0,255))
 
-    def find_contours_and_annotate_image(self, image, threshold):
+    def find_contours_and_annotate_image(self, src_image, dst_image, threshold):
 
-        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        gray = cv.cvtColor(src_image, cv.COLOR_BGR2GRAY)
         h, w = gray.shape
 
         if False:
@@ -1470,23 +1523,74 @@ class ScantoolTk:
 
         contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)[0]
 
-        cv.drawContours(image, contours, -1, (0,0,255))
-        
-    def image_update(self, image):
+        cv.drawContours(dst_image, contours, -1, (0,0,255))
 
+    def show_histogram(self, src_image, dst_image):
+
+        gray = cv.cvtColor(src_image, cv.COLOR_BGR2GRAY)
+        hist = np.bincount(gray.ravel(), minlength=256)
+        x = np.arange(256, dtype=np.int32) + 16
+        y = dst_image.shape[0]-16-np.int32(hist * (256 / np.max(hist)))
+        pts = np.vstack((x,y)).T
+        cv.polylines(dst_image, [pts], False, (255,0,0))
+        cv.putText(dst_image, f"min={np.min(gray)} max={np.max(gray)}",
+                   (16,32), cv.FONT_HERSHEY_PLAIN, 1, (0,255,255))
+        
+    def image_update(self, arg):
+
+        src_image, metadata = arg
+
+        dst_image = None
+        
         if self.var_detect_corners.get():
-            self.detect_corners_and_annotate_image(image)
+            if dst_image is None: dst_image = src_image.copy()
+            self.detect_corners_and_annotate_image(src_image, dst_image)
 
         if self.var_find_contours.get():
-            self.find_contours_and_annotate_image(image, self.camera_controls.threshold)
-        
-        self.image_camera = self.to_photo_image(image)
+            if dst_image is None: dst_image = src_image.copy()
+            self.find_contours_and_annotate_image(src_image, dst_image, self.camera_controls.threshold)
+
+        if self.var_histogram.get():
+            if dst_image is None: dst_image = src_image.copy()
+            self.show_histogram(src_image, dst_image)
+
+        self.image_camera = self.to_photo_image(dst_image if dst_image is not None else src_image)
         self.canvas_camera.delete('all')
         win_w, win_h = self.canvas_camera.winfo_width(), self.canvas_camera.winfo_height()
-        img_h, img_w = image.shape[:2]
+        img_h, img_w = src_image.shape[:2]
         x, y = (win_w - img_w) // 2, (win_h - img_h) // 2
         self.canvas_camera.create_image((x, y), image=self.image_camera, anchor=NW)
 
+        ignore_keys = {
+            'ColourCorrectionMatrix',
+            'FocusFoM',
+            'FrameDuration',
+            'ScalerCrop',
+            'ScalerCrops',
+            'SensorBlackLevels',
+            'SensorTemperature',
+            'SensorTimestamp'
+        }
+
+        m = []
+        for k, v in metadata.items():
+            if k in ignore_keys:
+                continue
+            if k == 'Lux':
+                v = f"{v:.1f}"
+            elif k == 'ColourGains':
+                v = f"({v[0]:.4f},{v[1]:.4f})"
+            elif k == 'DigitalGain':
+                v = f"{v:.4f}"
+            elif k == 'AnalogueGain':
+                v = f"{v:.4f}"
+            m.append((k,v))
+
+        s = [f"{k:17s} {v}" for k, v in sorted(m)]
+        s = '\n'.join(s)
+
+        self.canvas_camera.create_text((16,16), text=s, fill='LightGreen', anchor='nw', font=('Courier',10))
+        
     @staticmethod
     def to_photo_image(image):
         h, w = image.shape[:2]
