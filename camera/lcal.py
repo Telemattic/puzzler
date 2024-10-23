@@ -65,9 +65,9 @@ def polyfit2d(x, y, z, kx=3, ky=3, order=None):
     # do leastsq fitting and return leastsq result
     return np.linalg.lstsq(a.T, np.ravel(z), rcond=None)
 
-def compute_coefficients(img):
+def compute_coefficients(img, degree=2):
     step = 32
-    kx = ky = 2
+    kx = ky = degree
     
     gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY) if img.ndim == 3 else img
     gray = cv.GaussianBlur(gray, (31,31), 0)
@@ -107,7 +107,7 @@ def lighting_calibrate(ipath, opath):
     img = cv.imread(ipath, cv.IMREAD_COLOR)
     #    img = cv.resize(img, None, fx=.25, fy=.25)
 
-    coeffs = compute_coefficients(img)
+    coeffs = compute_coefficients(img, 4)
     img2 = FlatFieldCorrector(coeffs)(img)
 
     o = {'coeffs': coeffs.tolist()}
@@ -117,6 +117,8 @@ def lighting_calibrate(ipath, opath):
     cv.imwrite('corrected.jpg', img2)
 
 def lighting_calibrate2(ipath, opath):
+
+    kx = ky = 3
 
     img = cv.imread(ipath, cv.IMREAD_COLOR)
     # img = cv.resize(img, None, fx=.25, fy=.25)
@@ -134,9 +136,9 @@ def lighting_calibrate2(ipath, opath):
     y = np.arange(16,h,32) / h
     z = flat_field[16:h:32,16:w:32]
 
-    ret = polyfit2d(x, y, z, kx=2, ky=2, order=None)
+    ret = polyfit2d(x, y, z, kx=kx, ky=ky, order=None)
 
-    coeffs = ret[0].reshape((3,3))
+    coeffs = ret[0].reshape((kx+1,ky+1))
     print(f"{coeffs=}")
 
     print(f"{np.min(flat_field)=} {np.max(flat_field)=}")
@@ -219,7 +221,9 @@ def lighting_calibrate2(ipath, opath):
         
 def main():
 
-    lighting_calibrate('pano_397_1107.png', 'lightmap.png')
+    # lighting_calibrate('pano_397_1107.png', 'lightmap.png')
+    # lighting_calibrate('pano_black.png', 'lightmap.png')
+    lighting_calibrate('pano_gray.png', 'lightmap.png')
 
 if __name__ == '__main__':
     main()
