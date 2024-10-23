@@ -122,6 +122,7 @@ class WebCamera(ICamera):
         return tuple(self.config['main']['size'])
 
     def set_controls(self, controls):
+        print(f"set_controls: {controls}")
         r = self.session.post(
             self.host + f'/controls', params={}, timeout=5, json=controls)
         r.raise_for_status()
@@ -134,11 +135,7 @@ class WebCamera(ICamera):
             self.host + f'/image/{stream}.jpeg', params={}, timeout=5)
         r.raise_for_status()
 
-        # pprint.pprint(r.headers)
-        
         metadata = json.loads(r.headers["X-Puzzler"])['image_metadata']
-        # pprint.pprint(metadata)
-        # print(f"{metadata['ExposureTime']=}")
         
         # magic to give imdecode data it can parse, this is just a
         # view, not a copy
@@ -153,4 +150,3 @@ class WebCamera(ICamera):
         r = self.session.get(self.host + '/config', timeout=5)
         r.raise_for_status()
         return json.loads(r.content)
-
