@@ -197,6 +197,7 @@ class Browser:
             # r.draw_polygon(p.points, outline='black', fill='', width=1)
 
         r.draw_text(np.zeros(2), text=p.label, font=self.font, fill='black')
+        r.draw_points([np.zeros(2)], radius=3, fill='purple', outline='')
         
 class BrowseTk:
 
