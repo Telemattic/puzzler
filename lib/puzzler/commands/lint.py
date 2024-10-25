@@ -570,15 +570,19 @@ def remove_lint(points):
 
     return db.trim_contour(points, optimized_cuts)
 
-def lint_update(args):
+def lint_update_pieces(pieces):
 
-    puzzle = puzzler.file.load(args.puzzle)
-
-    for piece in puzzle.pieces:
+    for piece in pieces:
 
         piece.points = remove_lint(piece.points)
         piece.tabs = None
         piece.edges = None
+
+def lint_update(args):
+
+    puzzle = puzzler.file.load(args.puzzle)
+
+    lint_update_pieces(puzzle.pieces)
 
     puzzler.file.save(args.puzzle, puzzle)
 
