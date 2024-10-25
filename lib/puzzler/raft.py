@@ -137,6 +137,10 @@ class RaftFeaturesComputer:
             if k == 'edge':
                 edges += list(g)
 
+        if len(edges) == 0:
+            print(frontier)
+            raise ValueError("split_frontier_into_axes: frontier contains no edges")
+
         helper = FeatureHelper(self.pieces, coords)
         
         axes = [helper.get_edge_unit_vector(edges[0])]
@@ -524,6 +528,9 @@ class RaftAligner:
         seamstress = RaftSeamstress(self.pieces)
         seams = seamstress.trim_seams(
             seamstress.seams_between_rafts(dst_raft, src_raft, src_raft_coord))
+
+        if len(seams) == 0:
+            raise ValueError("refine_alignment_between_rafts: no seams found"
 
         global_src_points = []
         global_dst_points = []
