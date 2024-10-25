@@ -318,6 +318,7 @@ class PocketFitter:
         self.pieces = pieces
         self.raftinator = puzzler.raft.Raftinator(pieces)
         self.num_refine = num_refine
+        self.pocket = pocket
 
         pocket_coords = {i: dst_raft.coords[i].copy() for i in pocket.pieces}
         pocket_raft = puzzler.raft.Raft(pocket_coords, None)
@@ -350,19 +351,24 @@ class PocketFitter:
             if len(feature_pairs) < 1:
                 continue
 
-            if True:
-                aligner = self.raftinator.aligner
-                src_coord = aligner.rough_align(self.dst_raft, src_raft, feature_pairs)
-                src_coord = aligner.refine_alignment_between_rafts(
-                    self.dst_raft, src_raft, src_coord)
-                new_raft = self.raftinator.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
-            else:
-                new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
-                    self.dst_raft, src_raft, feature_pairs)
+            try:
+                if True:
+                    aligner = self.raftinator.aligner
+                    src_coord = aligner.rough_align(self.dst_raft, src_raft, feature_pairs)
+                    src_coord = aligner.refine_alignment_between_rafts(
+                        self.dst_raft, src_raft, src_coord)
+                    new_raft = self.raftinator.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
+                else:
+                    new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
+                        self.dst_raft, src_raft, feature_pairs)
 
-            mse = self.compute_mse_with_refinement(new_raft)
-            
-            retval.append((mse, feature_pairs))
+                mse = self.compute_mse_with_refinement(new_raft)
+
+                retval.append((mse, feature_pairs))
+            except Exception as x:
+                s = self.raftinator.format_feature_pairs(feature_pairs)
+                print(f"measure_fit: {self.pocket!s} feature_pairs={s} failed explosively!")
+                raise x
 
         return retval
 
@@ -387,8 +393,24 @@ class PocketFitter:
 
         piece = self.pieces[label]
 
+        if False:
+            angles = []
+            for tab in piece.tabs:
+                x, y = tab.ellipse.center
+                angles.append(math.atan2(y, x))
+
+            s = [f"{i:.3f}" for i in angles]
+            print(f"{label=} angles={s}")
+
+            s = [f"{(i % (2. * math.pi)) * 2. / math.pi:.3f}" for i in angles]
+            print(f"   [0,4): {s}")
+            for i, ref in enumerate(angles):
+                dirs = [axis_for_angle(i-ref) for i in angles]
+                print(f"  {i=} {ref=:.3f} {dirs=}")
+
         ref_angle = None
         dirs = [None, None, None, None]
+        n_collisions = 4
 
         for tab_no, tab in enumerate(piece.tabs):
 
@@ -402,12 +424,21 @@ class PocketFitter:
                 d = axis_for_angle(angle - ref_angle)
 
             # HACK, see piece L16 from 300.json
-            if dirs[d] is not None:
-                assert label in {'L16'}
+            if dirs[d] is not None and len(piece.tabs) == 4:
+                n_collisions += 1
                 continue
              
-            assert dirs[d] is None
+            assert dirs[d] is None, f"{label} has multiple tabs at {d=}"
             dirs[d] = (piece.label, tab_no, tab.indent)
+
+        # HACK: if we couldn't figure out cardinal directions for a
+        # piece with 4 tabs just assign them sequentially *but* note
+        # that we actually walk the tabs in reverse order ordinarily
+        # because of the angle computation.  Blech.
+        if n_collisions and len(piece.tabs) == 4:
+            for tab_no, tab in enumerate(piece.tabs):
+                i = (4 - tab_no) % 4
+                dirs[i] = (piece.label, tab_no, tab.indent)
 
         retval = []
         for i in range(4):
