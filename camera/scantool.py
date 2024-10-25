@@ -22,6 +22,7 @@ import pprint
 import puzzler
 import requests
 import scipy.spatial.distance
+import tempfile
 import time
 import traceback
 
@@ -35,6 +36,9 @@ from twisted.internet import threads as twisted_threads
 import puzzbot.camera.ffc as ffc
 from puzzbot.camera.calibrate import CornerDetector, BigHammerCalibrator, BigHammerRemapper
 from puzzler.commands.points import PerimeterComputer
+from puzzler.commands.lint import lint_update_pieces
+from puzzler.commands.ellipse import feature_update_pieces
+from puzzler.psolve import ParallelSolver
 
 def draw_detected_corners(image, corners, ids = None, *, thickness=1, color=(0,255,255), size=3):
     # cv.aruco.drawDetectedCornersCharuco doesn't do subpixel precision for some reason
@@ -55,7 +59,95 @@ def compute_contour_center_of_mass(contour):
 
 def distance_to_contour(contour, pt):
     return cv.pointPolygonTest(contour, np.float32(pt), True)
+
+def run_solver(pieces):
+
+    Puzzle = puzzler.puzzle.Puzzle
     
+    dirname = tempfile.mkdtemp(prefix='scantool_', dir='C:\Temp')
+
+    puzzle_path = os.path.join(dirname, 'puzzle.json')
+    solve_path = os.path.join(dirname, 'solve.json')
+
+    print(f"Solving puzzle, stashed at {puzzle_path}")
+        
+    puzzler.file.save(puzzle_path, Puzzle({}, pieces))
+        
+    ps = ParallelSolver(puzzle_path, 8, dirname=dirname)
+    raft = ps.solve()
+
+    ps.save(solve_path, raft)
+        
+    n_pieces = len(ps.pieces)
+    n_placed = len(raft.coords) if raft else 0
+    print(f"all done! {n_pieces=} {n_placed=}")
+
+    return raft
+
+def apply_solution(gantry, camera, table, solution):
+
+    dpi = 600.
+    origin = np.array((250, 100))
+    pick_height = -70.
+    move_height = -60.
+    drop_height = -65.
+    
+    Coord = puzzler.align.Coord
+
+    mm_per_pixel = 25.4 / dpi
+
+    gantry.move_to(z=move_height)
+    gantry.pump(1)
+    time.sleep(5)
+
+    n = len(solution.coords)
+    for i, (label, dst_coord) in enumerate(solution.coords.items()):
+
+        src_coord = table.coords[label]
+
+        src_x, src_y = src_coord.xy * mm_per_pixel
+        dst_x, dst_y = dst_coord.xy * mm_per_pixel + origin
+
+        # minimize the angle to be turned, fmod(x,y) will return an
+        # angle with the same sign as x, so its domain in this case
+        # is (-2*pi, 2*pi)
+        angle = math.fmod(dst_coord.angle - src_coord.angle, 2. * math.pi)
+        if angle > math.pi:
+            angle -= 2 * math.pi
+        elif angle < -math.pi:
+            angle += 2 * math.pi
+
+        print(f"\n[{i}/{n}]: move {label} from ({src_x:.3f},{src_y:.3f}) to ({dst_x:.3f},{dst_y:.3f}), rotate by {math.degrees(angle):.1f} degrees")
+
+        # not sure we've got CW/CCW figured out
+        steps = -100. * (angle / math.pi)
+        
+        gantry.move_to(x=src_x, y=src_y)
+        gantry.move_to(z=pick_height)
+        time.sleep(1)
+        gantry.move_to(z=move_height)
+
+        pick_path = f"piece_{label}_pick.jpg"
+        pick_image = camera.get_calibrated_image('lores')
+        cv.imwrite(pick_path, pick_image)
+        
+        gantry.move_to(x=dst_x, y=dst_y, wait=False)
+        gantry.rotate(steps)
+        gantry.move_to(z=drop_height)
+        gantry.valve(1)
+        time.sleep(1)
+        gantry.move_to(z=move_height)
+        gantry.valve(0)
+
+        drop_path = f"piece_{label}_drop.jpg"
+        drop_image = camera.get_calibrated_image('lores')
+        cv.imwrite(drop_path, drop_image)
+
+    gantry.pump(0)
+    gantry.move_to(z=0)
+    gantry.move_to(x=10, y=10)
+    print("All done!")
+
 class ContourDistanceImage:
 
     def __init__(self, contour, finger_radius_px):
@@ -228,9 +320,6 @@ class PieceFinder:
 
         optimized_path = self.optimize_path(to_scan)
 
-        # with open('pano-tsp.json', 'w') as f:
-        #     json.dump({'original':to_scan, 'optimized':optimized_path}, f, indent=4)
-
         n_cols = int(math.sqrt(len(to_scan)))
         if n_cols * n_cols < len(to_scan):
             n_cols += 1
@@ -240,11 +329,13 @@ class PieceFinder:
             col = len(pieces) % n_cols
             row = len(pieces) // n_cols
             label = f"{chr(ord('A')+row)}{col+1}"
-            opath = f"piece_{label}.jpg"
+            piece_path = f"piece_{label}_points.jpg"
+            details_path = f"piece_{label}_details.jpg"
             with np.printoptions(precision=1):
-                print(f"\nFound piece at {capture_mm=} {radius_mm=:.1f} mm -> {opath}")
+                print(f"\nFound piece at {capture_mm=} {radius_mm=:.1f} mm -> {piece_path}")
             try:
-                points, source, center_mm = self.get_points_and_source_for_piece(capture_mm, radius_mm, opath)
+                points, source, center_mm = self.get_points_and_source_for_piece(
+                    capture_mm, radius_mm, piece_path, details_path)
                 pieces.append((center_mm, label, points, source))
                 
                 # self.touch_picture(center_mm, f"piece_{label}_touch.jpg", source.rect)
@@ -259,8 +350,21 @@ class PieceFinder:
 
         puzzler.file.save('temp-puzzle.json', Puzzle({}, fnord))
 
+        coords = {label: {'angle':0., 'xy':(xy/mm_per_pixel).tolist()} for xy, label, _, _ in pieces}
+
+        o = {'pieces': sorted(coords.keys()), 'raft':{'coords':coords}}
+
+        with open('temp-solve.json', 'w') as f:
+            f.write(json.JSONEncoder(indent=0).encode(o))
+
         print(f"All done!  Found {len(pieces)} pieces")
-        return pieces
+
+        Coord = puzzler.align.Coord
+        Raft = puzzler.raft.Raft
+
+        coords = {k: Coord(v['angle'], v['xy']) for k, v in coords.items()}
+        
+        return fnord, Raft(coords)
 
     @staticmethod
     def optimize_path(to_scan):
@@ -363,7 +467,7 @@ class PieceFinder:
         time.sleep(.5)
         return self.camera.get_calibrated_image()
 
-    def get_points_and_source_for_piece(self, capture_xy, radius, opath=None):
+    def get_points_and_source_for_piece(self, capture_xy, radius, piece_path=None, details_path=None):
         image = self.capture_image_at_xy(capture_xy[0], capture_xy[1])
 
         image_h, image_w = image.shape[:2]
@@ -379,17 +483,23 @@ class PieceFinder:
 
         center = self.choose_contour_center(np.squeeze(contour))
 
-        if opath:
-            print(f"Saving piece to {opath}")
-            sub_image = np.copy(np.flipud(sub_image))
-            cv.drawContours(sub_image, [contour], 0, (0,64,192), thickness=2, lineType=cv.LINE_AA)
-            cv.circle(sub_image, center, 6, (64,192,0), thickness=2, lineType=cv.LINE_AA)
+        if piece_path:
+            print(f"Saving image to {piece_path}")
+            if os.path.exists(piece_path):
+                os.unlink(piece_path)
+            cv.imwrite(piece_path, sub_image)
+
+        if details_path:
+            print(f"Saving details to {details_path}")
+            details_image = np.copy(np.flipud(sub_image))
+            cv.drawContours(details_image, [contour], 0, (0,64,192), thickness=2, lineType=cv.LINE_AA)
+            cv.circle(details_image, center, 6, (64,192,0), thickness=2, lineType=cv.LINE_AA)
             finger_radius_px = int(self.finger_diameter_mm * .5 * pix_per_mm)
-            cv.circle(sub_image, center, finger_radius_px, (64,192,0), thickness=2, lineType=cv.LINE_AA)
-            sub_image = np.copy(np.flipud(sub_image))
-            if os.path.exists(opath):
-                os.unlink(opath)
-            cv.imwrite(opath, sub_image)
+            cv.circle(details_image, center, finger_radius_px, (64,192,0), thickness=2, lineType=cv.LINE_AA)
+            details_image = np.copy(np.flipud(details_image))
+            if os.path.exists(details_path):
+                os.unlink(details_path)
+            cv.imwrite(details_path, details_image)
 
         dx, dy = center + np.array((x0,y0)) - self.finger_xy
         
@@ -411,7 +521,7 @@ class PieceFinder:
         # take the center of the points from the center of the
         # image, as that is how the camera was aligned
         points = np.squeeze(contour) - center
-        source = Source(opath, (0, 0, sub_image.shape[1], sub_image.shape[0]))
+        source = Source(piece_path, (0, 0, sub_image.shape[1], sub_image.shape[0]))
         return points, source, center_xy
 
     def touch_picture(self, xy, opath, rect):
@@ -864,10 +974,10 @@ class Gantry:
             self.klipper.gcode_script('M400')
 
     def rotate(self, angle, wait=True):
-        self.klipper.gcode_script("MANUAL_STEPPER STEPPER=stepper_a SET_POSITION=0")
-        self.klipper.gcode_script(f"MANUAL_STEPPER STEPPER=stepper_a MOVE={angle} ACCEL=100")
-        if wait:
-            self.klipper.gcode_script('M400')
+        script = "MANUAL_STEPPER STEPPER=stepper_a SET_POSITION=0\n"
+        script += f"MANUAL_STEPPER STEPPER=stepper_a MOVE={float(angle):.2f}"
+        script += "\nM400" if wait else " SYNC=0"
+        self.klipper.gcode_script(script)
 
     def lights(self, lights_on):
         value = 1 if lights_on else 0
@@ -1123,6 +1233,9 @@ class ScantoolTk:
         self.gantry = Gantry(Klipper(args.server))
         if 'gantry' in self.calibration:
             self.gantry.set_calibration(self.calibration['gantry'])
+
+        self.pieces = None
+        self.solution = None
         
         self._init_charuco_board(config['charuco_board'])
         self._init_camera(args.camera, 4656, 3496)
@@ -1275,19 +1388,26 @@ class ScantoolTk:
         f = ttk.LabelFrame(self.frame, text='GCode')
         f.grid(column=0, row=3, columnspan=2, sticky=(N, W, E, S))
         ttk.Button(f, text='Gantry Calibrate', command=self.do_gantry_calibrate).grid(column=0, row=0)
-        ttk.Button(f, text='Find Pieces', command=self.do_find_pieces).grid(column=1, row=0)
         ttk.Button(f, text='Finger Calibrate', command=self.do_finger_calibrate).grid(column=2, row=0)
         ttk.Button(f, text='Save Config', command=self.do_save_config).grid(column=3, row=0)
         ttk.Button(f, text='Test Repeatability', command=self.do_test_repeatability).grid(column=4, row=0)
         ttk.Button(f, text='Capture Image', command=self.do_capture_image).grid(column=5, row=0)
         ttk.Button(f, text='Firmware Restart', command=self.do_firmware_restart).grid(column=6, row=0)
 
+        f = ttk.LabelFrame(self.frame, text='Solver')
+        f.grid(column=0, row=4, columnspan=2, sticky=(N, W, E, S))
+        ttk.Button(f, text='Find Pieces', command=self.do_find_pieces).grid(column=0, row=0)
+        ttk.Button(f, text='Lint', command=self.do_lint).grid(column=1, row=0)
+        ttk.Button(f, text='Features', command=self.do_features).grid(column=2, row=0)
+        ttk.Button(f, text='Solve', command=self.do_solve).grid(column=3, row=0)
+        ttk.Button(f, text='Apply', command=self.do_apply_solution).grid(column=4, row=0)
+        
         self.axes_status = AxesStatus(self.frame)
-        self.axes_status.grid(column=0, row=4, columnspan=2, sticky=(N, W))
+        self.axes_status.grid(column=0, row=5, columnspan=2, sticky=(N, W))
         self.axes_status.bind("<<home>>", lambda event: self.do_home())
 
         self.camera_controls = CameraControls(self.frame)
-        self.camera_controls.grid(column=0, row=5, columnspan=2, sticky=(W))
+        self.camera_controls.grid(column=0, row=6, columnspan=2, sticky=(W))
         self.camera_controls.bind("<<ae_enable>>", lambda x: self.do_ae_enable())
         self.camera_controls.bind("<<exposure_time>>", lambda x: self.do_exposure_time())
         self.camera_controls.bind("<<awb_enable>>", lambda x: self.do_awb_enable())
@@ -1431,6 +1551,32 @@ class ScantoolTk:
         rect = (135, 400, 720, 1150)
         rect = (14, 750, 750, 1330)
         d = twisted_threads.deferToThread(finder.find_pieces, rect)
+        d.addCallback(self.set_pieces)
+
+    def set_pieces(self, arg):
+        pieces, table = arg
+        self.pieces = pieces
+        self.table = table
+
+    def do_lint(self):
+        print("Lint!")
+        d = twisted_threads.deferToThread(lint_update_pieces, self.pieces)
+        d.addCallback(print, "All done!")
+
+    def do_features(self):
+        print("Features!")
+        d = twisted_threads.deferToThread(feature_update_pieces, self.pieces, epsilon=20.)
+        d.addCallback(print, "All done!")
+
+    def do_solve(self):
+        d = twisted_threads.deferToThread(run_solver, self.pieces)
+        d.addCallback(self.set_solution)
+
+    def set_solution(self, raft):
+        self.solution = raft
+
+    def do_apply_solution(self):
+        d = twisted_threads.deferToThread(apply_solution, self.gantry, self.camera, self.table, self.solution)
             
     def do_test_repeatability(self):
         tester = RepeatabilityTester(self.gantry, self.camera, self.charuco_board)
