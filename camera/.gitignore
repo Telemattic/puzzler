@@ -1,0 +1,9 @@
+pano*.jpg
+pano*.png
+scan_*.jpg
+piece_*.jpg
+temp-puzzle.json
+the-config.json
+temp-solve.json
+temp-puzzle-relabeled.json
+temp/rescores.json

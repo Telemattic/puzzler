@@ -271,12 +271,10 @@ class PieceFinder:
         self.max_size_mm = 70
         self.margin_px = 125
         self.feedrate = 5000
-        self.finger_xy = np.array((448.97, 777.38))
+        self.finger_xy = np.array((0., 0.)) # dummy XY, to be overridden by caller
         self.finger_diameter_mm = 11.7
         self.board_height = -70.
         self.retract_height = 0.
-
-        #self.image_threshold = 75
 
     def find_pieces(self, rect):
 
@@ -1543,10 +1541,19 @@ class ScantoolTk:
         d.addCallback(self.set_finger_calibration)
 
     def set_finger_calibration(self, calibration):
-        self.calibration['finger'] = calibration    
+        self.calibration['finger'] = calibration
+
+    def get_finger_xy(self):
+        cal = self.calibration.get('finger', {})
+        x = cal.get('x')
+        y = cal.get('y')
+        if x is None or y is None:
+            raise ValueError("get_finger_xy: finger not calibrated")
+        return np.array((x,y))
 
     def do_find_pieces(self):
         finder = PieceFinder(self.gantry, self.camera)
+        finder.finger_xy = self.get_finger_xy()
         finder.threshold = self.camera_controls.threshold
         rect = (135, 400, 720, 1150)
         rect = (14, 750, 750, 1330)

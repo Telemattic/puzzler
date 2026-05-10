@@ -1,0 +1,7 @@
+[features]
+epsilon = 20.
+max_semi_major = 170.
+
+[solver.border]
+max_mse = 10000
+num_extra_edges = 10

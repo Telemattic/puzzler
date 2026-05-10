@@ -81,7 +81,7 @@ class TabComputer:
 
         # override for 100 piece puzzle which has significantly larger
         # pieces
-        self.max_semi_major = 150
+        self.max_semi_major = 170
 
         self.tabs = []
 
@@ -888,13 +888,10 @@ def clean_edges(label, edges):
         edges = [e1, e0]
 
     return edges
-                    
-def feature_update(args):
 
-    verbose = False
-    tab_data = []
-    puzzle = puzzler.file.load(args.puzzle)
-    for piece in tqdm(puzzle.pieces, disable=verbose):
+def feature_update_pieces(pieces, verbose=False, epsilon=10.):
+                    
+    for piece in tqdm(pieces, disable=verbose):
         if piece.points is None:
             continue
 
@@ -903,28 +900,27 @@ def feature_update(args):
 
         perimeter = PerimeterLoader(piece)
 
-        tc = TabComputer(perimeter, args.epsilon, False)
+        tc = TabComputer(perimeter, epsilon, False)
         ec = EdgeComputer(perimeter, tc.approx_poly, tc.tabs, False)
 
         piece.tabs = []
         for i, tab in enumerate(sorted(tc.tabs, key=operator.itemgetter('indexes'))):
             piece.tabs.append(puzzler.feature.Tab(tab['indexes'], tab['ellipse'], tab['indent'], tab['tangents']))
-            tab_data.append((piece.label, i, tab['mse']))
 
-        # print(" tabs:", ', '.join(f"{t.ellipse.semi_major/t.ellipse.semi_minor:.3f}" for t in piece.tabs))
-                
         edges = []
         for edge in sorted(ec.edges, key=operator.itemgetter('fit_indexes')):
             edges.append(puzzler.feature.Edge(edge['fit_indexes'], edge['line']))
 
         piece.edges = clean_edges(piece.label, edges)
+
+def feature_update(args):
             
+    puzzle = puzzler.file.load(args.puzzle)
+
+    feature_update_pieces(puzzle.pieces, epsilon=args.epsilon)
+    
     puzzler.file.save(args.puzzle, puzzle)
 
-    if False:
-        print("piece,tab_no,mse")
-        for label, tab_no, mse in tab_data:
-            print(f"{label},{tab_no},{mse:.3f}")
 
 def add_parser(commands):
     

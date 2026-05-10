@@ -236,7 +236,7 @@ class BorderSolver:
     
     def link_pieces_nx(self, scores):
 
-        max_mse = 70. if len(self.corners) + len(self.edges) < 50 else 20.
+        max_mse = 100090. if len(self.corners) + len(self.edges) < 50 else 20.
         num_extra_edges = 10
 
         print(f"link_pieces_nx: corners={self.corners}, no. edges={len(self.edges)}")
@@ -249,6 +249,11 @@ class BorderSolver:
             sources.sort(key=operator.itemgetter(0))
             rescore[dst] = sources
 
+        with open('temp/rescores.json', 'w') as f:
+            o = dict()
+            o['scores'] = rescore
+            f.write(json.dumps(o, indent=4))
+                
         G = nx.DiGraph()
         extra_edges = []
         
@@ -289,6 +294,9 @@ class BorderSolver:
         # adding just the necessary extra edges to get the optimal
         # solution) but what else can we do?
         extra_edges.sort()
+
+        # num_extra_edges = len(extra_edges)
+        print(f"HACK: setting {num_extra_edges=}")
 
         for i in range(num_extra_edges):
 
@@ -893,7 +901,12 @@ class PuzzleSolver:
 
         _, _, src_label, feature_pairs = fits[0]
 
-        print(f"Placing {src_label}: {self.raftinator.format_feature_pairs(feature_pairs)}")
+        status = self.is_good_match(feature_pairs)
+        if status is None or status:
+            status = ''
+        else:
+            status = ' <BAD MATCH>'
+        print(f"Placing {src_label}: {self.raftinator.format_feature_pairs(feature_pairs)}{status}")
 
         dst_raft = self.raft
         src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
@@ -909,6 +922,11 @@ class PuzzleSolver:
         
         if len(new_raft.coords) % 20 == 0:
             self.refine()
+
+    def is_good_match(self, feature_pairs):
+        if self.expected is None:
+            return None
+        return all(self.expected.get(a) == b for a, b in feature_pairs)
 
     def refine(self):
 
@@ -1051,14 +1069,17 @@ def from_json(pieces, s):
         if o is None:
             return None
         
-        size = tuple(o['size'])
+        size = o.get('size')
+        if size is not None:
+            size = tuple(size)
+            
         coords = dict()
         for k, v in o['coords'].items():
-            coords[k] = parse_affine_transform(v)
+            coords[k] = parse_coord(v)
 
         return puzzler.raft.Raft(coords, size)
 
-    def parse_affine_transform(o):
+    def parse_coord(o):
         angle = o['angle']
         xy = tuple(o['xy'])
         return Coord(angle, xy)
@@ -1089,10 +1110,13 @@ def to_json(solver):
         if raft is None:
             return None
 
-        coords = dict((k, format_coord(v))
-                      for k, v in raft.coords.items())
+        o = dict()
+        if raft.size is not None:
+            o['size'] = raft.size
 
-        return {'size':raft.size, 'coords':coords}
+        o['coords'] = dict((k, format_coord(v)) for k, v in raft.coords.items())
+
+        return o
 
     def format_coord(t):
         return {'angle':t.angle, 'xy':t.xy.tolist()}
