@@ -16,6 +16,7 @@
 #      PyOpenGL
 #      pyopengltk
 #      scikit-image
+#      matplotlib
 
 # 1000.json problems:
 #   1. O28 (bad match to X38, Y37)
