@@ -59,7 +59,7 @@ class Curvature:
 
     def interp_point(self, cpl):
         # print(f"interp_point: {cpl=} {self.cum_path_length=} {self.points=}")
-        x = cpl / self.stepsize
+        x = cpl / 1. # self.stepsize
         i = int(x)
         n = len(self.points)
         if i < 0:
@@ -427,6 +427,7 @@ class MatchTk:
         self.curves_canvas = CurvesCanvas(parent, self.var_epsilon, self.var_offset)
         self.curves_canvas.canvas.get_tk_widget().grid(
             column=1, row=0, sticky=(tkinter.N, tkinter.E, tkinter.S, tkinter.W))
+        self.curves_canvas.canvas.mpl_connect('motion_notify_event', self.on_figure_motion)
        
         self.controls = ttk.Frame(self.frame)
         self.controls.grid(column=0, row=1, sticky=(tkinter.N, tkinter.W, tkinter.E, tkinter.S), pady=5)
