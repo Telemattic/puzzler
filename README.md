@@ -42,4 +42,7 @@ Todo:
   
    C11:0=C12:0,D11:2=D12:0,C12:3=D12:1,C11:1=D11:1
 
-  see puzzler.align.MultiTargetError for a better error measurement
+  see puzzler.align.MultiTargetError for a better error measurement,
+  better (correct I think) match is
+
+   C11:1=C12:3,D11:2=D12:0,C12:2=D12:1
