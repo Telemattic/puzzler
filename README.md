@@ -1,13 +1,21 @@
 # puzzler
 
 # dependencies:
-#
-#   pip3 install pycairo
-#   pip3 install PyOpenGL
-#   pip3 install pyopengltk
-#   pip3 install bezier==2023.7.28     # avoid pulling in a dependency on numpy 2.0
-#   pip3 install scikit-image
-#   pip3 install cachetools
+#  python -m venv env
+#  <activate env>
+#  pip3 install ...
+#      cachetools
+#      numpy
+#      opencv-python
+#      scipy
+#      palettable
+#      networkx
+#      tqdm
+#      pycairo
+#      Pillow
+#      PyOpenGL
+#      pyopengltk
+#      scikit-image
 
 # 1000.json problems:
 #   1. O28 (bad match to X38, Y37)

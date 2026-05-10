@@ -73,7 +73,7 @@ class Parser:
         return Puzzle.Piece.Source(data['id'], tuple(data['rect']))
 
     def parse_points(self, data):
-        pts = np.array(puzzler.chain.ChainCode().decode(data))
+        pts = np.array(puzzler.chain.ChainCode().decode(data), dtype=np.int32)
         pts.setflags(write=0)
         return pts
 
