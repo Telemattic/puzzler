@@ -47,3 +47,11 @@ Todo:
   better (correct I think) match is
 
    C11:1=C12:3,D11:2=D12:0,C12:2=D12:1
+
+
+Profiling:
+
+  # note, -s deals with python subprocesses which is vital in a virtualenv
+  # note, -- makes sure that the python command line isn't parsed as part of the py-spy arguments
+  
+  py-spy record -f speedscope -o prof.ss -s -- python app.py -p 100.json align
