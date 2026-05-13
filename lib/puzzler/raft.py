@@ -316,8 +316,9 @@ Seams = Sequence[Seam]
 
 class RaftAligner:
 
-    def __init__(self, pieces: Pieces) -> None:
+    def __init__(self, pieces: Pieces, seamstress : 'RaftSeamstress') -> None:
         self.pieces = pieces
+        self.seamstress = seamstress
 
     def rough_align(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Coord:
 
@@ -525,7 +526,7 @@ class RaftAligner:
     def refine_alignment_between_rafts(
             self, dst_raft: Raft, src_raft: Raft, src_raft_coord: Coord) -> Coord:
 
-        seamstress = RaftSeamstress(self.pieces)
+        seamstress = self.seamstress
         seams = seamstress.trim_seams(
             seamstress.seams_between_rafts(dst_raft, src_raft, src_raft_coord))
 
@@ -830,8 +831,8 @@ class Raftinator:
     def __init__(self, pieces: Pieces):
         self.pieces = pieces
         self.factory = RaftFactory(pieces)
-        self.aligner = RaftAligner(pieces)
         self.seamstress = RaftSeamstress(pieces)
+        self.aligner = RaftAligner(pieces, self.seamstress)
         self.raft_error = RaftError(pieces)
         self.verbose = False
 
