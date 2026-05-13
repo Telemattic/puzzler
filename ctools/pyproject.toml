@@ -9,5 +9,5 @@ version = "0.1"
 
 [tool.setuptools]
 ext-modules = [
-  {name="puzzler.ctools", sources=["puzzler_ctools.c"]}
+  {name="puzzler.ctools", sources=["puzzler_ctools.c", "nearest_point.cxx"]}
 ]
