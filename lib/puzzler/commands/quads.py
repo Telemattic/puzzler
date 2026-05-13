@@ -588,8 +588,8 @@ def try_triples(pieces, quad, num_refine):
                     retval.append(row)
 
         else:
-                    
-            pocket_fitter = PocketFitter(pieces, good_raft, pocket, num_refine)
+
+            pocket_fitter = PocketFitter(pieces, triple_raft, pocket, num_refine)
 
             for fit_label in pieces:
     
