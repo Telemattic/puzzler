@@ -7,3 +7,4 @@ from . import scan
 from . import match
 from . import quads
 from . import lint
+from . import tabs
