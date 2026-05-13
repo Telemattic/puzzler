@@ -1,7 +1,9 @@
+import cv2 as cv
 import math
 import numpy as np
 import puzzler
 import scipy
+import tempfile
 
 import tkinter
 from tkinter import ttk
@@ -9,6 +11,72 @@ from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import matplotlib
+
+# class Fnord:
+#     piece
+#     stepsize
+#     samples
+#     curvature
+ 
+class PolygonApproximator:
+
+    def __init__(self, epsilon):
+        self.epsilon = epsilon
+        
+    def approximate_polygon(self, points):
+        return np.squeeze(cv.approxPolyDP(np.array(points), self.epsilon, closed=True))
+
+class PolygonSampler:
+
+    def __init__(self, stepsize):
+        self.stepsize = stepsize
+
+    def sample_polygon(self, polygon):
+
+        diffs = np.roll(polygon, -1, axis=0) - polygon
+        side_lengths = np.linalg.norm(diffs, axis=1)
+        xp = np.cumulative_sum(side_lengths, include_initial=True)
+
+        fp = np.empty(polygon.shape[0], dtype=np.complex128)
+        fp.real = polygon[:,0]
+        fp.imag = polygon[:,1]
+
+        x = np.arange(0, xp[-1] * 2., self.stepsize)
+
+        # does periodic work as expected here, i.e. does a sample x,
+        # taken after the xp of the last point in the data (xp[-2])
+        # interpolate between that point and the first point, xp[0]?
+
+        retval = np.interp(x, xp[:-1], fp, period=xp[-1])
+
+        return retval.view(dtype=np.float64).reshape(-1,2)
+
+class CurvatureComputer:
+
+    def __init__(self, stepsize):
+        self.stepsize = stepsize
+
+    def first_derivative(self, points):
+        # dx/dt = (x[t+1] - x[t-1]) / (2 * delta t)
+        numer = np.roll(points, -1, axis=0) - np.roll(points, 1, axis=0)
+        denom = 2 * self.stepsize
+        return numer * (1. / denom)
+
+    def second_derivative(self, points):
+        # ddx/ddt = (x[t+1] - 2x[t] + x[t-1]) / square(delta t)
+        numer = np.roll(points, -1, axis=0) - 2*points + np.roll(points, 1, axis=0)
+        denom = self.stepsize * self.stepsize
+        return numer * (1. / denom)
+
+    def compute_curvature(self, points):
+
+        d1 = self.first_derivative(points)
+        d1x, d1y = d1[:,0], d1[:,1]
+
+        d2 = self.second_derivative(points)
+        d2x, d2y = d2[:,0], d2[:,1]
+
+        return (d1x * d2y - d1y * d2x) / np.pow(d1x*d1x + d1y*d1y, 1.5)
 
 class Curvature:
 
@@ -31,6 +99,7 @@ class Curvature:
     def by_potrace(path, stepsize, reverse=False, ds=None):
 
         repeat = None if reverse else 0.5
+        repeat = 1
         points = puzzler.potrace.InterpolatePath(stepsize).apply(path, repeat)
         if reverse:
             points = np.flip(points, axis=0)
@@ -288,8 +357,11 @@ class CurvesCanvas:
         self.ax1.set_ylabel('curvature')
         self.ax1.grid(True)
 
-        correlation = algorithm_ii(c1, c2, eps=epsilon)
-        lags = np.arange(-len(c2), len(c1))
+        if False:
+            correlation = algorithm_ii(c1, c2, eps=epsilon)
+        else:
+            correlation = scipy.signal.correlate(c1, c2)
+        lags = np.arange(-len(c2), len(c1)-1)
         
         self.ax2.plot(lags, correlation)
         self.ax2.set_ylabel('correlation')
@@ -407,6 +479,7 @@ class MatchTk:
         self.pieces = pieces
         self.coords = coords
         self.curves = dict()
+        self.tempdir = tempfile.TemporaryDirectory(dir='C:\\Temp', prefix='match')
 
         self.frame = ttk.Frame(parent, padding=5)
         self.frame.grid(column=0, row=0, sticky=(tkinter.N, tkinter.W, tkinter.E, tkinter.S))
@@ -536,9 +609,20 @@ class MatchTk:
             rev = label != self.labels[0]
             if False:
                 self.curves[label] = Curvature.by_hack(piece.points, stepsize, rev, ds)
-            else:
+            elif False:
                 path = puzzler.potrace.piece_to_path(piece)[0]
                 self.curves[label] = Curvature.by_potrace(path, stepsize, reverse=rev, ds=ds)
+            else:
+                if True:
+                    svgpath = puzzler.potrace.piece_to_path(piece, self.tempdir)[0]
+                    samples = puzzler.potrace.InterpolatePath(stepsize).apply(svgpath, 1)
+                else:
+                    approx = PolygonApproximator(2.).approximate_polygon(piece.points)
+                    samples = PolygonSampler(stepsize).sample_polygon(approx)
+                if rev:
+                    samples = np.flip(samples, axis=0)
+                curvature = CurvatureComputer(stepsize).compute_curvature(samples)
+                self.curves[label] = Curvature(curvature, samples)
             
         self.render()
 
