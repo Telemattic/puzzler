@@ -1,5 +1,6 @@
 #define PY_SSIZE_T__CLEAN
 #include <Python.h>
+#include <numpy/arrayobject.h>
 
 static PyObject*
 spam_system(PyObject* self, PyObject* args)
@@ -17,9 +18,21 @@ static PyObject*
 compute_nearest_point_image(PyObject* self, PyObject* args)
 {
     int x0, y0, x1, y1;
-    PyObject* points;
-    if (!PyArg_ParseTuple(args, "((ii)(ii))O", &x0, &y0, &x1, &y1, &points))
+    PyObject* pointsObject;
+    if (!PyArg_ParseTuple(args, "((ii)(ii))O", &x0, &y0, &x1, &y1, &pointsObject))
         return NULL;
+
+    int requirements = NPY_ARRAY_C_CONTIGUOUS|NPY_ARRAY_ALIGNED|NPY_ARRAY_ENSUREARRAY;
+    pointsObject = PyArray_FromAny(pointsObject, PyArray_DescrFromType(NPY_INT32), 2, 2, requirements, NULL);
+    if (pointsObject == NULL)
+        return NULL;
+
+    PyArrayObject* points = (PyArrayObject*) pointsObject;
+    if (PyArray_DIM(points, 0) != 2) {
+        PyErr_SetString(PyExc_ValueError, "points array must be [n,2]");
+        return NULL;
+    }
+    
     Py_RETURN_NONE;
 }
 

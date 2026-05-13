@@ -1,13 +1,14 @@
 # pyproject.toml
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "numpy"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "puzzler-ctools"
 version = "0.1"
 
-[tool.setuptools]
-ext-modules = [
-  {name="puzzler.ctools", sources=["puzzler_ctools.c", "nearest_point.cxx"]}
-]
+#[tool.setuptools]
+#ext-modules = [
+#  {name="puzzler.ctools", sources=["puzzler_ctools.c", "nearest_point.cxx"], include-dirs=[numpy.getinclude()]}
+#]
+#
