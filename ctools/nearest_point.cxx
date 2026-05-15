@@ -3,6 +3,19 @@
 #include <algorithm>
 
 void
+write_array(FILE *f, int w, int h, const int* data)
+{
+    for (int y = 0; y != h; ++y) {
+        for (int x = 0; x != w; ++x) {
+            if (x)
+                fputc(',',f);
+            fprintf(f,"%d", data[x+y*w]);
+        }
+        fputc('\n',f);
+    }
+}
+
+void
 NearestPointImageComputer::compute(
     BBox bbox, int32 n_points, const Point* points, int32* image, double* dist_retval)
 {
@@ -45,11 +58,28 @@ NearestPointImageComputer::compute(
         i = j;
     }
 
+    FILE* f = fopen("arrays.txt", "w");
+    if (f) {
+        fputs("f_values, pass 1:", f);
+        write_array(f, w, h, f_values.data());
+        fputs("image, pass 1:", f);
+        write_array(f, w, h, image);
+    }
+
     for (int i = 0; i != h; ++i) {
         // compute2(w, f_values.data() + i*w, image + i*w);
         compute2revised(w, f_values.data() + i*w, image+i*w, w*w+h*h);
     }
 
+    if (f) {
+        fputs("f_values, pass 2:", f);
+        write_array(f, w, h, f_values.data());
+        fputs("image, pass 2:", f);
+        write_array(f, w, h, image);
+        fclose(f);
+        f = nullptr;
+    }
+    
     if (dist_retval) {
         for (int i = 0; i != w*h; ++i)
             dist_retval[i] = sqrt(f_values[i]);
@@ -107,13 +137,29 @@ NearestPointImageComputer::compute2revised(
         if (f_values[i] == max_val)
             continue;
 
-        int32 s = -1;
+        int32 s = 0;
         while (k > 0) {
 
             const auto p = parabolas.data() + k-1;
 
             const int32 j = p->center;
-            s = ((f_values[i] + i*i) - (p->value + j*j) + (i-j)) / (2 * (i-j));
+
+            // we're more than rounding up, the interval [x,x+1) will map to x+1
+            //
+            // this means that in case of a tie (parabola p and the new
+            // parabola we're considering) would yield the same value at a
+            // particular coordinate then we leave p with ownership of that
+            // coordinate
+
+            // s = ((f_values[i] + i*i) - (p->value + j*j)) / (2 * (i-j)) + 1;
+            
+            s = (f_values[i] + i*i) - (p->value + j*j);
+
+            // integer arithmetic rounds towards 0, not towards smaller
+            // numbers, so if the result of a division is -1/2 we can end up
+            // with the final value of s being 1 instead of 0.  Oops.
+            s = (s < 0) ? 0 : (s / (2*(i-j)) + 1);
+                
             if (s > p->lbound)
                 break;
             --k;
