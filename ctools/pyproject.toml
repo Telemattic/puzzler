@@ -4,5 +4,5 @@ requires = ["setuptools", "numpy"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "puzzler-ctools"
+name = "puzzbin"
 version = "0.1"

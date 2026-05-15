@@ -46,7 +46,8 @@ NearestPointImageComputer::compute(
     }
 
     for (int i = 0; i != h; ++i) {
-        compute2(w, f_values.data() + i*w, image + i*w);
+        // compute2(w, f_values.data() + i*w, image + i*w);
+        compute2revised(w, f_values.data() + i*w, image+i*w, w*w+h*h);
     }
 
     if (dist_retval) {
@@ -79,13 +80,74 @@ NearestPointImageComputer::compute1(
     }
 }
 
+struct Parabola {
+    // center (minimum) of the parabola
+    int32 center;
+
+    // left-most point for which parabola is part of the lower envelope
+    int32 lbound;
+
+    // value of the parabola at the center
+    int32 value;
+
+    // index of source point for this parabola
+    int32 index;
+};
+
+void
+NearestPointImageComputer::compute2revised(
+    int32 n, int32* f_values, int32* f_tags, int32 max_val)
+{
+    // worst case is one parabola per point
+    std::vector<Parabola> parabolas(n);
+    int k = 0; // number of parabolas
+
+    for (int i = 0; i != n; ++i) {
+
+        if (f_values[i] == max_val)
+            continue;
+
+        int32 s = -1;
+        while (k > 0) {
+
+            const auto p = parabolas.data() + k-1;
+
+            const int32 j = p->center;
+            s = ((f_values[i] + i*i) - (p->value + j*j) + (i-j)) / (2 * (i-j));
+            if (s > p->lbound)
+                break;
+            --k;
+        }
+
+        if (s < n) {
+            parabolas[k] = Parabola{.center=i, .lbound=s, .value=f_values[i], .index=f_tags[i]};
+            ++k;
+        }
+    }
+
+    if (k == 0)
+        return;
+
+    auto p = parabolas.data();
+    const auto p_end = p + k;
+    for (int32 i = 0; i != n; ++i) {
+
+        while (p+1 != p_end && p[1].lbound <= i)
+            ++p;
+
+        const int d = i - p->center;
+        f_values[i] = p->value + d * d;
+        f_tags[i] = p->index;
+    }
+}
+
 void
 NearestPointImageComputer::compute2(
     int32 n, int32* f_values, int32* f_tags)
 {
     if (n < 1)
         return;
-    
+
     if (m_centers.size() < n)
         m_centers.resize(n, -1);
     int32* centers = m_centers.data();

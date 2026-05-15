@@ -79,20 +79,20 @@ compute_nearest_point_image(PyObject* self, PyObject* args)
     return Py_BuildValue("OO", dist_object.get(), image_object.get());
 }
 
-static PyMethodDef ctools_methods[] = {
+static PyMethodDef puzzbin_methods[] = {
     {"_compute_nearest_point_image", compute_nearest_point_image, METH_VARARGS,
      "Compute the nearest point image, internal implementation of python function."},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 
-static struct PyModuleDef ctools_module = {
+static struct PyModuleDef puzzbin_module = {
     .m_base = PyModuleDef_HEAD_INIT,
-    .m_name = "ctools",
-    .m_methods = ctools_methods
+    .m_name = "puzzbin",
+    .m_methods = puzzbin_methods
 };
 
 extern "C" PyMODINIT_FUNC
-PyInit_ctools(void)
+PyInit_puzzbin(void)
 {
-    return PyModuleDef_Init(&ctools_module);
+    return PyModuleDef_Init(&puzzbin_module);
 }
