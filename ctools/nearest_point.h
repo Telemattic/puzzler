@@ -5,9 +5,11 @@
   #undef _DEBUG
   #include <vector>
   #include <algorithm>
+  #include <memory>
   #define _DEBUG
 #else
   #include <vector>
+  #include <memory>
 #endif
 
 typedef int int32;
@@ -23,7 +25,8 @@ struct BBox {
 class NearestPointImageComputer {
 
   public:
-    void compute(BBox bbox, int32 n_points, const Point* points, int32* image);
+    void compute(BBox bbox, int32 n_points, const Point* points, int32* image,
+                 double* dist_retval = nullptr);
     void compute1(int32 n_points, int32* points, int32* p_tags,
                   int32 width, int32 stride, int32* f_values, int32* f_tags);
     void compute2(int32 n, int32* f_values, int32* f_tags);

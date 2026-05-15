@@ -4,7 +4,7 @@
 
 void
 NearestPointImageComputer::compute(
-    BBox bbox, int32 n_points, const Point* points, int32* image)
+    BBox bbox, int32 n_points, const Point* points, int32* image, double* dist_retval)
 {
     const int32 w = bbox.ur.x - bbox.ll.x;
     const int32 h = bbox.ur.y - bbox.ll.y;
@@ -22,6 +22,9 @@ NearestPointImageComputer::compute(
     std::vector<int32> f_values(w*h, w*w+h*h);
     std::vector<int32> y_values;
 
+    const int32 x0 = bbox.ll.x;
+    const int32 y0 = bbox.ll.y;
+    
     int32 i = 0;
     while (i != n_points) {
 
@@ -33,17 +36,23 @@ NearestPointImageComputer::compute(
 
         if (j-i > y_values.size())
             y_values.resize(j-i);
+
         for (int k = i; k != j; ++k)
-            y_values[k-i] = points[tags[k]].y;
+            y_values[k-i] = points[tags[k]].y - y0;
 
         compute1(j-i, y_values.data(), tags.data()+i,
-                 h, w, f_values.data() + x, image + x);
+                 h, w, f_values.data() + x - x0, image + x - x0);
 
         i = j;
     }
 
     for (int i = 0; i != h; ++i) {
         compute2(w, f_values.data() + i*w, image + i*w);
+    }
+
+    if (dist_retval) {
+        for (int i = 0; i != w*h; ++i)
+            dist_retval[i] = sqrt(f_values[i]);
     }
 }
 
@@ -107,11 +116,16 @@ NearestPointImageComputer::compute2(
     }
     lbounds[k+1] = n;
 
+    const std::vector<int32> save_f_values(f_values, f_values+n);
+    const std::vector<int32> save_f_tags(f_tags, f_tags+n);
+
     int j = 0;
     for (int i = 0; i != n; ++i) {
-        while (lbounds[j+1] < i)
+        while (lbounds[j+1] <= i)
             ++j;
         const int c = centers[j];
-        f_tags[i] = f_tags[c];
+        const int d = c - i;
+        f_values[i] = save_f_values[c] + d*d;
+        f_tags[i] = save_f_tags[c];
     }
 }

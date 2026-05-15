@@ -11,6 +11,12 @@
 #include "nearest_point.h"
 #include <numpy/arrayobject.h>
 
+std::shared_ptr<PyObject> make_py_shared(PyObject* obj) {
+    return std::shared_ptr<PyObject>(obj, [](PyObject* o) {
+        Py_XDECREF(o);
+    });
+}
+
 static PyObject*
 compute_nearest_point_image(PyObject* self, PyObject* args)
 {
@@ -24,8 +30,11 @@ compute_nearest_point_image(PyObject* self, PyObject* args)
 
     int requirements = NPY_ARRAY_C_CONTIGUOUS|NPY_ARRAY_ALIGNED|NPY_ARRAY_ENSUREARRAY;
     pointsObject = PyArray_FromAny(pointsObject, PyArray_DescrFromType(NPY_INT32), 2, 2, requirements, NULL);
-    if (pointsObject == NULL)
+    if (!pointsObject)
         return NULL;
+
+    // we now own a reference on pointsObject, Py_DECREF(pointsObject) is necessary before exiting
+    auto pointsObject_ptr = make_py_shared(pointsObject);
 
     auto points = reinterpret_cast<PyArrayObject*>(pointsObject);
     if (PyArray_DIM(points, 1) != 2) {
@@ -51,18 +60,24 @@ compute_nearest_point_image(PyObject* self, PyObject* args)
     auto points_data = reinterpret_cast<const Point*>(PyArray_DATA(points));
 
     const npy_intp dims[2] = {width, height};
-    auto image_object = PyArray_SimpleNew(2, dims, NPY_INT32);
-    if (image_object == NULL)
+    auto image_object = make_py_shared(PyArray_SimpleNew(2, dims, NPY_INT32));
+    if (!image_object)
         return NULL;
 
-    auto image_data = reinterpret_cast<int32*>(PyArray_DATA(reinterpret_cast<PyArrayObject*>(image_object)));
-    for (int i = 0; i != width*height; ++i)
-        image_data[i] = n_points;
+    auto image_data = reinterpret_cast<int32*>(PyArray_DATA(reinterpret_cast<PyArrayObject*>(image_object.get())));
+    std::fill(image_data, image_data + width*height, n_points);
+
+    auto dist_object = make_py_shared(PyArray_SimpleNew(2, dims, NPY_FLOAT64));
+    if (!dist_object)
+        return NULL;
+
+    auto dist_data = reinterpret_cast<double*>(PyArray_DATA(reinterpret_cast<PyArrayObject*>(dist_object.get())));
 
     NearestPointImageComputer npic;
-    npic.compute(bbox, n_points, points_data, image_data);
+    npic.compute(bbox, n_points, points_data, image_data, dist_data);
 
-    return image_object;
+    auto retval = Py_BuildValue("OO", dist_object.get(), image_object.get());
+    return retval;
 }
 
 static PyMethodDef ctools_methods[] = {
