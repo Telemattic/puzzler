@@ -6,41 +6,40 @@ void
 NearestPointImageComputer::compute(
     BBox bbox, int32 n_points, const Point* points, int32* image, double* dist_retval)
 {
-    const int32 w = bbox.ur.x - bbox.ll.x;
-    const int32 h = bbox.ur.y - bbox.ll.y;
+    std::vector<int32> indices(n_points);
+    std::iota(indices.begin(), indices.end(), 0);
 
-    std::vector<int32> tags(n_points);
-    for (int32 i = 0; i != n_points; ++i)
-        tags[i] = i;
-
-    std::sort(tags.begin(), tags.end(), [=](int32 i, int32 j) {
+    std::sort(indices.begin(), indices.end(), [=](int32 i, int32 j) {
         const Point& a(points[i]);
         const Point& b(points[j]);
         return a.x == b.x ? a.y < b.y : a.x < b.x;
     });
 
-    std::vector<int32> f_values(w*h, w*w+h*h);
-    std::vector<int32> y_values;
-
     const int32 x0 = bbox.ll.x;
     const int32 y0 = bbox.ll.y;
     
+    const int32 w = bbox.ur.x - x0;
+    const int32 h = bbox.ur.y - y0;
+
+    std::vector<int32> f_values(w*h, w*w+h*h);
+    std::vector<int32> y_values;
+
     int32 i = 0;
     while (i != n_points) {
 
-        const int32 x = points[tags[i]].x;
+        const int32 x = points[indices[i]].x;
         
         int32 j = i+1;
-        while (j != n_points && points[tags[j]].x == x)
+        while (j != n_points && points[indices[j]].x == x)
             ++j;
 
         if (j-i > y_values.size())
             y_values.resize(j-i);
 
         for (int k = i; k != j; ++k)
-            y_values[k-i] = points[tags[k]].y - y0;
+            y_values[k-i] = points[indices[k]].y - y0;
 
-        compute1(j-i, y_values.data(), tags.data()+i,
+        compute1(j-i, y_values.data(), indices.data()+i,
                  h, w, f_values.data() + x - x0, image + x - x0);
 
         i = j;
@@ -58,7 +57,7 @@ NearestPointImageComputer::compute(
 
 void
 NearestPointImageComputer::compute1(
-    int32 n_points, int32* points, int32* p_tags,
+    int32 n_points, const int32* points, const int32* p_tags,
     int32 width, int32 stride, int32* f_values, int32* f_tags)
 {
     int32 x = 0;

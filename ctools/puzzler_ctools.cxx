@@ -59,7 +59,7 @@ compute_nearest_point_image(PyObject* self, PyObject* args)
     auto n_points = static_cast<int>(PyArray_DIM(points,0));
     auto points_data = reinterpret_cast<const Point*>(PyArray_DATA(points));
 
-    const npy_intp dims[2] = {width, height};
+    const npy_intp dims[2] = {height, width};
     auto image_object = make_py_shared(PyArray_SimpleNew(2, dims, NPY_INT32));
     if (!image_object)
         return NULL;
@@ -76,8 +76,7 @@ compute_nearest_point_image(PyObject* self, PyObject* args)
     NearestPointImageComputer npic;
     npic.compute(bbox, n_points, points_data, image_data, dist_data);
 
-    auto retval = Py_BuildValue("OO", dist_object.get(), image_object.get());
-    return retval;
+    return Py_BuildValue("OO", dist_object.get(), image_object.get());
 }
 
 static PyMethodDef ctools_methods[] = {

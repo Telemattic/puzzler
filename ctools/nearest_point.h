@@ -6,10 +6,12 @@
   #include <vector>
   #include <algorithm>
   #include <memory>
+  #include <numeric>
   #define _DEBUG
 #else
   #include <vector>
   #include <memory>
+  #include <numeric>
 #endif
 
 typedef int int32;
@@ -27,7 +29,7 @@ class NearestPointImageComputer {
   public:
     void compute(BBox bbox, int32 n_points, const Point* points, int32* image,
                  double* dist_retval = nullptr);
-    void compute1(int32 n_points, int32* points, int32* p_tags,
+    void compute1(int32 n_points, const int32* points, const int32* p_tags,
                   int32 width, int32 stride, int32* f_values, int32* f_tags);
     void compute2(int32 n, int32* f_values, int32* f_tags);
 
