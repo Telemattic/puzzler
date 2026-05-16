@@ -3,9 +3,11 @@
 #ifdef _DEBUG
   #undef _DEBUG
   #include <Python.h>
+  #include <memory>
   #define _DEBUG
 #else
   #include <Python.h>
+  #include <memory>
 #endif
 
 #include "nearest_point.h"
@@ -18,7 +20,7 @@ std::shared_ptr<PyObject> make_py_shared(PyObject* obj) {
 }
 
 static PyObject*
-compute_nearest_point_image(PyObject* self, PyObject* args)
+py_compute_nearest_point_image(PyObject* self, PyObject* args)
 {
     BBox bbox;
     PyObject* pointsObject;
@@ -73,14 +75,13 @@ compute_nearest_point_image(PyObject* self, PyObject* args)
 
     auto dist_data = reinterpret_cast<double*>(PyArray_DATA(reinterpret_cast<PyArrayObject*>(dist_object.get())));
 
-    NearestPointImageComputer npic;
-    npic.compute(bbox, n_points, points_data, image_data, dist_data);
+    compute_nearest_point_image(bbox, n_points, points_data, image_data, dist_data);
 
     return Py_BuildValue("OO", dist_object.get(), image_object.get());
 }
 
 static PyMethodDef puzzbin_methods[] = {
-    {"_compute_nearest_point_image", compute_nearest_point_image, METH_VARARGS,
+    {"compute_nearest_point_image", py_compute_nearest_point_image, METH_VARARGS,
      "Compute the nearest point image, internal implementation of python function."},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };

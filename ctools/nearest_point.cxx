@@ -1,19 +1,32 @@
 #include "nearest_point.h"
 
-#include <algorithm>
+#ifdef _DEBUG
+  #undef _DEBUG
+  #include <vector>
+  #include <algorithm>
+  #include <numeric>
+  #define _DEBUG
+#else
+  #include <vector>
+  #include <algorithm>
+  #include <numeric>
+#endif
 
-void
-write_array(FILE *f, int w, int h, const int* data)
-{
-    for (int y = 0; y != h; ++y) {
-        for (int x = 0; x != w; ++x) {
-            if (x)
-                fputc(',',f);
-            fprintf(f,"%d", data[x+y*w]);
-        }
-        fputc('\n',f);
-    }
-}
+class NearestPointImageComputer {
+
+  public:
+    void compute(BBox bbox, int32 n_points, const Point* points, int32* image,
+                 double* dist_retval = nullptr);
+    void compute1(int32 n_points, const int32* points, const int32* p_tags,
+                  int32 width, int32 stride, int32* f_values, int32* f_tags);
+    void compute2(int32 n, int32* f_values, int32* f_tags, int32 max_val);
+
+  private:
+    // centers of parabolas defining lower envelope
+    std::vector<int32> m_centers;
+    // left boundaries between parabolas, parabola [i] is minimal in [lbounds[i], lbounds[i+1])
+    std::vector<int32> m_lbounds;
+};
 
 void
 NearestPointImageComputer::compute(
@@ -58,28 +71,10 @@ NearestPointImageComputer::compute(
         i = j;
     }
 
-    FILE* f = fopen("arrays.txt", "w");
-    if (f) {
-        fputs("f_values, pass 1:", f);
-        write_array(f, w, h, f_values.data());
-        fputs("image, pass 1:", f);
-        write_array(f, w, h, image);
-    }
-
     for (int i = 0; i != h; ++i) {
-        // compute2(w, f_values.data() + i*w, image + i*w);
-        compute2revised(w, f_values.data() + i*w, image+i*w, w*w+h*h);
+        compute2(w, f_values.data() + i*w, image+i*w, w*w+h*h);
     }
 
-    if (f) {
-        fputs("f_values, pass 2:", f);
-        write_array(f, w, h, f_values.data());
-        fputs("image, pass 2:", f);
-        write_array(f, w, h, image);
-        fclose(f);
-        f = nullptr;
-    }
-    
     if (dist_retval) {
         for (int i = 0; i != w*h; ++i)
             dist_retval[i] = sqrt(f_values[i]);
@@ -125,7 +120,7 @@ struct Parabola {
 };
 
 void
-NearestPointImageComputer::compute2revised(
+NearestPointImageComputer::compute2(
     int32 n, int32* f_values, int32* f_tags, int32 max_val)
 {
     // worst case is one parabola per point
@@ -188,51 +183,14 @@ NearestPointImageComputer::compute2revised(
 }
 
 void
-NearestPointImageComputer::compute2(
-    int32 n, int32* f_values, int32* f_tags)
+compute_nearest_point_image(
+    BBox         bbox,
+    int32        n_points,
+    const Point* points,
+    int32*       image_retval,
+    double*      dist_retval)
 {
-    if (n < 1)
-        return;
-
-    if (m_centers.size() < n)
-        m_centers.resize(n, -1);
-    int32* centers = m_centers.data();
-
-    if (m_lbounds.size() <= n)
-        m_lbounds.resize(n+1, -1);
-    int32* lbounds = m_lbounds.data();
-
-    // index of rightmost parabola in lower envelope
-    int32 k = 0;
-    centers[0] = 0;
-    lbounds[0] = -1;
-    
-    for (int32 i = 1; i != n; ++i) {
-
-        int32 s = -1;
-        while (k > 0) {
-            const int32 j = centers[k];
-            s = ((f_values[i] + i*i) - (f_values[j] + j*j) + (i-j)) / (2 * (i-j));
-            if (s > lbounds[k])
-                break;
-            --k;
-        }
-        k += 1;
-        centers[k] = i;
-        lbounds[k] = s;
-    }
-    lbounds[k+1] = n;
-
-    const std::vector<int32> save_f_values(f_values, f_values+n);
-    const std::vector<int32> save_f_tags(f_tags, f_tags+n);
-
-    int j = 0;
-    for (int i = 0; i != n; ++i) {
-        while (lbounds[j+1] <= i)
-            ++j;
-        const int c = centers[j];
-        const int d = c - i;
-        f_values[i] = save_f_values[c] + d*d;
-        f_tags[i] = save_f_tags[c];
-    }
+    NearestPointImageComputer npic;
+    npic.compute(bbox, n_points, points, image_retval, dist_retval);
 }
+    
