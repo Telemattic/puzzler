@@ -9,6 +9,8 @@ import scipy
 from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Tuple
 from dataclasses import dataclass
 
+# import puzzler.spatial
+
 Piece = 'puzzler.puzzle.Puzzle.Piece'
 Pieces = Mapping[str,Piece]
 
@@ -822,6 +824,7 @@ class RaftSeamstress:
     def get_kdtree(self, label: str) -> scipy.spatial.KDTree:
         piece = self.pieces[label]
         return scipy.spatial.KDTree(piece.points)
+        #return puzzler.spatial.NearestPointImage(piece.points, radius=self.medium_cutoff+1)
 
     def compute_normals(self, points: np.ndarray, indices: np.ndarray) -> np.ndarray:
         return puzzler.align.NormalsComputer()(points, indices)
@@ -870,10 +873,13 @@ class Raftinator:
     def get_overlap_error_for_raft(self, raft: Raft) -> float:
         return self.raft_error.overlap_error_for_raft(raft)
 
-    def get_total_error_for_raft_and_seams(self, raft: Raft, seams: Optional[Seams] = None) -> float:
+    def get_total_fit_error_for_raft_and_seams(self, raft: Raft, seams: Optional[Seams] = None) -> 'FitError':
         if seams is None:
             seams = self.get_seams_for_raft(raft)
-        return self.raft_error.total_error_for_raft_and_seams(raft, seams).mse
+        return self.raft_error.total_error_for_raft_and_seams(raft, seams)
+
+    def get_total_error_for_raft_and_seams(self, raft: Raft, seams: Optional[Seams] = None) -> float:
+        return self.get_total_fit_error_for_raft_and_seams(raft, seams).mse
 
     def align_and_merge_rafts_with_feature_pairs(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Raft:
         
