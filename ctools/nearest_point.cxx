@@ -12,6 +12,20 @@
   #include <numeric>
 #endif
 
+struct Parabola {
+    // center (minimum) of the parabola
+    int32 center;
+
+    // left-most point for which parabola is part of the lower envelope
+    int32 lbound;
+
+    // value of the parabola at the center
+    int32 value;
+
+    // index of source point for this parabola
+    int32 index;
+};
+
 class NearestPointImageComputer {
 
   public:
@@ -22,10 +36,7 @@ class NearestPointImageComputer {
     void compute2(int32 n, int32* f_values, int32* f_tags, int32 max_val);
 
   private:
-    // centers of parabolas defining lower envelope
-    std::vector<int32> m_centers;
-    // left boundaries between parabolas, parabola [i] is minimal in [lbounds[i], lbounds[i+1])
-    std::vector<int32> m_lbounds;
+    std::vector<Parabola> m_parabolas;
 };
 
 void
@@ -47,6 +58,9 @@ NearestPointImageComputer::compute(
     const int32 w = bbox.ur.x - x0;
     const int32 h = bbox.ur.y - y0;
 
+    // worst case is one parabola per point
+    m_parabolas.resize(w);
+    
     std::vector<int32> f_values(w*h, w*w+h*h);
     std::vector<int32> y_values;
 
@@ -105,26 +119,10 @@ NearestPointImageComputer::compute1(
     }
 }
 
-struct Parabola {
-    // center (minimum) of the parabola
-    int32 center;
-
-    // left-most point for which parabola is part of the lower envelope
-    int32 lbound;
-
-    // value of the parabola at the center
-    int32 value;
-
-    // index of source point for this parabola
-    int32 index;
-};
-
 void
 NearestPointImageComputer::compute2(
     int32 n, int32* f_values, int32* f_tags, int32 max_val)
 {
-    // worst case is one parabola per point
-    std::vector<Parabola> parabolas(n);
     int k = 0; // number of parabolas
 
     for (int i = 0; i != n; ++i) {
@@ -135,7 +133,7 @@ NearestPointImageComputer::compute2(
         int32 s = 0;
         while (k > 0) {
 
-            const auto p = parabolas.data() + k-1;
+            const auto p = m_parabolas.data() + k-1;
 
             const int32 j = p->center;
 
@@ -161,7 +159,7 @@ NearestPointImageComputer::compute2(
         }
 
         if (s < n) {
-            parabolas[k] = Parabola{.center=i, .lbound=s, .value=f_values[i], .index=f_tags[i]};
+            m_parabolas[k] = Parabola{.center=i, .lbound=s, .value=f_values[i], .index=f_tags[i]};
             ++k;
         }
     }
@@ -169,7 +167,7 @@ NearestPointImageComputer::compute2(
     if (k == 0)
         return;
 
-    auto p = parabolas.data();
+    auto p = m_parabolas.data();
     const auto p_end = p + k;
     for (int32 i = 0; i != n; ++i) {
 
