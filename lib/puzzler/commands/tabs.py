@@ -70,8 +70,9 @@ class TabsComputer:
                             print(f"  seam[{i}]: dst={s.dst.piece} src={s.src.piece} sse={s.error} n={len(s.src.indices)}")
                         oe = self.raftinator.raft_error.overlap_error_for_raft(raft)
                         print(f"  overlap_error={oe}")
-
-                    fit_error = self.raftinator.raft_error.seam_error_for_raft(seams)
+                    else:
+                        seams = self.raftinator.get_seams_for_raft(raft)
+                        fit_error = self.raftinator.raft_error.seam_error_for_raft(seams)
 
                     rows.append({'dst_label':dst_label, 'dst_tab_no':dst_tab_no,
                                  'src_label':src.label, 'src_tab_no':src_tab_no, 'raft':desc,
