@@ -804,10 +804,13 @@ class AlignTk:
         raft = r.make_raft_from_feature_pairs(fp)
         
         seams = r.get_seams_for_raft(raft)
-        mse = r.get_cumulative_error_for_seams(seams)
+        mse = r.get_cumulative_error_for_seams(seams).mse
         mse2 = r.get_total_error_for_raft_and_seams(raft, seams)
         print_coords(raft)
         print(f"MSE={mse:.3f} MSE2={mse2:.3f}")
+
+        for i, s in enumerate(seams):
+            print(f"seam[{i}]: dst={s.dst.piece.item()} src={s.src.piece} SSE={s.error:.3f} n={len(s.src.indices)}")
 
         if self.var_refine_raft_alignment.get():
             for pass_no in range(2):
@@ -817,11 +820,13 @@ class AlignTk:
                 else:
                     raft = r.refine_alignment_within_raft(raft)
                 seams = r.get_seams_for_raft(raft)
-                mse = r.get_cumulative_error_for_seams(seams)
+                mse = r.get_fit_error_for_seams(seams).mse
                 mse2 = r.get_total_error_for_raft_and_seams(raft, seams)
                 print_coords(raft)
                 print(f"MSE={mse:.3f} MSE2={mse2:.3f}")
-            
+                for i, s in enumerate(seams):
+                    print(f"seam[{i}]: dst={s.dst.piece.item()} src={s.src.piece} SSE={s.error:.3f} n={len(s.src.indices)}")
+
         pieces = dict([(i.piece.label, i) for i in self.pieces])
 
         for label, coord in raft.coords.items():

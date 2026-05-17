@@ -314,6 +314,9 @@ class PocketFinder:
 
 class PocketFitter:
 
+    class FitException(Exception):
+        pass
+
     def __init__(self, pieces, dst_raft, pocket, num_refine):
         self.pieces = pieces
         self.raftinator = puzzler.raft.Raftinator(pieces)
@@ -336,7 +339,7 @@ class PocketFitter:
 
         self.dst_tab_pair = (dst_tab_a, dst_tab_b)
 
-    def measure_fit(self, src_label):
+    def measure_fit(self, src_label, compute_seam_fit_error=False):
 
         if src_label in self.dst_raft.coords:
             return []
@@ -352,19 +355,28 @@ class PocketFitter:
                 continue
 
             try:
+                seam_fe = None
                 if True:
                     aligner = self.raftinator.aligner
                     src_coord = aligner.rough_align(self.dst_raft, src_raft, feature_pairs)
                     src_coord = aligner.refine_alignment_between_rafts(
                         self.dst_raft, src_raft, src_coord)
                     new_raft = self.raftinator.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
+
+                    if compute_seam_fit_error:
+                        seamstress = self.raftinator.seamstress
+                        seams = seamstress.seams_between_rafts(
+                            self.dst_raft, src_raft, src_coord)
+                        good_dsts = {i[0] for i in self.dst_tab_pair if i is not None}
+                        seam_fe = seamstress.fit_error_for_seams([s for s in seams if s.dst.piece in good_dsts])
+
                 else:
                     new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
                         self.dst_raft, src_raft, feature_pairs)
 
                 mse = self.compute_mse_with_refinement(new_raft)
 
-                retval.append((mse, feature_pairs))
+                retval.append((mse, feature_pairs, seam_fe))
             except Exception as x:
                 s = self.raftinator.format_feature_pairs(feature_pairs)
                 print(f"measure_fit: {self.pocket!s} feature_pairs={s} failed explosively!")
@@ -373,21 +385,24 @@ class PocketFitter:
         return retval
 
     def compute_mse_with_refinement(self, raft):
+        return [i.mse for i in self.compute_fit_error_with_refinement(raft)]
 
-        mse = []
+    def compute_fit_error_with_refinement(self, raft):
+
+        fit_error = []
 
         r = self.raftinator
 
         seams = r.get_seams_for_raft(raft)
-        mse.append(r.get_total_error_for_raft_and_seams(raft, seams))
+        fit_error.append(r.get_total_fit_error_for_raft_and_seams(raft, seams))
                 
         for _ in range(self.num_refine):
             raft = r.refine_alignment_within_raft(raft, seams)
             
             seams = r.get_seams_for_raft(raft)
-            mse.append(r.get_total_error_for_raft_and_seams(raft, seams))
+            fit_error.append(r.get_total_fit_error_for_raft_and_seams(raft, seams))
 
-        return mse
+        return fit_error
 
     def tab_pairs_for_piece(self, label):
 
@@ -427,8 +442,10 @@ class PocketFitter:
             if dirs[d] is not None and len(piece.tabs) == 4:
                 n_collisions += 1
                 continue
-             
-            assert dirs[d] is None, f"{label} has multiple tabs at {d=}"
+
+            if dirs[d] is not None:
+                raise PocketFitter.FitException(f"{label} has multiple tabs at {d=}")
+                                   
             dirs[d] = (piece.label, tab_no, tab.indent)
 
         # HACK: if we couldn't figure out cardinal directions for a
@@ -473,7 +490,7 @@ class PocketFitter:
             raise ValueError("tab conflict")
         return (Feature(a[0],'tab',a[1]), Feature(b[0],'tab',b[1]))
 
-def try_triples(pieces, quad, num_refine):
+def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
 
     raftinator = puzzler.raft.Raftinator(pieces)
     
@@ -540,81 +557,48 @@ def try_triples(pieces, quad, num_refine):
 
         retval = []
 
-        use_legacy_algorithm = False
+        pocket_fitter = PocketFitter(pieces, triple_raft, pocket, num_refine)
 
-        if use_legacy_algorithm:
-            
-            for try_label, try_piece in pieces.items():
+        for fit_label in pieces:
 
-                if try_label in triple_raft.coords:
-                    continue
-    
-                try_raft = raftinator.factory.make_raft_for_piece(try_label)
-    
-                for try_tab_pair in tab_pairs_for_piece(try_piece):
+            for mse, try_feature_pairs, seam_fit_error in pocket_fitter.measure_fit(fit_label, compute_seam_fit_error=True):
 
-                    try_feature_pairs = make_feature_pairs(fit_tab_pair, try_tab_pair)
+                desc = raftinator.format_feature_pairs(
+                    triple_feature_pairs + try_feature_pairs)
 
-                    if len(try_feature_pairs) < 1:
-                        continue
-    
-                    new_raft = raftinator.align_and_merge_rafts_with_feature_pairs(
-                        triple_raft, try_raft, try_feature_pairs)
-    
-                    mse = []
-    
-                    new_seams = raftinator.get_seams_for_raft(new_raft)
-                    mse.append(raftinator.get_total_error_for_raft_and_seams(new_raft, new_seams))
-                    
-                    for _ in range(num_refine):
-                        new_raft = raftinator.refine_alignment_within_raft(new_raft, new_seams)
-                               
-                        new_seams = raftinator.get_seams_for_raft(new_raft)
-                        mse.append(raftinator.get_total_error_for_raft_and_seams(new_raft, new_seams))
-    
-                    desc = raftinator.format_feature_pairs(triple_feature_pairs + try_feature_pairs)
+                if fit_error_for_tab_pairs:
+                    fit_error = puzzler.raft.FitError(0.,0)
+                    for i in try_feature_pairs:
+                        fit_error = fit_error + fit_error_for_tab_pairs[i]
+                    lower_bound_mse = fit_error.mse
+                else:
+                    lower_bound_mse = None
 
-                    row = {'quad_no': quad_no,
-                           'ul_piece': quad['ul_piece'],
-                           'ur_piece': quad['ur_piece'],
-                           'll_piece': quad['ll_piece'],
-                           'lr_piece': quad['lr_piece'],
-                           'drop_piece': drop_label,
-                           'fit_piece': try_label,
-                           'raft': desc,
-                           'mse': tuple(mse),
-                           'rank': None}
-                    
-                    retval.append(row)
+                seam_mse = seam_fit_error.mse if seam_fit_error else None
+                
+                row = {'quad_no': quad_no,
+                       'ul_piece': quad['ul_piece'],
+                       'ur_piece': quad['ur_piece'],
+                       'll_piece': quad['ll_piece'],
+                       'lr_piece': quad['lr_piece'],
+                       'drop_piece': drop_label,
+                       'fit_piece': fit_label,
+                       'raft': desc,
+                       'mse': tuple(mse),
+                       'seam_mse': seam_mse,
+                       'lower_bound_mse': lower_bound_mse,
+                       'rank': None}
 
-        else:
-
-            pocket_fitter = PocketFitter(pieces, triple_raft, pocket, num_refine)
-
-            for fit_label in pieces:
-    
-                for mse, try_feature_pairs in pocket_fitter.measure_fit(fit_label):
-    
-                    desc = raftinator.format_feature_pairs(
-                        triple_feature_pairs + try_feature_pairs)
-                    
-                    row = {'quad_no': quad_no,
-                           'ul_piece': quad['ul_piece'],
-                           'ur_piece': quad['ur_piece'],
-                           'll_piece': quad['ll_piece'],
-                           'lr_piece': quad['lr_piece'],
-                           'drop_piece': drop_label,
-                           'fit_piece': fit_label,
-                           'raft': desc,
-                           'mse': tuple(mse),
-                           'rank': None}
-                    
-                    retval.append(row)
+                retval.append(row)
 
         retval.sort(key=lambda x: x['mse'][-1])
         for i, row in enumerate(retval, start=1):
             row['rank'] = i
             row['mse'] = ','.join(f"{i:.3f}" for i in row['mse'])
+            for k in 'seam_mse', 'lower_bound_mse':
+                if row[k] is not None:
+                    row[k] = decimal.Decimal(f"{row[k]:.3f}")
+                   
 
         retval2 += retval
         quad_no += 1
@@ -635,6 +619,21 @@ def triples_work(quad):
 
     pieces = {p.label: p for p in TRIPLES_PUZZLE.pieces}
     return try_triples(pieces, quad, TRIPLES_REFINE)
+
+def load_fit_error_for_tab_pairs(path):
+
+    retval = dict()
+    with open(path, 'r', newline='') as ifile:
+        reader = csv.DictReader(ifile)
+        fieldnames = reader.fieldnames
+
+        for row in reader:
+            dst = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
+            src = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
+            fit_error = puzzler.raft.FitError(float(row['sse']), int(row['n']))
+            retval[dst,src] = fit_error
+
+    return retval
 
 def triples_main(args):
 
@@ -657,8 +656,10 @@ def triples_main(args):
                 row['quad_no'] = 4 * len(quads)
                 quads.append(row)
 
+    fit_error_for_tab_pairs = load_fit_error_for_tab_pairs(args.tabs) if args.tabs else None
+
     with open(output_csv_path, 'w', newline='') as ofile:
-        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft mse rank'
+        fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft mse seam_mse lower_bound_mse rank'
         writer = csv.DictWriter(ofile, fieldnames=fieldnames.split())
         writer.writeheader()
 
@@ -676,7 +677,7 @@ def triples_main(args):
         else:
 
             for quad in tqdm(quads, smoothing=0):
-                writer.writerows(try_triples(pieces, quad, args.refine))
+                writer.writerows(try_triples(pieces, quad, args.refine, fit_error_for_tab_pairs))
 
 def add_parser(commands):
 
@@ -695,5 +696,6 @@ def add_parser(commands):
                                 help="number of workers (default %(default)i)")
     parser_triples.add_argument("-r", "--refine", default=1, type=int,
                                 help="number of refinement passes for fit (default %(default)i)")
+    parser_triples.add_argument("--tabs", default=None, help="CSV of fit error for all possible tab matches")
     parser_triples.set_defaults(func=triples_main)
     

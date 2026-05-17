@@ -39,6 +39,15 @@ class TabsComputer:
             for src in self.pieces.values():
                 if src is dst:
                     continue
+
+                # HACK
+                if False:
+                    if 'O20' not in (dst_label, src.label):
+                        continue
+
+                    if len({'B4', 'A5'} & {dst_label, src.label}) == 0:
+                        continue
+                
                 for src_tab_no, src_tab in enumerate(src.tabs):
                     if dst_tab.indent == src_tab.indent:
                         continue
@@ -50,10 +59,22 @@ class TabsComputer:
                     for _ in range(3):
                         raft = self.raftinator.refine_alignment_within_raft(raft)
 
-                    fit_error = self.raftinator.get_total_fit_error_for_raft_and_seams(raft)
                     desc = format_feature_pair(feature_pair)
 
-                    rows.append({'dst_label':dst_label, 'dst_tab_no':dst_tab_no, 'src_label':src.label, 'src_tab_no':src_tab_no, 'raft':desc,
+                    if False:
+                        fit_error = self.raftinator.get_total_fit_error_for_raft_and_seams(raft)
+
+                        seams = self.raftinator.get_seams_for_raft(raft)
+                        print(f"{desc}:")
+                        for i, s in enumerate(seams):
+                            print(f"  seam[{i}]: dst={s.dst.piece} src={s.src.piece} sse={s.error} n={len(s.src.indices)}")
+                        oe = self.raftinator.raft_error.overlap_error_for_raft(raft)
+                        print(f"  overlap_error={oe}")
+
+                    fit_error = self.raftinator.raft_error.seam_error_for_raft(seams)
+
+                    rows.append({'dst_label':dst_label, 'dst_tab_no':dst_tab_no,
+                                 'src_label':src.label, 'src_tab_no':src_tab_no, 'raft':desc,
                                  'sse':fit_error.sse, 'n':fit_error.n, 'mse':fit_error.mse, 'rank':None})
 
             rows.sort(key=operator.itemgetter('mse'))

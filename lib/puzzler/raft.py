@@ -663,13 +663,13 @@ class RaftSeamstress:
         self.close_cutoff = 10
         self.medium_cutoff = 48
 
-    def cumulative_error_for_seams(self, seams: Seams) -> float:
-        n_points = 0
-        error = 0.
+    def fit_error_for_seams(self, seams: Seams) -> 'FitError':
+        sse = 0.
+        n = 0
         for s in seams:
-            n_points += len(s.src.indices)
-            error += s.error
-        return error / n_points if n_points else 0.
+            sse += s.error
+            n += len(s.src.indices)
+        return FitError(sse, n)
 
     def seams_between_rafts(self, dst_raft: Raft, src_raft: Raft, src_raft_coord: Coord) -> Seams:
 
@@ -867,8 +867,8 @@ class Raftinator:
         s = self.seamstress
         return s.trim_seams(s.seams_within_raft(raft))
 
-    def get_cumulative_error_for_seams(self, seams) -> float:
-        return self.seamstress.cumulative_error_for_seams(seams)
+    def get_fit_error_for_seams(self, seams) -> 'FitError':
+        return self.seamstress.fit_error_for_seams(seams)
 
     def get_overlap_error_for_raft(self, raft: Raft) -> float:
         return self.raft_error.overlap_error_for_raft(raft)
@@ -876,7 +876,7 @@ class Raftinator:
     def get_total_fit_error_for_raft_and_seams(self, raft: Raft, seams: Optional[Seams] = None) -> 'FitError':
         if seams is None:
             seams = self.get_seams_for_raft(raft)
-        return self.raft_error.total_error_for_raft_and_seams(raft, seams)
+        return self.raft_error.fit_error_for_raft_and_seams(raft, seams)
 
     def get_total_error_for_raft_and_seams(self, raft: Raft, seams: Optional[Seams] = None) -> float:
         return self.get_total_fit_error_for_raft_and_seams(raft, seams).mse
@@ -998,9 +998,16 @@ class FitError:
     def __add__(self, that: 'FitError') -> 'FitError':
         return FitError(self.sse + that.sse, self.n + that.n)
 
-    def __iadd__(self, that: 'FitError') -> None:
+    def __sub__(self, that: 'FitError') -> 'FitError':
+        return FitError(self.sse - that.see, self.n - that.n)
+
+    def __iadd__(self, that: 'FitError') -> 'FitError':
         self.sse += that.sse
         self.n += that.n
+        return self
+
+    def __repr__(self):
+        return f"FitError({self.sse},{self.n})"
 
 class RaftError:
 
@@ -1010,7 +1017,7 @@ class RaftError:
         self.close_cutoff = 10
         self.max_dist = 256
 
-    def total_error_for_raft_and_seams(self, raft: Raft, seams: Seams) -> FitError:
+    def fit_error_for_raft_and_seams(self, raft: Raft, seams: Seams) -> FitError:
 
         return self.overlap_error_for_raft(raft) + self.seam_error_for_raft(seams)
 

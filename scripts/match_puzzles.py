@@ -16,7 +16,7 @@ def score_pair2(piece_a, piece_b, fp):
     raft = r.make_raft_from_feature_pairs(fp)
     
     seams = r.get_seams_for_raft(raft)
-    mse = r.get_cumulative_error_for_seams(seams)
+    mse = r.get_fit_error_for_seams(seams).mse
     mse2 = r.get_total_error_for_raft_and_seams(raft, seams)
     
     # print(f"{r.format_feature_pairs(fp)}: MSE={mse:.3f} MSE2={mse2:.3f}")

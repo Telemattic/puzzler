@@ -38,7 +38,7 @@ class Worker:
         fits = []
         
         for src_label in pieces:
-            for mse, feature_pairs in fitter.measure_fit(src_label):
+            for mse, feature_pairs, _ in fitter.measure_fit(src_label):
                 fits.append((mse[-1], src_label, feature_pairs))
 
         if not fits:

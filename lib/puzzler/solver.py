@@ -993,8 +993,11 @@ class PuzzleSolver:
         for src_label in self.pieces:
             if src_label in self.raft.coords:
                 continue
-            for mse, feature_pairs in pf.measure_fit(src_label):
-                fits.append((mse[-1], src_label, feature_pairs))
+            try:
+                for mse, feature_pairs, _ in pf.measure_fit(src_label):
+                    fits.append((mse[-1], src_label, feature_pairs))
+            except pf.FitException as x:
+                print(f"score_pocket: {pocket!s}, skipping {src_label} due to measure_fit error")
 
         return sorted(fits, key=operator.itemgetter(0))
 
