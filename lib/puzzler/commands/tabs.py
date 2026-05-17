@@ -17,9 +17,8 @@ def format_feature_pair(p):
     
 class TabsComputer:
 
-    def __init__(self, puzzle_path, refine):
-        self.puzzle = puzzler.file.load(puzzle_path)
-        self.pieces = dict((i.label, i) for i in self.puzzle.pieces)
+    def __init__(self, pieces, refine):
+        self.pieces = dict((i.label, i) for i in pieces)
         self.refine = refine
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
 
@@ -40,14 +39,6 @@ class TabsComputer:
                 if src is dst:
                     continue
 
-                # HACK
-                if False:
-                    if 'O20' not in (dst_label, src.label):
-                        continue
-
-                    if len({'B4', 'A5'} & {dst_label, src.label}) == 0:
-                        continue
-                
                 for src_tab_no, src_tab in enumerate(src.tabs):
                     if dst_tab.indent == src_tab.indent:
                         continue
@@ -72,17 +63,28 @@ class TabsComputer:
                         print(f"  overlap_error={oe}")
                     else:
                         seams = self.raftinator.get_seams_for_raft(raft)
+
+                        fwd_err = puzzler.raft.FitError(0.,0)
+                        rev_err = puzzler.raft.FitError(0.,0)
+                        for s in seams:
+                            if s.dst.piece == dst_label:
+                                fwd_err += puzzler.raft.FitError(s.error, len(s.src.indices))
+                            else:
+                                rev_err += puzzler.raft.FitError(s.error, len(s.src.indices))
+                        
                         fit_error = self.raftinator.raft_error.seam_error_for_raft(seams)
 
                     rows.append({'dst_label':dst_label, 'dst_tab_no':dst_tab_no,
                                  'src_label':src.label, 'src_tab_no':src_tab_no, 'raft':desc,
+                                 'fwd_sse':fwd_err.sse, 'fwd_n':fwd_err.n,
+                                 'rev_sse':rev_err.sse, 'rev_n':rev_err.n,
                                  'sse':fit_error.sse, 'n':fit_error.n, 'mse':fit_error.mse, 'rank':None})
 
             rows.sort(key=operator.itemgetter('mse'))
             for i, row in enumerate(rows, start=1):
                 row['rank'] = i
-                row['mse'] = decimal.Decimal(f"{row['mse']:.3f}")
-                row['sse'] = decimal.Decimal(f"{row['sse']:.3f}")
+                for k in ('mse', 'sse', 'fwd_sse', 'rev_sse'):
+                    row[k] = decimal.Decimal(f"{row[k]:.3f}")
 
             retval += rows
 
@@ -90,7 +92,8 @@ class TabsComputer:
 
 def worker(args, src_q, dst_q):
 
-    tabs_computer = TabsComputer(args.puzzle, args.refine)
+    puzzle = puzzler.file.load(args.puzzle)
+    tabs_computer = TabsComputer(puzzle.pieces, args.refine)
 
     job = src_q.get()
     while job:
@@ -108,6 +111,10 @@ def tabs_main(args):
 
     print("Tab alignment!")
 
+    # HACK
+    if False:
+        puzzle.pieces = [i for i in puzzle.pieces if i.label in ('B4', 'A5', 'O20')]
+                
     num_indents = 0
     num_outdents = 0
     for p in puzzle.pieces:
@@ -120,7 +127,7 @@ def tabs_main(args):
     print(f"{len(puzzle.pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
     with open(args.output, 'w', newline='') as f:
-        field_names = 'dst_label dst_tab_no src_label src_tab_no raft sse n mse rank'.split()
+        field_names = 'dst_label dst_tab_no src_label src_tab_no raft fwd_sse fwd_n rev_sse rev_n sse n mse rank'.split()
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
@@ -150,7 +157,7 @@ def tabs_main(args):
                 p.join()
 
         else:
-            tabs_computer = TabsComputer(args.puzzle, args.refine)
+            tabs_computer = TabsComputer(puzzle.pieces, args.refine)
             
             pieces = puzzle.pieces[:args.max_piece] if args.max_piece is not None else puzzle.pieces
             
