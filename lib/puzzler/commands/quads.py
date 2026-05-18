@@ -11,6 +11,8 @@ from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Set, 
 
 from tqdm import tqdm
 
+HACK = False
+
 def axis_for_angle(phi):
 
     # [0, 2*pi) -> [0,4)
@@ -367,6 +369,11 @@ class PocketFitter:
                         seamstress = self.raftinator.seamstress
                         seams = seamstress.seams_between_rafts(
                             self.dst_raft, src_raft, src_coord)
+                        if HACK and src_label == 'O20':
+                            print(f"dst={self.dst_tab_pair} src={src_tab_pair}")
+                            for i, s in enumerate(seams):
+                                print(f"seam[{i}]: dst={s.dst.piece.item()} src={s.src.piece} SSE={s.error:.3f} n={len(s.src.indices)}")
+
                         good_dsts = {i[0] for i in self.dst_tab_pair if i is not None}
                         seam_fe = seamstress.fit_error_for_seams([s for s in seams if s.dst.piece in good_dsts])
 
@@ -484,8 +491,10 @@ class PocketFitter:
 
     @staticmethod
     def make_feature_pair(a, b):
-        if a is None or b is None:
+        if a is None and b is None:
             return None
+        if a is None or b is None:
+            raise ValueError("tab can't match missing tab")
         if a[2] == b[2]:
             raise ValueError("tab conflict")
         return (Feature(a[0],'tab',a[1]), Feature(b[0],'tab',b[1]))
@@ -534,6 +543,9 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
     retval2 = []
 
     quad_no = quad['quad_no']
+
+    if HACK and quad_no != 8:
+        return []
 
     for drop_quadrant in 'ul_piece', 'ur_piece', 'll_piece', 'lr_piece':
 
@@ -603,6 +615,9 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
         retval2 += retval
         quad_no += 1
 
+        if HACK:
+            break
+
     return retval2
 
 TRIPLES_PUZZLE = None
@@ -625,12 +640,11 @@ def load_fit_error_for_tab_pairs(path):
     retval = dict()
     with open(path, 'r', newline='') as ifile:
         reader = csv.DictReader(ifile)
-        fieldnames = reader.fieldnames
 
         for row in reader:
             dst = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
             src = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
-            fit_error = puzzler.raft.FitError(float(row['sse']), int(row['n']))
+            fit_error = puzzler.raft.FitError(float(row['fwd_sse']), int(row['fwd_n']))
             retval[dst,src] = fit_error
 
     return retval
