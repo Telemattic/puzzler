@@ -622,18 +622,20 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
 
 TRIPLES_PUZZLE = None
 TRIPLES_REFINE = None
+TRIPLES_FIT_ERROR = None
 
-def triples_init(puzzle_path, num_refine):
+def triples_init(puzzle_path, num_refine, tabs_path):
 
     global TRIPLES_PUZZLE, TRIPLES_REFINE
 
     TRIPLES_PUZZLE = puzzler.file.load(puzzle_path)
     TRIPLES_REFINE = num_refine
+    TRIPLES_FIT_ERROR = load_fit_error_for_tab_pairs(tabs_path)
 
 def triples_work(quad):
 
     pieces = {p.label: p for p in TRIPLES_PUZZLE.pieces}
-    return try_triples(pieces, quad, TRIPLES_REFINE)
+    return try_triples(pieces, quad, TRIPLES_REFINE, TRIPLES_FIT_ERROR)
 
 def load_fit_error_for_tab_pairs(path):
 
@@ -670,8 +672,6 @@ def triples_main(args):
                 row['quad_no'] = 4 * len(quads)
                 quads.append(row)
 
-    fit_error_for_tab_pairs = load_fit_error_for_tab_pairs(args.tabs) if args.tabs else None
-
     with open(output_csv_path, 'w', newline='') as ofile:
         fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft mse seam_mse lower_bound_mse rank'
         writer = csv.DictWriter(ofile, fieldnames=fieldnames.split())
@@ -681,7 +681,7 @@ def triples_main(args):
             
             with mp.Pool(args.num_workers,
                          triples_init,
-                         [puzzle_path, args.refine],
+                         [puzzle_path, args.refine, args.tabs],
                          maxtasksperchild=None) as pool:
                 
                 pbar = tqdm(total=len(quads), smoothing=0)
@@ -689,6 +689,8 @@ def triples_main(args):
                     writer.writerows(result)
                     pbar.update()
         else:
+
+            fit_error_for_tab_pairs = load_fit_error_for_tab_pairs(args.tabs) if args.tabs else None
 
             for quad in tqdm(quads, smoothing=0):
                 writer.writerows(try_triples(pieces, quad, args.refine, fit_error_for_tab_pairs))
