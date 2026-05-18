@@ -626,7 +626,7 @@ TRIPLES_FIT_ERROR = None
 
 def triples_init(puzzle_path, num_refine, tabs_path):
 
-    global TRIPLES_PUZZLE, TRIPLES_REFINE
+    global TRIPLES_PUZZLE, TRIPLES_REFINE, TRIPLES_FIT_ERROR
 
     TRIPLES_PUZZLE = puzzler.file.load(puzzle_path)
     TRIPLES_REFINE = num_refine
