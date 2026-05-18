@@ -501,7 +501,7 @@ class RaftAligner:
             dst_body = bodies[i.dst.piece]
             dst_piece = self.pieces[i.dst.piece]
             dst_points = dst_piece.points[i.dst.indices]
-            dst_normals = puzzler.align.NormalsComputer()(dst_piece.points, i.dst.indices)
+            dst_normals = self.compute_normals(dst_piece.points, i.dst.indices)
             
             icp.add_body_correspondence(src_body, src_points,
                                         dst_body, dst_points, dst_normals)
@@ -551,7 +551,7 @@ class RaftAligner:
             dst_points = dst_piece.points[i.dst.indices]
             dst_coord = dst_raft.coords[i.dst.piece]
             
-            dst_normals = puzzler.align.NormalsComputer()(dst_piece.points, i.dst.indices)
+            dst_normals = self.compute_normals(dst_piece.points, i.dst.indices)
 
             global_src_points.append(src_coord.xform.apply_v2(src_points))
             global_dst_points.append(dst_coord.xform.apply_v2(dst_points))
@@ -585,7 +585,8 @@ class RaftAligner:
             self,
             raft: Raft,
             seams: Sequence[Seam],
-            axis_features: Optional[Frontiers] = None) -> Raft:
+            axis_features: Optional[Frontiers] = None,
+            fixed_piece: Optional[str] = None) -> Raft:
 
         verbose = False
 
@@ -593,18 +594,17 @@ class RaftAligner:
 
         pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
 
-        fixed_piece = None
         axes = [None] * 4
 
-        if axis_features is None:
-            fixed_piece = self.find_piece_closest_to_origin(raft)
-        else:
+        if axis_features:
             axes = [
                 icp.make_axis(np.array((0, -1), dtype=float), 0., True),
                 icp.make_axis(np.array((1, 0), dtype=float)),
                 icp.make_axis(np.array((0, 1), dtype=float)),
                 icp.make_axis(np.array((-1, 0), dtype=float), 0., True)
             ]
+        elif fixed_piece is None:
+            fixed_piece = self.find_piece_closest_to_origin(raft)
 
         if verbose:
             print(f"refine_alignment_within_raft: {fixed_piece=}")
@@ -624,7 +624,7 @@ class RaftAligner:
             dst_body = bodies[i.dst.piece]
             dst_piece = self.pieces[i.dst.piece]
             dst_points = dst_piece.points[i.dst.indices]
-            dst_normals = puzzler.align.NormalsComputer()(dst_piece.points, i.dst.indices)
+            dst_normals = self.compute_normals(dst_piece.points, i.dst.indices)
             
             icp.add_body_correspondence(src_body, src_points,
                                         dst_body, dst_points, dst_normals)
@@ -654,6 +654,9 @@ class RaftAligner:
         size = (axes[1].value, axes[2].value) if axis_features else None
 
         return Raft(coords, size)
+
+    def compute_normals(self, points: np.ndarray, indices: np.ndarray) -> np.ndarray:
+        return puzzler.align.NormalsComputer()(points, indices)
 
 class RaftSeamstress:
 
@@ -893,12 +896,12 @@ class Raftinator:
 
         return self.aligner.refine_edge_alignment_within_raft(raft, seams, edges)
 
-    def refine_alignment_within_raft(self, raft: Raft, seams: Optional[Seams] = None) -> Raft:
+    def refine_alignment_within_raft(self, raft: Raft, seams: Optional[Seams] = None, fixed: Optional[str] = None) -> Raft:
 
         if seams is None:
             seams = self.get_seams_for_raft(raft)
 
-        return self.aligner.refine_alignment_within_raft(raft, seams)
+        return self.aligner.refine_alignment_within_raft(raft, seams=seams, fixed_piece=fixed)
 
     def make_raft_from_string(self, s: str) -> Raft:
 

@@ -267,11 +267,11 @@ class PuzzleSGFactory:
             for n in normals:
                 sgb.add_lines(np.array((n[0], n[0] + n[1]*10)), fill=color, width=1)
 
-        def draw_stitches(stitches, color, normals_flag):
+        def draw_seam(seam, color, normals_flag):
             if self.render_vertex_details:
-                draw_vertexes(stitches.points, color)
+                draw_vertexes(seam.points, color)
             if normals_flag:
-                normals = list(zip(stitches.points, stitches.normals))
+                normals = list(zip(seam.points, seam.normals))
                 draw_normals(normals, color)
 
         def draw_index_range(stitches, color):
@@ -295,9 +295,9 @@ class PuzzleSGFactory:
         if self.seams:
             for seam in self.seams:
                 if seam.src.piece == p.piece.label:
-                    draw_stitches(seam.src, color, False)
+                    draw_seam(seam.src, color, False)
                 if seam.dst.piece == p.piece.label:
-                    draw_stitches(seam.dst, color, True)
+                    draw_seam(seam.dst, color, True)
                     draw_index_range(seam.dst, color)
         
         normals = self.normals.get(p.piece.label)

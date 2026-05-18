@@ -45,45 +45,32 @@ class TabsComputer:
 
                     feature_pair = (Feature(dst_label, 'tab', dst_tab_no), Feature(src.label, 'tab', src_tab_no))
                     
-                    raft = self.raftinator.make_raft_from_feature_pairs([feature_pair])
-
-                    for _ in range(3):
-                        raft = self.raftinator.refine_alignment_within_raft(raft)
+                    raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
+                        self.raftinator.factory.make_raft_for_piece(dst_label),
+                        self.raftinator.factory.make_raft_for_piece(src.label),
+                        [feature_pair])
 
                     desc = format_feature_pair(feature_pair)
 
-                    if False:
-                        fit_error = self.raftinator.get_total_fit_error_for_raft_and_seams(raft)
+                    for i in range(3):
+                        seam = self.raftinator.seamstress.seam_between_pieces(
+                            dst_label, raft.coords[dst_label], src.label, raft.coords[src.label])
+                        raft = self.raftinator.refine_alignment_within_raft(raft, seams=[seam], fixed=dst_label)
 
-                        seams = self.raftinator.get_seams_for_raft(raft)
-                        print(f"{desc}:")
-                        for i, s in enumerate(seams):
-                            print(f"  seam[{i}]: dst={s.dst.piece} src={s.src.piece} sse={s.error} n={len(s.src.indices)}")
-                        oe = self.raftinator.raft_error.overlap_error_for_raft(raft)
-                        print(f"  overlap_error={oe}")
-                    else:
-                        seams = self.raftinator.get_seams_for_raft(raft)
+                    seam = self.raftinator.seamstress.seam_between_pieces(
+                        dst_label, raft.coords[dst_label], src.label, raft.coords[src.label])
 
-                        fwd_err = puzzler.raft.FitError(0.,0)
-                        rev_err = puzzler.raft.FitError(0.,0)
-                        for s in seams:
-                            if s.dst.piece == dst_label:
-                                fwd_err += puzzler.raft.FitError(s.error, len(s.src.indices))
-                            else:
-                                rev_err += puzzler.raft.FitError(s.error, len(s.src.indices))
+                    fit_error = puzzler.raft.FitError(seam.error, len(seam.src.indices))
                         
-                        fit_error = self.raftinator.raft_error.seam_error_for_raft(seams)
-
                     rows.append({'dst_label':dst_label, 'dst_tab_no':dst_tab_no,
-                                 'src_label':src.label, 'src_tab_no':src_tab_no, 'raft':desc,
-                                 'fwd_sse':fwd_err.sse, 'fwd_n':fwd_err.n,
-                                 'rev_sse':rev_err.sse, 'rev_n':rev_err.n,
-                                 'sse':fit_error.sse, 'n':fit_error.n, 'mse':fit_error.mse, 'rank':None})
+                                 'src_label':src.label, 'src_tab_no':src_tab_no,
+                                 'raft':desc, 'rank':None,
+                                 'sse':fit_error.sse, 'n':fit_error.n, 'mse':fit_error.mse})
 
             rows.sort(key=operator.itemgetter('mse'))
             for i, row in enumerate(rows, start=1):
                 row['rank'] = i
-                for k in ('mse', 'sse', 'fwd_sse', 'rev_sse'):
+                for k in ('mse', 'sse'):
                     row[k] = decimal.Decimal(f"{row[k]:.3f}")
 
             retval += rows
@@ -127,7 +114,7 @@ def tabs_main(args):
     print(f"{len(puzzle.pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
     with open(args.output, 'w', newline='') as f:
-        field_names = 'dst_label dst_tab_no src_label src_tab_no raft fwd_sse fwd_n rev_sse rev_n sse n mse rank'.split()
+        field_names = 'dst_label dst_tab_no src_label src_tab_no raft sse n mse rank'.split()
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
