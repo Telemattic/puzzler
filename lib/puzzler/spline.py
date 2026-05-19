@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import make_splrep
 
-class SplineRep:
+class BSpline:
 
     def __init__(self, n, spl_x, spl_y):
         self.n = n
@@ -39,4 +39,4 @@ def make_spline_for_points(points, s=None):
     y = np.vstack((points, points[:1]))
     spl_x = make_splrep(x, y[:,0], s=s, bc_type='periodic')
     spl_y = make_splrep(x, y[:,1], s=s, bc_type='periodic')
-    return SplineRep(n, spl_x, spl_y)
+    return BSpline(n, spl_x, spl_y)

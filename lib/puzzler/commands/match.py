@@ -2,6 +2,7 @@ import cv2 as cv
 import math
 import numpy as np
 import puzzler
+from puzzler.spline import make_spline_for_points
 import scipy
 import tempfile
 
@@ -349,18 +350,15 @@ class CurvesCanvas:
         self.ax2 = f.add_subplot(3, 1, 2)
         self.ax3 = f.add_subplot(3, 1, 3)
 
-        c1 = self.c1.curvature
-        c2 = self.c2.curvature
+        c1 = self.c1.curvature(np.arange(self.c1.n))
+        c2 = self.c2.curvature(np.arange(116,752)) #np.arange(self.c2.n))
         
         self.ax1.plot(np.arange(1,len(c1)+1), c1)
         self.ax1.plot(np.arange(1,len(c2)+1)+offset, c2)
         self.ax1.set_ylabel('curvature')
         self.ax1.grid(True)
 
-        if False:
-            correlation = algorithm_ii(c1, c2, eps=epsilon)
-        else:
-            correlation = scipy.signal.correlate(c1, c2)
+        correlation = scipy.signal.correlate(c1, c2)
         lags = np.arange(-len(c2), len(c1)-1)
         
         self.ax2.plot(lags, correlation)
@@ -449,15 +447,16 @@ class CurvesCanvas:
     def update_offset(self):
         offset = self.var_offset.get()
 
-        c1 = self.c1.curvature
-        c2 = self.c2.curvature
-        start1, end1 = max(0, offset), min(len(c1), len(c2)+offset)
+        c1 = self.c1.n
+        c2 = self.c2.n
+        c2 = 752-116
+        start1, end1 = max(0, offset), min(c1, c2+offset)
         start2, end2 = start1-offset, end1-offset
 
-        self.ax1.lines[1].set_xdata(np.arange(1,len(c2)+1)+offset)
+        self.ax1.lines[1].set_xdata(np.arange(1,c2+1)+offset)
 
-        c3 = np.abs(c1[start1:end1] - c2[start2:end2])
-        self.ax3.lines[0].set_data(np.arange(start1, end1), c3)
+        # c3 = np.abs(c1[start1:end1] - c2[start2:end2])
+        # self.ax3.lines[0].set_data(np.arange(start1, end1), c3)
         
         self.canvas.draw_idle()
 
@@ -555,6 +554,9 @@ class MatchTk:
         dst_piece = self.pieces[self.labels[0]]
         src_piece = self.pieces[self.labels[1]]
 
+        print(f"dst={self.curves_canvas.get_dst_points()}")
+        print(f"src={self.curves_canvas.get_src_points()}")
+
         dst_points = dst_curve.points[self.curves_canvas.get_dst_points()]
         src_points = src_curve.points[self.curves_canvas.get_src_points()]
 
@@ -601,34 +603,17 @@ class MatchTk:
         
     def potrace(self):
 
-        stepsize = self.var_stepsize.get()
-        ds = self.var_ds.get()
-        
         for label in self.labels:
             piece = self.pieces[label]
             rev = label != self.labels[0]
-            if False:
-                self.curves[label] = Curvature.by_hack(piece.points, stepsize, rev, ds)
-            elif False:
-                path = puzzler.potrace.piece_to_path(piece)[0]
-                self.curves[label] = Curvature.by_potrace(path, stepsize, reverse=rev, ds=ds)
-            else:
-                if True:
-                    svgpath = puzzler.potrace.piece_to_path(piece, self.tempdir)[0]
-                    samples = puzzler.potrace.InterpolatePath(stepsize).apply(svgpath, 1)
-                else:
-                    approx = PolygonApproximator(2.).approximate_polygon(piece.points)
-                    samples = PolygonSampler(stepsize).sample_polygon(approx)
-                if rev:
-                    samples = np.flip(samples, axis=0)
-                curvature = CurvatureComputer(stepsize).compute_curvature(samples)
-                self.curves[label] = Curvature(curvature, samples)
-            
+            points = piece.points[::-1] if rev else piece.points
+            self.curves[label] = make_spline_for_points(points)
+
         self.render()
 
         c1 = self.curves[self.labels[0]]
         c2 = self.curves[self.labels[1]]
-
+        
         self.curves_canvas.set_curves([c1,c2])
 
     def render(self):
@@ -667,13 +652,13 @@ class MatchTk:
 
         for l in self.labels:
             o = 0 if l == self.labels[0] else self.var_offset.get()
-            c = self.curves[l].interp_point(self.cursor_xdata - o)
+            xy = self.curves[l].eval(self.cursor_xdata - o)
             r = puzzler.renderer.canvas.CanvasRenderer(canvas)
             r.transform(self.camera.matrix)
             coord = self.coords[l]
             r.translate(coord.xy)
             r.rotate(coord.angle)
-            r.draw_circle(c, radius=6, fill='', outline='red', tag='cursor')
+            r.draw_circle(xy, radius=6, fill='', outline='red', tag='cursor')
     
 def match(args):
 
