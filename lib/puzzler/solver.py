@@ -959,7 +959,7 @@ class PuzzleSolver:
     def score_pockets(self):
 
         raft = self.raft
-        pocket_finder = puzzler.commands.quads.PocketFinder(self.pieces, raft)
+        pocket_finder = puzzler.pocket.PocketFinder(self.pieces, raft)
         pockets = pocket_finder.find_pockets_on_frontiers()
 
         fits = []
@@ -986,7 +986,7 @@ class PuzzleSolver:
     def score_pocket(self, pocket):
 
         pocket_raft = self.raft
-        pf = puzzler.commands.quads.PocketFitter(self.pieces, pocket_raft, pocket, 1)
+        pf = puzzler.pocket.PocketFitter(self.pieces, pocket_raft, pocket, 1)
 
         fits = []
         

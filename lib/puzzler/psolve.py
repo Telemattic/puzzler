@@ -32,7 +32,7 @@ class Worker:
 
     def score_pocket(self, raft, pocket, pieces):
 
-        fitter = puzzler.commands.quads.PocketFitter(
+        fitter = puzzler.pocket.PocketFitter(
             self.pieces, raft, pocket, 1)
 
         fits = []
@@ -211,7 +211,7 @@ class ParallelSolver:
 
     def find_pockets(self, raft):
 
-        pf = puzzler.commands.quads.PocketFinder(self.pieces, raft)
+        pf = puzzler.pocket.PocketFinder(self.pieces, raft)
         return pf.find_pockets_on_frontiers()
 
     def check_raft_well_formed(self, raft):

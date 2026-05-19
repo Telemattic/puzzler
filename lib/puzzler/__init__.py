@@ -6,6 +6,7 @@ from . import file
 from . import geometry
 from . import icp
 from . import math
+from . import pocket
 from . import potrace
 from . import puzzle
 from . import render
