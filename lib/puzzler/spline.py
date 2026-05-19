@@ -1,54 +1,42 @@
-import bezier
 import numpy as np
+from scipy.interpolate import make_splrep
 
-# pip install bezier==2023.7.28
+class SplineRep:
 
-# Great resource for bezier curves:
-#
-# https://pomax.github.io/bezierinfo/#derivatives
+    def __init__(self, n, spl_x, spl_y):
+        self.n = n
+        self.spl_x = spl_x
+        self.spl_y = spl_y
 
-class Spline:
+    def eval(self, x):
+        return np.vstack((self.spl_x(x), self.spl_y(x))).T
 
-    def __init__(self, data):
-        nodes = np.array(data)
-        degree = nodes.shape[0]-1
-        # each row is the weights for one dimension
-        self.curve = bezier.curve.Curve(nodes.T, degree)
+    def curvature(self, x):
 
-    @property
-    def degree(self):
-        return self.curve.degree
+        dx = self.spl_x.derivative()
+        ddx = dx.derivative()
 
-    @property
-    def dimension(self):
-        return self.curve.dimension
+        dy = self.spl_y.derivative()
+        ddy = dy.derivative()
 
-    @property
-    def arclength(self):
-        return self.curve.length
+        dx = dx(x)
+        ddx = ddx(x)
+        dy = dy(x)
+        ddy = ddy(x)
 
-    def evaluate(self, t):
-        t = np.array(t)
-        return self.curve.evaluate_multi(t).T
+        return (dx * ddy - dy * ddx) / np.pow(dx*dx + dy*dy, 1.5)
 
-    def derivative(self):
-        nodes = self.degree * np.diff(self.curve.nodes)
-        return Spline(nodes.T)
+    def path_length(self):
+        i = np.arange(self.n)
+        xy = self.eval(i)
+        d = np.diff(xy, axis=0, prepend=xy[-1:])
+        return np.sum(np.linalg.norm(d, axis=1))
 
-class Curvature:
-
-    def __init__(self, spline):
-        self.d = spline.derivative()
-        self.dd = self.d.derivative()
-
-    def evaluate(self, t):
-        # kappa(t) = (x'y" - x"y') / (x'^2 + y'^2)^(3/2)
-        t = np.array(t)
-        d = self.d.curve.evaluate_multi(t)
-        dd = self.dd.curve.evaluate_multi(t)
-
-        dx, dy = d[0], d[1]
-        ddx, ddy = dd[0], dd[1]
-        numer = dx * ddy - ddx * dy
-        denom = np.float_power(np.square(dx) + np.square(dy), 1.5)
-        return numer / denom
+def make_spline_for_points(points, s=None):
+    n = len(points)
+    s = s if s else n
+    x = np.arange(n+1)
+    y = np.vstack((points, points[:1]))
+    spl_x = make_splrep(x, y[:,0], s=s, bc_type='periodic')
+    spl_y = make_splrep(x, y[:,1], s=s, bc_type='periodic')
+    return SplineRep(n, spl_x, spl_y)
