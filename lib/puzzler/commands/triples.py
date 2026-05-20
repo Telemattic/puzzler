@@ -54,75 +54,38 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
 
         retval = []
 
-        pocket_fitter = puzzler.pocket.PocketFitter(pieces, triple_raft, pocket, num_refine)
+        pf = puzzler.pocket.PocketFitter(pieces, triple_raft, pocket, num_refine)
 
         candidates = set(pieces.keys()) - set(triple_raft.coords.keys())
 
-        if True:
+        min_seam_error = 10000.
 
-            min_seam_fit_error = 10000.
+        for match in pf.candidate_matches(candidates, fit_error_for_tab_pairs):
 
-            for lower_bound_seam_error, fit_label, try_feature_pairs in pocket_fitter.tab_matcher.possible_matches_ordered_by_lower_bound_error(
-                    candidates, fit_error_for_tab_pairs):
+            if match.min_seam_error > min_seam_error:
+                break
 
-                if lower_bound_seam_error > min_seam_fit_error:
-                    break
+            mse, seam_fit_error = pf.measure_fit(match.src_label, match.feature_pairs, compute_seam_fit_error=True)
+            if min_seam_error > seam_fit_error.mse:
+                min_seam_error = seam_fit_error.mse
 
-                mse, seam_fit_error = pocket_fitter.measure_fit2(fit_label, try_feature_pairs, compute_seam_fit_error=True)
-                if min_seam_fit_error > seam_fit_error.mse:
-                    min_seam_fit_error = seam_fit_error.mse
+            desc = raftinator.format_feature_pairs(
+                triple_feature_pairs + match.feature_pairs)
 
-                desc = raftinator.format_feature_pairs(
-                    triple_feature_pairs + try_feature_pairs)
+            row = {'quad_no': quad_no,
+                   'ul_piece': quad['ul_piece'],
+                   'ur_piece': quad['ur_piece'],
+                   'll_piece': quad['ll_piece'],
+                   'lr_piece': quad['lr_piece'],
+                   'drop_piece': drop_label,
+                   'fit_piece': match.src_label,
+                   'raft': desc,
+                   'mse': tuple(mse),
+                   'seam_mse': seam_fit_error.mse,
+                   'lower_bound_mse': match.min_seam_error,
+                   'rank': None}
 
-                row = {'quad_no': quad_no,
-                       'ul_piece': quad['ul_piece'],
-                       'ur_piece': quad['ur_piece'],
-                       'll_piece': quad['ll_piece'],
-                       'lr_piece': quad['lr_piece'],
-                       'drop_piece': drop_label,
-                       'fit_piece': fit_label,
-                       'raft': desc,
-                       'mse': tuple(mse),
-                       'seam_mse': seam_fit_error.mse,
-                       'lower_bound_mse': lower_bound_seam_error,
-                       'rank': None}
-
-                retval.append(row)
-
-        else:
-
-            for fit_label in pieces:
-
-                for mse, try_feature_pairs, seam_fit_error in pocket_fitter.measure_fit(fit_label, compute_seam_fit_error=True):
-
-                    desc = raftinator.format_feature_pairs(
-                        triple_feature_pairs + try_feature_pairs)
-
-                    if fit_error_for_tab_pairs:
-                        fit_error = puzzler.raft.FitError(0.,0)
-                        for i in try_feature_pairs:
-                            fit_error = fit_error + fit_error_for_tab_pairs[i]
-                        lower_bound_mse = fit_error.mse
-                    else:
-                        lower_bound_mse = None
-
-                    seam_mse = seam_fit_error.mse if seam_fit_error else None
-
-                    row = {'quad_no': quad_no,
-                           'ul_piece': quad['ul_piece'],
-                           'ur_piece': quad['ur_piece'],
-                           'll_piece': quad['ll_piece'],
-                           'lr_piece': quad['lr_piece'],
-                           'drop_piece': drop_label,
-                           'fit_piece': fit_label,
-                           'raft': desc,
-                           'mse': tuple(mse),
-                           'seam_mse': seam_mse,
-                           'lower_bound_mse': lower_bound_mse,
-                           'rank': None}
-
-                    retval.append(row)
+            retval.append(row)
 
         retval.sort(key=lambda x: x['mse'][-1])
         for i, row in enumerate(retval, start=1):

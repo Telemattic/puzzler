@@ -2,7 +2,8 @@ import puzzler
 import itertools
 import math
 import numpy as np
-from typing import NamedTuple, Set
+import operator
+from typing import NamedTuple, Optional, Set
 
 Feature = puzzler.raft.Feature
 
@@ -71,6 +72,11 @@ def tab_features_for_piece(piece, be_forgiving=True):
 
 class PocketTabMatcher:
 
+    class Match(NamedTuple):
+        src_label: str
+        feature_pairs: puzzler.raft.FeaturePairs
+        min_seam_error: Optional[float]
+
     def __init__(self, pieces, pocket):
         self.pieces = pieces
         self.pocket = pocket
@@ -87,32 +93,34 @@ class PocketTabMatcher:
 
         self.dst_tab_pair = (dst_tab_a, dst_tab_b)
 
-    def possible_matches(self, src_label):
+    def candidate_matches_for_piece(self, src_label, fit_error_for_tabs=None):
+
+        def lower_bound_error(feature_pairs):
+
+            err = puzzler.raft.FitError(0.,0)
+            for fp in feature_pairs:
+                err += fit_error_for_tabs[fp]
+            return err.mse
 
         retval = []
         for src_tab_pair in tab_features_for_piece(self.pieces[src_label]):
 
             feature_pairs = PocketTabMatcher.make_feature_pairs(self.dst_tab_pair, src_tab_pair)
             if len(feature_pairs):
-                retval.append(feature_pairs)
+                mse = lower_bound_error(feature_pairs) if fit_error_for_tabs else None
+                retval.append(PocketTabMatcher.Match(src_label, feature_pairs, mse))
+                
         return retval
-
-    def possible_matches_ordered_by_lower_bound_error(self, candidates, fit_error_for_tabs):
-
-        def lower_bound_error(registration):
-
-            err = puzzler.raft.FitError(0.,0)
-            for fp in registration:
-                err += fit_error_for_tabs[fp]
-            return err.mse
+        
+    def candidate_matches(self, candidates, fit_error_for_tabs=None):
 
         retval = []
         for src_label in candidates:
-            registrations = self.possible_matches(src_label)
-            for reg in registrations:
-                mse = lower_bound_error(reg)
-                retval.append((mse, src_label, reg))
-        retval.sort()
+            retval += self.candidate_matches_for_piece(src_label, fit_error_for_tabs)
+
+        if fit_error_for_tabs:
+            retval.sort(key=operator.attrgetter('min_seam_error'))
+        
         return retval
 
     @staticmethod
@@ -258,28 +266,10 @@ class PocketFitter:
 
         self.tab_matcher = PocketTabMatcher(pieces, pocket)
 
-    def measure_fit(self, src_label, compute_seam_fit_error=False):
+    def candidate_matches(self, candidates, fit_error_for_tabs=None):
+        return self.tab_matcher.candidate_matches(candidates, fit_error_for_tabs)
 
-        if src_label in self.dst_raft.coords:
-            return []
-
-        possible_matches = self.tab_matcher.possible_matches(src_label)
-        if len(possible_matches) == 0:
-            return []
-
-        retval = []
-        for feature_pairs in possible_matches:
-
-            try:
-                mse, seam_fe = self.measure_fit2(src_label, feature_pairs, compute_seam_fit_error)
-                retval.append((mse, feature_pairs, seam_fe))
-            except PocketFitter.FitException as x:
-                s = self.raftinator.format_feature_pairs(feature_pairs)
-                print(f"measure_fit: {self.pocket!s} feature_pairs={s} failed explosively!")
-
-        return retval
-
-    def measure_fit2(self, src_label, feature_pairs, compute_seam_fit_error=False):
+    def measure_fit(self, src_label, feature_pairs, compute_seam_fit_error=False):
 
         r = self.raftinator
 

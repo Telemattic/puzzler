@@ -989,15 +989,14 @@ class PuzzleSolver:
         pf = puzzler.pocket.PocketFitter(self.pieces, pocket_raft, pocket, 1)
 
         fits = []
-        
-        for src_label in self.pieces:
-            if src_label in self.raft.coords:
-                continue
+
+        for match in pf.candidate_matches(set(self.pieces.keys()) - set(self.raft.coords.keys())):
+
             try:
-                for mse, feature_pairs, _ in pf.measure_fit(src_label):
-                    fits.append((mse[-1], src_label, feature_pairs))
+                mse, _ = pf.measure_fit(match.src_label, match.feature_pairs)
+                fits.append((mse[-1], match.src_label, match.feature_pairs))
             except pf.FitException as x:
-                print(f"score_pocket: {pocket!s}, skipping {src_label} due to measure_fit error")
+                print(f"score_pocket: {pocket!s}, skipping {match.src_label} due to measure_fit error")
 
         return sorted(fits, key=operator.itemgetter(0))
 
