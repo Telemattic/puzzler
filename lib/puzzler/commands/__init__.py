@@ -6,5 +6,6 @@ from . import points
 from . import scan
 from . import match
 from . import quads
+from . import triples
 from . import lint
 from . import tabs

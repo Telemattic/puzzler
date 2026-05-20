@@ -97,6 +97,24 @@ class PocketTabMatcher:
                 retval.append(feature_pairs)
         return retval
 
+    def possible_matches_ordered_by_lower_bound_error(self, candidates, fit_error_for_tabs):
+
+        def lower_bound_error(registration):
+
+            err = puzzler.raft.FitError(0.,0)
+            for fp in registration:
+                err += fit_error_for_tabs[fp]
+            return err.mse
+
+        retval = []
+        for src_label in candidates:
+            registrations = self.possible_matches(src_label)
+            for reg in registrations:
+                mse = lower_bound_error(reg)
+                retval.append((mse, src_label, reg))
+        retval.sort()
+        return retval
+
     @staticmethod
     def make_feature_pairs(dst_tab_pair, src_tab_pair):
 
