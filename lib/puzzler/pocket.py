@@ -69,6 +69,61 @@ def tab_features_for_piece(piece, be_forgiving=True):
 
     return retval
 
+class PocketTabMatcher:
+
+    def __init__(self, pieces, pocket):
+        self.pieces = pieces
+        self.pocket = pocket
+        
+        dst_tab_a = None
+        if pocket.tab_a is not None:
+            t = pocket.tab_a
+            dst_tab_a = (t.piece, t.index, self.pieces[t.piece].tabs[t.index].indent)
+
+        dst_tab_b = None
+        if pocket.tab_b is not None:
+            t = pocket.tab_b
+            dst_tab_b = (t.piece, t.index, self.pieces[t.piece].tabs[t.index].indent)
+
+        self.dst_tab_pair = (dst_tab_a, dst_tab_b)
+
+    def possible_matches(self, src_label):
+
+        retval = []
+        for src_tab_pair in tab_features_for_piece(self.pieces[src_label]):
+
+            feature_pairs = PocketTabMatcher.make_feature_pairs(self.dst_tab_pair, src_tab_pair)
+            if len(feature_pairs):
+                retval.append(feature_pairs)
+        return retval
+
+    @staticmethod
+    def make_feature_pairs(dst_tab_pair, src_tab_pair):
+
+        retval = []
+        try:
+            fp = PocketTabMatcher.make_feature_pair(dst_tab_pair[0], src_tab_pair[1])
+            if fp is not None:
+                retval.append(fp)
+            fp = PocketTabMatcher.make_feature_pair(dst_tab_pair[1], src_tab_pair[0])
+            if fp is not None:
+                retval.append(fp)
+            
+        except ValueError:
+            retval = []
+
+        return retval
+
+    @staticmethod
+    def make_feature_pair(a, b):
+        if a is None and b is None:
+            return None
+        if a is None or b is None:
+            raise ValueError("tab can't match missing tab")
+        if a[2] == b[2]:
+            raise ValueError("tab conflict")
+        return (Feature(a[0],'tab',a[1]), Feature(b[0],'tab',b[1]))
+
 class Pocket(NamedTuple):
     tab_a: Feature
     tab_b: Feature
@@ -183,67 +238,52 @@ class PocketFitter:
         pocket_raft = puzzler.raft.Raft(pocket_coords, None)
         self.dst_raft = self.raftinator.refine_alignment_within_raft(pocket_raft)
 
-        dst_tab_a = None
-        if pocket.tab_a is not None:
-            t = pocket.tab_a
-            dst_tab_a = (t.piece, t.index, self.pieces[t.piece].tabs[t.index].indent)
-
-        dst_tab_b = None
-        if pocket.tab_b is not None:
-            t = pocket.tab_b
-            dst_tab_b = (t.piece, t.index, self.pieces[t.piece].tabs[t.index].indent)
-
-        self.dst_tab_pair = (dst_tab_a, dst_tab_b)
+        self.tab_matcher = PocketTabMatcher(pieces, pocket)
 
     def measure_fit(self, src_label, compute_seam_fit_error=False):
 
         if src_label in self.dst_raft.coords:
             return []
 
-        src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
+        possible_matches = self.tab_matcher.possible_matches(src_label)
+        if len(possible_matches) == 0:
+            return []
 
         retval = []
-        for src_tab_pair in tab_features_for_piece(self.pieces[src_label]):
-
-            feature_pairs = self.make_feature_pairs(src_tab_pair)
-
-            if len(feature_pairs) < 1:
-                continue
+        for feature_pairs in possible_matches:
 
             try:
-                seam_fe = None
-                if True:
-                    aligner = self.raftinator.aligner
-                    src_coord = aligner.rough_align(self.dst_raft, src_raft, feature_pairs)
-                    src_coord = aligner.refine_alignment_between_rafts(
-                        self.dst_raft, src_raft, src_coord)
-                    new_raft = self.raftinator.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
-
-                    if compute_seam_fit_error:
-                        seamstress = self.raftinator.seamstress
-                        seams = seamstress.seams_between_rafts(
-                            self.dst_raft, src_raft, src_coord)
-                        if HACK and src_label == 'O20':
-                            print(f"dst={self.dst_tab_pair} src={src_tab_pair}")
-                            for i, s in enumerate(seams):
-                                print(f"seam[{i}]: dst={s.dst.piece.item()} src={s.src.piece} SSE={s.error:.3f} n={len(s.src.indices)}")
-
-                        good_dsts = {i[0] for i in self.dst_tab_pair if i is not None}
-                        seam_fe = seamstress.fit_error_for_seams([s for s in seams if s.dst.piece in good_dsts])
-
-                else:
-                    new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
-                        self.dst_raft, src_raft, feature_pairs)
-
-                mse = self.compute_mse_with_refinement(new_raft)
-
+                mse, seam_fe = self.measure_fit2(src_label, feature_pairs, compute_seam_fit_error)
                 retval.append((mse, feature_pairs, seam_fe))
-            except Exception as x:
+            except PocketFitter.FitException as x:
                 s = self.raftinator.format_feature_pairs(feature_pairs)
                 print(f"measure_fit: {self.pocket!s} feature_pairs={s} failed explosively!")
-                raise x
 
         return retval
+
+    def measure_fit2(self, src_label, feature_pairs, compute_seam_fit_error=False):
+
+        r = self.raftinator
+
+        src_raft = r.factory.make_raft_for_piece(src_label)
+
+        src_coord = r.aligner.rough_align(self.dst_raft, src_raft, feature_pairs)
+        src_coord = r.aligner.refine_alignment_between_rafts(
+            self.dst_raft, src_raft, src_coord)
+
+        if compute_seam_fit_error:
+            seams = r.seamstress.seams_between_rafts(self.dst_raft, src_raft, src_coord)
+
+            good_dsts = {i[0] for i in self.tab_matcher.dst_tab_pair if i is not None}
+            seam_fe = r.seamstress.fit_error_for_seams([s for s in seams if s.dst.piece in good_dsts])
+        else:
+            seam_fe = None
+
+        new_raft = r.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
+
+        mse = self.compute_mse_with_refinement(new_raft)
+
+        return (mse, seam_fe)
 
     def compute_mse_with_refinement(self, raft):
         return [i.mse for i in self.compute_fit_error_with_refinement(raft)]
@@ -264,30 +304,4 @@ class PocketFitter:
             fit_error.append(r.get_total_fit_error_for_raft_and_seams(raft, seams))
 
         return fit_error
-
-    def make_feature_pairs(self, src_tab_pair):
-
-        retval = []
-        try:
-            fp = self.make_feature_pair(self.dst_tab_pair[0], src_tab_pair[1])
-            if fp is not None:
-                retval.append(fp)
-            fp = self.make_feature_pair(self.dst_tab_pair[1], src_tab_pair[0])
-            if fp is not None:
-                retval.append(fp)
-            
-        except ValueError:
-            retval = []
-
-        return retval
-
-    @staticmethod
-    def make_feature_pair(a, b):
-        if a is None and b is None:
-            return None
-        if a is None or b is None:
-            raise ValueError("tab can't match missing tab")
-        if a[2] == b[2]:
-            raise ValueError("tab conflict")
-        return (Feature(a[0],'tab',a[1]), Feature(b[0],'tab',b[1]))
 

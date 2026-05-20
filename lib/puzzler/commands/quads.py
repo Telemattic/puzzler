@@ -20,6 +20,8 @@ def quadmaster(pieces, quad):
     def make_feature_pair(a, b):
         if a is None or b is None:
             return None
+        if a is None or b is None:
+            raise ValueError("tab can't match missing tab")
         if a[2] == b[2]:
             raise ValueError("tab conflict")
         return (Feature(a[0],'tab',a[1]), Feature(b[0],'tab',b[1]))
@@ -37,15 +39,6 @@ def quadmaster(pieces, quad):
             retval = []
 
         return retval
-
-    def format_feature(f):
-        return f"{f.piece}:{f.index}" if f.kind == 'tab' else f"{f.piece}/{f.index}"
-
-    def format_feature_pair(p):
-        return format_feature(p[0]) + '=' + format_feature(p[1])
-
-    def format_feature_pairs(pairs):
-        return ','.join(format_feature_pair(i) for i in pairs)
 
     raftinator = puzzler.raft.Raftinator(pieces)
 
@@ -76,7 +69,7 @@ def quadmaster(pieces, quad):
             raft = raftinator.refine_alignment_within_raft(raft)
             
         mse = raftinator.get_total_error_for_raft_and_seams(raft)
-        desc = format_feature_pairs(feature_pairs)
+        desc = raftinator.format_feature_pairs(feature_pairs)
         
         retval.append(quad | {'raft':desc, 'mse':mse, 'rank':None})
 
@@ -182,35 +175,6 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
         new_raft = puzzler.raft.Raft(coords, None)
         return raftinator.refine_alignment_within_raft(new_raft)
 
-    def make_feature_pair(a, b):
-        if a is None or b is None:
-            return None
-        if a[2] == b[2]:
-            raise ValueError("tab conflict")
-        return (Feature(a[0],'tab',a[1]), Feature(b[0],'tab',b[1]))
-
-    def make_feature_pairs(dst_tab_pair, src_tab_pair):
-        
-        retval = []
-        try:
-            fp = make_feature_pair(dst_tab_pair[0], src_tab_pair[1])
-            if fp is not None:
-                retval.append(fp)
-            fp = make_feature_pair(dst_tab_pair[1], src_tab_pair[0])
-            if fp is not None:
-                retval.append(fp)
-            
-        except ValueError:
-            retval = []
-
-        return retval
-
-    def make_tab_pair(a, b):
-
-        tab_a = (a.piece, a.index, pieces[a.piece].tabs[a.index].indent) if a is not None else None
-        tab_b = (b.piece, b.index, pieces[b.piece].tabs[b.index].indent) if b is not None else None
-        return (tab_a, tab_b)
-
     good_raft = raftinator.make_raft_from_string(quad['raft'])
 
     retval2 = []
@@ -232,8 +196,6 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
         pocket = pockets.pop()
 
         assert pocket.pieces == frozenset(triple_raft.coords.keys())
-
-        fit_tab_pair = make_tab_pair(pocket.tab_a, pocket.tab_b)
 
         triple_feature_pairs = []
         for a, b in raftinator.parse_feature_pairs(quad['raft']):
