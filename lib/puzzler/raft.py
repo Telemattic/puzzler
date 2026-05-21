@@ -782,11 +782,16 @@ class RaftSeamstress:
 
         src_points = src_coord.xform.apply_v2(src_piece.points[src_indices])
 
-        dst_inverse_xform = (puzzler.render.Transform()
-                             .rotate(-dst_coord.angle)
-                             .translate(-dst_coord.xy))
+        dst_is_transformed = (dst_coord.angle != 0.) or np.any(dst_coord.xy)
 
-        src_points_in_dst_frame = dst_inverse_xform.apply_v2(src_points)
+        if dst_is_transformed:
+            dst_inverse_xform = (puzzler.render.Transform()
+                                 .rotate(-dst_coord.angle)
+                                 .translate(-dst_coord.xy))
+
+            src_points_in_dst_frame = dst_inverse_xform.apply_v2(src_points)
+        else:
+            src_points_in_dst_frame = src_points
 
         distance, dst_indices = self.get_kdtree(dst_label).query(
             src_points_in_dst_frame, distance_upper_bound=self.medium_cutoff)
@@ -794,7 +799,12 @@ class RaftSeamstress:
             return None
 
         dst_piece = self.pieces[dst_label]
-        dst_normals = dst_coord.xform.apply_n2(self.compute_normals(dst_piece.points, dst_indices))
+
+        if dst_is_transformed:
+            dst_normals = dst_coord.xform.apply_n2(self.compute_normals(dst_piece.points, dst_indices))
+        else:
+            dst_normals = self.compute_normals(dst_piece.points, dst_indices)
+            
         src_normals = src_coord.xform.apply_n2(self.compute_normals(src_piece.points, src_indices))
 
         dot_product = np.sum(dst_normals * src_normals, axis=1)
@@ -805,7 +815,11 @@ class RaftSeamstress:
             return None
 
         close_dst_indices = dst_indices[close_points]
-        close_dst_points = dst_coord.xform.apply_v2(dst_piece.points[close_dst_indices])
+
+        if dst_is_transformed:
+            close_dst_points = dst_coord.xform.apply_v2(dst_piece.points[close_dst_indices])
+        else:
+            close_dst_points = dst_piece.points[close_dst_indices]
                                 
         dst_stitches = Stitches(dst_label,
                                 close_dst_indices,
