@@ -84,7 +84,7 @@ class TabsComputer:
 
         desc = format_feature_pair((dst, src))
 
-        for i in range(3):
+        for i in range(self.refine):
             seam = r.seamstress.seam_between_pieces(
                 dst.piece, raft.coords[dst.piece], src.piece, raft.coords[src.piece])
             raft = r.refine_alignment_within_raft(raft, seams=[seam], fixed=dst.piece)
@@ -177,7 +177,7 @@ def add_parser(commands):
 
     parser_tabs = commands.add_parser("tabs", help="Output a CSV enumerating all possible tab matches")
     parser_tabs.add_argument("-o", "--output", help="output csv path", required=True)
-    parser_tabs.add_argument("-r", "--refine", default=2, type=int,
+    parser_tabs.add_argument("-r", "--refine", default=3, type=int,
                              help="number of refinement passes (default %(default)i)")
     parser_tabs.add_argument("-n", "--num-workers", default=0, type=int,
                              help="number of workers (default %(default)i)")
