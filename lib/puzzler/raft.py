@@ -316,11 +316,46 @@ class Seam(NamedTuple):
 
 Seams = Sequence[Seam]
 
+class NormalsComputer:
+
+    def __init__(self, pieces: Pieces, baseline = 10):
+        self.pieces = pieces
+        self.baseline = baseline
+
+    def __call__(self, label: str, indices: np.ndarray) -> np.ndarray:
+        if True:
+            return self.compute_all_normals(label)[indices]
+
+        points = self.pieces[label].points
+        n = len(points)
+        p0 = points[(indices - self.baseline) % n]
+        p1 = points[(indices + self.baseline) % n]
+        return NormalsComputer.diffs_to_normals(p1 - p0)
+
+    @functools.cache
+    def compute_all_normals(self, label: str) -> np.ndarray:
+        points = self.pieces[label].points
+        p0 = np.roll(points, self.baseline, axis=0)
+        p1 = np.roll(points, -self.baseline, axis=0)
+        return NormalsComputer.diffs_to_normals(p1 - p0)
+
+    @staticmethod
+    def diffs_to_normals(v: np.ndarray) -> np.ndarray:
+        l = np.linalg.norm(v, axis=1)
+        # l can be zero when the perimeter is degenerate and the same
+        # (x,y) appears multiple times in it, e.g. see tab 3 of piece
+        # N34 from the 1000-piece puzzle
+        l = np.where(l > 0., l, 1.)
+        v = v / l[:,np.newaxis]
+
+        return np.array((-v[:,1], v[:,0])).T
+
 class RaftAligner:
 
-    def __init__(self, pieces: Pieces, seamstress : 'RaftSeamstress') -> None:
+    def __init__(self, pieces: Pieces, seamstress: 'RaftSeamstress', normals: NormalsComputer) -> None:
         self.pieces = pieces
         self.seamstress = seamstress
+        self.normals = normals
 
     def rough_align(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Coord:
 
@@ -501,7 +536,7 @@ class RaftAligner:
             dst_body = bodies[i.dst.piece]
             dst_piece = self.pieces[i.dst.piece]
             dst_points = dst_piece.points[i.dst.indices]
-            dst_normals = self.compute_normals(dst_piece.points, i.dst.indices)
+            dst_normals = self.normals(i.dst.piece, i.dst.indices)
             
             icp.add_body_correspondence(src_body, src_points,
                                         dst_body, dst_points, dst_normals)
@@ -551,7 +586,7 @@ class RaftAligner:
             dst_points = dst_piece.points[i.dst.indices]
             dst_coord = dst_raft.coords[i.dst.piece]
             
-            dst_normals = self.compute_normals(dst_piece.points, i.dst.indices)
+            dst_normals = self.normals(i.dst.piece, i.dst.indices)
 
             global_src_points.append(src_coord.xform.apply_v2(src_points))
             global_dst_points.append(dst_coord.xform.apply_v2(dst_points))
@@ -624,7 +659,8 @@ class RaftAligner:
             dst_body = bodies[i.dst.piece]
             dst_piece = self.pieces[i.dst.piece]
             dst_points = dst_piece.points[i.dst.indices]
-            dst_normals = self.compute_normals(dst_piece.points, i.dst.indices)
+            
+            dst_normals = self.normals(i.dst.piece, i.dst.indices)
             
             icp.add_body_correspondence(src_body, src_points,
                                         dst_body, dst_points, dst_normals)
@@ -655,16 +691,14 @@ class RaftAligner:
 
         return Raft(coords, size)
 
-    def compute_normals(self, points: np.ndarray, indices: np.ndarray) -> np.ndarray:
-        return puzzler.align.NormalsComputer()(points, indices)
-
 class RaftSeamstress:
 
-    def __init__(self, pieces):
+    def __init__(self, pieces: Pieces, normals: NormalsComputer):
         self.pieces = pieces
         self.stride = 10
         self.close_cutoff = 10
         self.medium_cutoff = 48
+        self.normals = normals
 
     def fit_error_for_seams(self, seams: Seams) -> 'FitError':
         sse = 0.
@@ -800,12 +834,15 @@ class RaftSeamstress:
 
         dst_piece = self.pieces[dst_label]
 
+        # clamp bad indices to a safe value
+        dst_indices[dst_indices == len(dst_piece.points)] = 0
+        
         if dst_is_transformed:
-            dst_normals = dst_coord.xform.apply_n2(self.compute_normals(dst_piece.points, dst_indices))
+            dst_normals = dst_coord.xform.apply_n2(self.normals(dst_label, dst_indices))
         else:
-            dst_normals = self.compute_normals(dst_piece.points, dst_indices)
+            dst_normals = self.normals(dst_label, dst_indices)
             
-        src_normals = src_coord.xform.apply_n2(self.compute_normals(src_piece.points, src_indices))
+        src_normals = src_coord.xform.apply_n2(self.normals(src_label, src_indices))
 
         dot_product = np.sum(dst_normals * src_normals, axis=1)
 
@@ -843,16 +880,14 @@ class RaftSeamstress:
         return scipy.spatial.KDTree(piece.points)
         #return puzzler.spatial.NearestPointImage(piece.points, radius=self.medium_cutoff+1)
 
-    def compute_normals(self, points: np.ndarray, indices: np.ndarray) -> np.ndarray:
-        return puzzler.align.NormalsComputer()(points, indices)
-
 class Raftinator:
 
     def __init__(self, pieces: Pieces):
         self.pieces = pieces
         self.factory = RaftFactory(pieces)
-        self.seamstress = RaftSeamstress(pieces)
-        self.aligner = RaftAligner(pieces, self.seamstress)
+        self.normals = NormalsComputer(pieces)
+        self.seamstress = RaftSeamstress(pieces, self.normals)
+        self.aligner = RaftAligner(pieces, self.seamstress, self.normals)
         self.raft_error = RaftError(pieces)
         self.verbose = False
 
