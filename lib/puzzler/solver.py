@@ -794,7 +794,7 @@ class FrontierExplorer:
 
 class PuzzleSolver:
 
-    def __init__(self, pieces, dirname = None, expected = None):
+    def __init__(self, pieces, *, dirname = None, expected = None, fit_error_for_tab_pairs = None):
         self.pieces = pieces
         self.raft = None
         self.frontiers = None
@@ -806,6 +806,7 @@ class PuzzleSolver:
         self.start_time = time.monotonic()
         self.dirname = dirname
         self.expected = expected
+        self.fit_error_for_tab_pairs = fit_error_for_tab_pairs
 
     def solve(self):
         if self.raft:
@@ -877,10 +878,10 @@ class PuzzleSolver:
     def solve_field(self):
 
         if self.raft is None:
-            return
+            return False
 
         if not self.corners:
-            return
+            return False
 
         self.distance_query_cache.purge()
 
@@ -889,15 +890,15 @@ class PuzzleSolver:
         if not fits:
             # UI sentinel -- there is no more progress to be made
             self.corners = []
-            return
+            return False
         
-        fits.sort(key=operator.itemgetter(0))
+        fits.sort(key=operator.itemgetter(1))
 
         for i, f in enumerate(fits[:20]):
             r, mse, src_label, feature_pairs = f
             dst = ','.join(str(i[0]) for i in feature_pairs)
             src = ','.join(str(i[1]) for i in feature_pairs)
-            print(f"{i:2d}: {src_label:4s} {mse=:5.1f} {src=} {dst=}")
+            print(f"{i:2d}: {src_label:4s} {mse=:5.1f} {src=} {dst=} {r=:.3f}")
 
         _, _, src_label, feature_pairs = fits[0]
 
@@ -922,6 +923,8 @@ class PuzzleSolver:
         
         if len(new_raft.coords) % 20 == 0:
             self.refine()
+
+        return status == ''
 
     def is_good_match(self, feature_pairs):
         if self.expected is None:
@@ -990,13 +993,21 @@ class PuzzleSolver:
 
         fits = []
 
-        for match in pf.candidate_matches(set(self.pieces.keys()) - set(self.raft.coords.keys())):
+        candidates = set(self.pieces.keys()) - set(self.raft.coords.keys())
+        
+        compute_seam_fit_error = self.fit_error_for_tab_pairs is not None
+        min_seam_error = 10000.
+        
+        for match in pf.candidate_matches(candidates, self.fit_error_for_tab_pairs):
 
-            try:
-                mse, _ = pf.measure_fit(match.src_label, match.feature_pairs)
-                fits.append((mse[-1], match.src_label, match.feature_pairs))
-            except pf.FitException as x:
-                print(f"score_pocket: {pocket!s}, skipping {match.src_label} due to measure_fit error")
+            if compute_seam_fit_error and match.min_seam_error > min_seam_error:
+                break;
+                
+            mse, seam_fit_error = pf.measure_fit(match.src_label, match.feature_pairs, compute_seam_fit_error)
+            if compute_seam_fit_error and min_seam_error > seam_fit_error.mse:
+                min_seam_error = seam_fit_error.mse
+                
+            fits.append((mse[-1], match.src_label, match.feature_pairs))
 
         return sorted(fits, key=operator.itemgetter(0))
 

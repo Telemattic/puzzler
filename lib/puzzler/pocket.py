@@ -48,7 +48,7 @@ def tab_features_for_piece(piece, be_forgiving=True):
                 n_collisions += 1
                 continue
 
-            raise PocketFitter.FitException(f"{label} has multiple tabs at {d=}")
+            raise PocketFitter.FitException(f"{piece.label} has multiple tabs at {d=}")
 
         dirs[d] = (piece.label, tab_no, tab.indent)
 
@@ -116,7 +116,10 @@ class PocketTabMatcher:
 
         retval = []
         for src_label in candidates:
-            retval += self.candidate_matches_for_piece(src_label, fit_error_for_tabs)
+            try:
+                retval += self.candidate_matches_for_piece(src_label, fit_error_for_tabs)
+            except PocketFitter.FitException as x:
+                print(x)
 
         if fit_error_for_tabs:
             retval.sort(key=operator.attrgetter('min_seam_error'))

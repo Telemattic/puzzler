@@ -389,12 +389,12 @@ class CanvasHitTester:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces, directory, expected):
+    def __init__(self, parent, pieces, directory, expected, fit_error_for_tab_pairs):
         
         self.pieces = pieces
 
         pieces_dict = {i.piece.label: i.piece for i in pieces}
-        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, dirname=directory, expected=expected)
+        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, dirname=directory, expected=expected, fit_error_for_tab_pairs=fit_error_for_tab_pairs)
 
         self.draggable = None
         self.selection = None
@@ -567,7 +567,7 @@ class AlignTk:
 
     def do_tab_alignment(self):
 
-        self.solver.solve_field()
+        can_continue = self.solver.solve_field()
         if self.solver.seams:
             self.render_seams = self.solver.seams
         self.update_coords()
@@ -576,7 +576,7 @@ class AlignTk:
         self.render()
 
         if self.var_solve_continuous.get():
-            if self.solver.corners:
+            if can_continue:
                 self.parent.after_idle(self.do_tab_alignment)
             else:
                 self.var_solve_continuous.set(0)
@@ -883,6 +883,20 @@ def cross_check_expected_and_pieces(expected, pieces):
             s = ', '.join(str(i) for i in (b-c))
             print(f"    unknown tabs in expected: {s}")
     
+def read_fit_error_for_tab_pairs(path):
+
+    retval = dict()
+    with open(path, 'r', newline='') as ifile:
+        reader = csv.DictReader(ifile)
+
+        for row in reader:
+            dst = puzzler.raft.Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
+            src = puzzler.raft.Feature(row['src_label'], 'tab', int(row['src_tab_no']))
+            fit_error = puzzler.raft.FitError(float(row['sse']), int(row['n']))
+            retval[dst,src] = fit_error
+
+    return retval
+
 def align_ui(args):
 
     puzzle = puzzler.file.load(args.puzzle)
@@ -907,6 +921,10 @@ def align_ui(args):
         expected = read_expected_tab_matches(args.expected)
         cross_check_expected_and_pieces(expected, by_label)
 
+    fit_error_for_tab_pairs = None
+    if args.tabs:
+        fit_error_for_tab_pairs = read_fit_error_for_tab_pairs(args.tabs)
+
     if args.num_workers:
         ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers, expected, args.directory)
         raft = ps.solve()
@@ -918,7 +936,7 @@ def align_ui(args):
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, args.directory, expected)
+    ui = AlignTk(root, pieces, args.directory, expected, fit_error_for_tab_pairs)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 
@@ -936,4 +954,5 @@ def add_parser(commands):
     parser_align.add_argument("-e", "--expected", help="expected tab matches csv file")
     parser_align.add_argument("-n", "--num-workers", help="number of workers for parallel solve", default=0, type=int)
     parser_align.add_argument("-d", "--directory", help="directory to log output to")
+    parser_align.add_argument("-t", "--tabs", help="fit errors for tab pairs")
     parser_align.set_defaults(func=align_ui)
