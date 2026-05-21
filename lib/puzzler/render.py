@@ -38,27 +38,11 @@ class Transform:
         return Transform(np.linalg.inv(t.matrix))
 
     def apply_v2(self, points):
-        if points.ndim == 1:
-            points = np.hstack((points, np.ones(1)))
-            points = points @ self.matrix.T
-            return points[:2]
-        
-        n = len(points)
-        points = np.hstack((points, np.ones((n,1))))
-        points = points @ self.matrix.T
-        return points[:,:2]
-        
-    def apply_n2(self, normals):
-        if normals.ndim == 1:
-            normals = np.hstack((normals, np.zeros(1)))
-            normals = normals @ self.matrix.T
-            return normals[:2]
-        
-        n = len(normals)
-        normals = np.hstack((normals, np.zeros((n,1))))
-        normals = normals @ self.matrix.T
-        return normals[:,:2]
-    
+        return points @ self.matrix[:2,:2].T + self.matrix[:2,2]
+
+    def apply_n2(self, points):
+        return points @ self.matrix[:2,:2].T
+
 @contextmanager
 def save(r):
 
