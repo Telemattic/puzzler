@@ -4,6 +4,8 @@ import numpy as np
 import puzzler
 import multiprocessing as mp
 import operator
+import re
+import itertools
 
 from tqdm import tqdm
 
@@ -14,6 +16,42 @@ def format_feature(f):
 
 def format_feature_pair(p):
     return format_feature(p[0]) + '=' + format_feature(p[1])
+
+def row_col_of_piece(p):
+    m = re.match("^([A-Z]+)([0-9]+)", p.label)
+    c = int(m[2])
+    r = 0
+    for i in m[1]:
+        r = r*26 + (ord(i) - ord('A'))
+    return (r, c)
+
+def iterate_over_tabs(pieces):
+
+    outdents = []
+    indents = []
+
+    for p in sorted(pieces, key=row_col_of_piece):
+
+        for tab_no, tab in enumerate(p.tabs):
+            f = Feature(p.label, 'tab', tab_no)
+            if tab.indent:
+                indents.append(f)
+            else:
+                outdents.append(f)
+
+    #print(f"outdents={','.join(str(i) for i in outdents)}")
+    #print(f"indents={','.join(str(i) for i in indents)}")
+
+    # keep the batchsize larger to keep the grain from getting too
+    # small, but don't let it get too large and blow out caching
+    bs = 16
+    n = len(outdents) + len(indents)
+    while bs * bs < n and bs < 64:
+        bs += 1
+
+    #print(f"batchsize={bs}")
+
+    return list(itertools.product(itertools.batched(outdents, bs), itertools.batched(indents, bs)))
     
 class TabsComputer:
 
@@ -22,60 +60,43 @@ class TabsComputer:
         self.refine = refine
         self.raftinator = puzzler.raft.Raftinator(self.pieces)
 
-        # pre-populate the caches
-        for k, v in self.pieces.items():
-            self.raftinator.seamstress.get_kdtree(k)
-            puzzler.align.DistanceImage.Factory(v)
-
-    def compute_rows_for_dst(self, dst_label):
+    def compute_rows(self, tabs_a, tabs_b):
 
         retval = []
 
-        dst = self.pieces[dst_label]
-        
-        for dst_tab_no, dst_tab in enumerate(dst.tabs):
-            rows = []
-            for src in self.pieces.values():
-                if src is dst:
+        for i in tabs_a:
+            for j in tabs_b:
+                if i.piece == j.piece:
                     continue
-
-                for src_tab_no, src_tab in enumerate(src.tabs):
-                    if dst_tab.indent == src_tab.indent:
-                        continue
-
-                    feature_pair = (Feature(dst_label, 'tab', dst_tab_no), Feature(src.label, 'tab', src_tab_no))
-                    
-                    raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
-                        self.raftinator.factory.make_raft_for_piece(dst_label),
-                        self.raftinator.factory.make_raft_for_piece(src.label),
-                        [feature_pair])
-
-                    desc = format_feature_pair(feature_pair)
-
-                    for i in range(3):
-                        seam = self.raftinator.seamstress.seam_between_pieces(
-                            dst_label, raft.coords[dst_label], src.label, raft.coords[src.label])
-                        raft = self.raftinator.refine_alignment_within_raft(raft, seams=[seam], fixed=dst_label)
-
-                    seam = self.raftinator.seamstress.seam_between_pieces(
-                        dst_label, raft.coords[dst_label], src.label, raft.coords[src.label])
-
-                    fit_error = puzzler.raft.FitError(seam.error, len(seam.src.indices))
-                        
-                    rows.append({'dst_label':dst_label, 'dst_tab_no':dst_tab_no,
-                                 'src_label':src.label, 'src_tab_no':src_tab_no,
-                                 'raft':desc, 'rank':None,
-                                 'sse':fit_error.sse, 'n':fit_error.n, 'mse':fit_error.mse})
-
-            rows.sort(key=operator.itemgetter('mse'))
-            for i, row in enumerate(rows, start=1):
-                row['rank'] = i
-                for k in ('mse', 'sse'):
-                    row[k] = decimal.Decimal(f"{row[k]:.3f}")
-
-            retval += rows
+                retval.append(self.compute_fit(i, j))
+                retval.append(self.compute_fit(j, i))
 
         return retval
+
+    def compute_fit(self, dst, src):
+
+        r = self.raftinator
+
+        raft = r.align_and_merge_rafts_with_feature_pairs(
+            r.factory.make_raft_for_piece(dst.piece),
+            r.factory.make_raft_for_piece(src.piece),
+            [(dst, src)])
+
+        desc = format_feature_pair((dst, src))
+
+        for i in range(3):
+            seam = r.seamstress.seam_between_pieces(
+                dst.piece, raft.coords[dst.piece], src.piece, raft.coords[src.piece])
+            raft = r.refine_alignment_within_raft(raft, seams=[seam], fixed=dst.piece)
+
+        seam = r.seamstress.seam_between_pieces(
+            dst.piece, raft.coords[dst.piece], src.piece, raft.coords[src.piece])
+
+        fit_error = puzzler.raft.FitError(seam.error, len(seam.src.indices))
+
+        return {'dst_label':dst.piece, 'dst_tab_no':dst.index,
+                'src_label':src.piece, 'src_tab_no':src.index,
+                'raft':desc, 'sse':fit_error.sse, 'n':fit_error.n}
 
 def worker(args, src_q, dst_q):
 
@@ -85,7 +106,7 @@ def worker(args, src_q, dst_q):
     job = src_q.get()
     while job:
 
-        rows = tabs_computer.compute_rows_for_dst(job)
+        rows = tabs_computer.compute_rows(*job)
 
         dst_q.put(rows)
         job = src_q.get()
@@ -126,10 +147,11 @@ def tabs_main(args):
             for p in workers:
                 p.start()
 
-            for p in puzzle.pieces:
-                src_q.put(p.label)
+            num_jobs = 0
+            for p in iterate_over_tabs(puzzle.pieces):
+                src_q.put(p)
+                num_jobs += 1
                 
-            num_jobs = len(puzzle.pieces)
             pbar = tqdm(total=num_jobs, smoothing=0)
             while num_jobs > 0:
                 job = dst_q.get()
@@ -148,8 +170,8 @@ def tabs_main(args):
             
             pieces = puzzle.pieces[:args.max_piece] if args.max_piece is not None else puzzle.pieces
             
-            for dst in tqdm(pieces, smoothing=0):
-                writer.writerows(tabs_computer.compute_rows_for_dst(dst.label))
+            for tabs_a, tabs_b in tqdm(iterate_over_tabs(pieces), smoothing=0):
+                writer.writerows(tabs_computer.compute_rows(tabs_a, tabs_b))
 
 def add_parser(commands):
 
