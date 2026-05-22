@@ -196,8 +196,6 @@ class PuzzleSGFactory:
         self.render_vertex_details = False
         self.renderer = None
         self.font = None
-        self.normals = dict()
-        self.vertexes = dict()
         self.seams = []
         self.props = {'tabs.render':False, 'edges.render':False, 'tabs.ellipse.fill':''}
 
@@ -243,8 +241,7 @@ class PuzzleSGFactory:
             props = self.props | {'points.outline':color, 'points.fill':color+(0.25,), 'tabs.ellipse.outline':color, 'tags':(tag,)}
             sgb.add_node(PuzzleSGFactory.piece_factory(p.piece.label, props))
 
-        # global coordinate system!
-        self.draw_normals_and_vertexes_and_seams(p, color, tag)
+            self.draw_normals_and_vertexes_and_seams(p, color, tag)
 
     def draw_normals_and_vertexes_and_seams(self, p, color, tag):
 
@@ -269,28 +266,25 @@ class PuzzleSGFactory:
 
         def draw_seam(seam, color, normals_flag):
             if self.render_vertex_details:
-                draw_vertexes(seam.points, color)
+                draw_vertexes(p.piece.points[seam.indices], color)
             if normals_flag:
-                normals = list(zip(seam.points, seam.normals))
-                draw_normals(normals, color)
+                vertexes = p.piece.points[seam.indices]
+                normals = self.raftinator.normals(p.piece.label, seam.indices)
+                draw_normals(list(zip(vertexes,normals)), color)
 
         def draw_index_range(stitches, color):
 
             seamstress = self.raftinator.seamstress
             a, b = seamstress.get_index_range_for_stitches(stitches)
 
-            with puzzler.sgbuilder.insert_sequence(sgb):
-                sgb.add_translate(p.coords.xy)
-                sgb.add_rotate(p.coords.angle)
-            
-                va = p.piece.points[a]
-                vb = p.piece.points[b]
+            va = p.piece.points[a]
+            vb = p.piece.points[b]
                 
-                sgb.add_points([va], radius=6, fill='', outline=color, width=1)
-                sgb.add_text(va, "a", font=('Courier New', 12))
+            sgb.add_points([va], radius=6, fill='', outline=color, width=1)
+            sgb.add_text(va, "a", font=('Courier New', 12))
                 
-                sgb.add_points([vb], radius=6, fill='', outline=color, width=1)
-                sgb.add_text(vb, "b", font=('Courier New', 12))
+            sgb.add_points([vb], radius=6, fill='', outline=color, width=1)
+            sgb.add_text(vb, "b", font=('Courier New', 12))
 
         if self.seams:
             for seam in self.seams:
@@ -299,14 +293,6 @@ class PuzzleSGFactory:
                 if seam.dst.piece == p.piece.label:
                     draw_seam(seam.dst, color, True)
                     draw_index_range(seam.dst, color)
-        
-        normals = self.normals.get(p.piece.label)
-        if normals is not None:
-            draw_normals(normals, color)
-
-        vertexes = self.vertexes.get(p.piece.label)
-        if vertexes is not None:
-            draw_vertexes(vertexes, color)
 
     def draw_rotate_handles(self, piece_id):
 
@@ -398,8 +384,6 @@ class AlignTk:
 
         self.draggable = None
         self.selection = None
-        self.render_normals = None
-        self.render_vertexes = None
         self.render_seams = None
         self.scenegraph = None
         self.hittester = None
@@ -534,11 +518,7 @@ class AlignTk:
         f.frontiers = self.solver.frontiers
         if self.var_render_frontier.get():
             f.render_frontier_details = True
-        if self.render_normals:
-            f.normals = self.render_normals
         if self.var_render_vertexes.get():
-            if self.render_vertexes:
-                f.vertexes = self.render_vertexes
             f.render_vertex_details = True
         if self.render_seams:
             f.seams = self.render_seams
@@ -783,8 +763,6 @@ class AlignTk:
             p.coords.xy = np.array((x, y))
 
         self.scenegraph = None
-        self.render_normals = None
-        self.render_vertexes = None
         self.render_seams = None
         self.render()
 
@@ -837,8 +815,6 @@ class AlignTk:
         rfc = puzzler.raft.RaftFeaturesComputer(pieces)
         rfc.compute_features(raft.coords)
 
-        self.render_vertexes = dict()
-        self.render_normals = dict()
         self.render_seams = seams
 
         self.scenegraph = None

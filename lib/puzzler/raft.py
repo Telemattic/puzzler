@@ -307,7 +307,6 @@ class Stitches(NamedTuple):
     piece: str
     indices: np.ndarray
     points: np.ndarray
-    normals: np.ndarray
 
 class Seam(NamedTuple):
     dst: Stitches
@@ -772,13 +771,11 @@ class RaftSeamstress:
 
                 dst_stitches = Stitches(seam.dst.piece,
                                         seam.dst.indices[nonzero],
-                                        seam.dst.points[nonzero],
-                                        seam.dst.normals[nonzero])
+                                        seam.dst.points[nonzero])
 
                 src_stitches = Stitches(seam.src.piece,
                                         seam.src.indices[nonzero],
-                                        seam.src.points[nonzero],
-                                        seam.src.normals[nonzero])
+                                        seam.src.points[nonzero])
 
                 error = np.sum((dst_stitches.points - src_stitches.points) ** 2)
 
@@ -860,13 +857,11 @@ class RaftSeamstress:
                                 
         dst_stitches = Stitches(dst_label,
                                 close_dst_indices,
-                                close_dst_points,
-                                dst_normals[close_points])
+                                close_dst_points)
 
         src_stitches = Stitches(src_label,
                                 src_indices[close_points],
-                                src_points[close_points],
-                                src_normals[close_points])
+                                src_points[close_points])
 
         close_distance = distance[close_points]
 
