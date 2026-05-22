@@ -187,8 +187,9 @@ class PuzzleSGFactory:
     # HACK: initialized as singleton on first construction of PuzzleSGFactory
     piece_factory = None
 
-    def __init__(self, pieces):
+    def __init__(self, pieces, raftinator):
         self.pieces = pieces
+        self.raftinator = raftinator
         self.selection = None
         self.frontiers = []
         self.render_frontier_details = False
@@ -201,9 +202,8 @@ class PuzzleSGFactory:
         self.props = {'tabs.render':False, 'edges.render':False, 'tabs.ellipse.fill':''}
 
         if PuzzleSGFactory.piece_factory is None:
-            pieces_dict = dict((i.piece.label, i.piece) for i in pieces)
             PuzzleSGFactory.piece_factory = puzzler.sgbuilder.PieceSceneGraphFactory(
-                pieces_dict)
+                self.raftinator.pieces)
 
     def build(self):
 
@@ -276,7 +276,7 @@ class PuzzleSGFactory:
 
         def draw_index_range(stitches, color):
 
-            seamstress = puzzler.raft.RaftSeamstress({p.piece.label: p.piece})
+            seamstress = self.raftinator.seamstress
             a, b = seamstress.get_index_range_for_stitches(stitches)
 
             with puzzler.sgbuilder.insert_sequence(sgb):
@@ -528,7 +528,7 @@ class AlignTk:
 
     def build_scenegraph(self):
 
-        f = PuzzleSGFactory(self.pieces)
+        f = PuzzleSGFactory(self.pieces, self.solver.raftinator)
 
         f.selection = self.selection
         f.frontiers = self.solver.frontiers
@@ -602,7 +602,7 @@ class AlignTk:
             return
 
         pieces = dict((i.piece.label, i.piece) for i in self.pieces)
-        raftinator = puzzler.raft.Raftinator(pieces)
+        raftinator = self.solver.raftinator
 
         coords = dict()
         for p, c in r.coords.items():
@@ -799,7 +799,7 @@ class AlignTk:
                 x, y = v.xy
                 print(f"{k}: angle={v.angle:.3f} xy=({x:.3f},{y:.3f})")
         
-        r = puzzler.raft.Raftinator(pieces)
+        r = self.solver.raftinator
         fp = r.parse_feature_pairs(s)
         raft = r.make_raft_from_feature_pairs(fp)
         

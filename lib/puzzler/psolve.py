@@ -25,6 +25,7 @@ class Worker:
                 p.edges = puzzler.commands.ellipse.clean_edges(p.label, p.edges)
 
         self.edge_scorer = puzzler.solver.EdgeScorer(self.pieces)
+        self.raftinator = puzzler.raft.Raftinator(self.pieces)
         
     def score_edge(self, dst, sources):
 
@@ -33,7 +34,7 @@ class Worker:
     def score_pocket(self, raft, pocket, pieces):
 
         fitter = puzzler.pocket.PocketFitter(
-            self.pieces, raft, pocket, 1)
+            self.raftinator, raft, pocket, 1)
 
         fits = []
         
@@ -95,7 +96,7 @@ class ParallelSolver:
 
     def solve_border(self):
 
-        bs = puzzler.solver.BorderSolver(self.pieces)
+        bs = puzzler.solver.BorderSolver(self.raftinator)
         scores = self.score_edges(bs.pred, bs.succ)
 
         border = bs.link_pieces(scores)

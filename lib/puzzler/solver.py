@@ -26,13 +26,13 @@ Size = puzzler.raft.Size
 
 class BorderSolver:
 
-    def __init__(self, pieces, expected=None):
-        self.pieces = pieces
+    def __init__(self, raftinator, expected=None):
+        self.pieces = raftinator.pieces
         self.pred = dict()
         self.succ = dict()
         self.corners = []
         self.edges = []
-        self.raftinator = puzzler.raft.Raftinator(self.pieces)
+        self.raftinator = raftinator
         self.expected = expected
 
         for p in self.pieces.values():
@@ -376,7 +376,7 @@ class BorderSolver:
                 
     def score_matches(self):
 
-        s = EdgeScorer(self.pieces)
+        s = EdgeScorer(self.raftinator)
         return {dst[0]: s.score_edge_piece(dst, self.pred) for dst in self.succ.items()}
 
     def compute_edge_info(self, piece):
@@ -402,9 +402,9 @@ class BorderSolver:
 
 class EdgeScorer:
 
-    def __init__(self, pieces):
-        self.pieces = pieces
-        self.raftinator = puzzler.raft.Raftinator(pieces)
+    def __init__(self, raftinator):
+        self.pieces = raftinator.pieces
+        self.raftinator = raftinator
 
     def score_edge_piece(self, dst, sources):
 
@@ -842,7 +842,7 @@ class PuzzleSolver:
 
     def solve_border(self):
 
-        bs = BorderSolver(self.pieces, expected=self.expected)
+        bs = BorderSolver(self.raftinator, expected=self.expected)
 
         scores = bs.score_matches()
 
@@ -989,7 +989,7 @@ class PuzzleSolver:
     def score_pocket(self, pocket):
 
         pocket_raft = self.raft
-        pf = puzzler.pocket.PocketFitter(self.pieces, pocket_raft, pocket, 1)
+        pf = puzzler.pocket.PocketFitter(self.raftinator, pocket_raft, pocket, 1)
 
         fits = []
 

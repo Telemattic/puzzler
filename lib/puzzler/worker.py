@@ -9,18 +9,19 @@ class Worker:
         self.puzzle_path = puzzle_path
         self.pieces = {i.label: i for i in puzzle.pieces}
         self.border_solver = None # let it be created lazily
+        self.raftinator = puzzler.raft.Raftinator(self.pieces)
 
     def score_edge_piece(self, dst, sources):
 
         if self.border_solver is None:
-            self.border_solver = puzzler.solver.BorderSolver(self.pieces)
+            self.border_solver = puzzler.solver.BorderSolver(self.raftinator)
 
         return self.border_solver.score_edge_piece(dst, sources)
 
     def score_pocket(self, raft, pocket, pieces):
 
         fitter = puzzler.commands.quads.PocketFitter(
-            self.pieces, raft, pocket, 1)
+            self.raftinator, raft, pocket, 1)
 
         fits = []
         

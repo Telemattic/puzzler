@@ -146,29 +146,6 @@ class DistanceImage:
         ret = self.dist_image[rows, cols]
         return ret * (1/16) if self.compress else ret
 
-class NormalsComputer:
-
-    def __init__(self, baseline = 10):
-        self.baseline = baseline
-
-    def __call__(self, points, indices):
-
-        n = len(points)
-
-        p0 = points[(indices - self.baseline) % n]
-        p1 = points[(indices + self.baseline) % n]
-        v = p1 - p0
-        l = np.linalg.norm(v, axis=1)
-        # l can be zero when the perimeter is degenerate and the same
-        # (x,y) appears multiple times in it, e.g. see tab 3 of piece
-        # N34 from the 1000-piece puzzle
-        l = np.where(l > 0., l, 1.)
-        v = v / l[:,np.newaxis]
-
-        normals = np.array((-v[:,1], v[:,0])).T
-        
-        return normals
-
 class DistanceQueryCache:
 
     def __init__(self, purge_interval=None):

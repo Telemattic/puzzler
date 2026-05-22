@@ -257,9 +257,9 @@ class PocketFitter:
     class FitException(Exception):
         pass
 
-    def __init__(self, pieces, dst_raft, pocket, num_refine):
-        self.pieces = pieces
-        self.raftinator = puzzler.raft.Raftinator(pieces)
+    def __init__(self, raftinator, dst_raft, pocket, num_refine):
+        self.raftinator = raftinator
+        self.pieces = raftinator.pieces
         self.num_refine = num_refine
         self.pocket = pocket
 
@@ -267,7 +267,7 @@ class PocketFitter:
         pocket_raft = puzzler.raft.Raft(pocket_coords, None)
         self.dst_raft = self.raftinator.refine_alignment_within_raft(pocket_raft)
 
-        self.tab_matcher = PocketTabMatcher(pieces, pocket)
+        self.tab_matcher = PocketTabMatcher(self.pieces, pocket)
 
     def candidate_matches(self, candidates, fit_error_for_tabs=None):
         return self.tab_matcher.candidate_matches(candidates, fit_error_for_tabs)

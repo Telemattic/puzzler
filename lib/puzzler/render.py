@@ -34,9 +34,6 @@ class Transform:
                       (0,  0, 1)))
         return self.multiply(m)
 
-    def inverse(t):
-        return Transform(np.linalg.inv(t.matrix))
-
     def apply_v2(self, points):
         return points @ self.matrix[:2,:2].T + self.matrix[:2,2]
 

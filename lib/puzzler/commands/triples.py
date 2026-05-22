@@ -54,7 +54,7 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
 
         retval = []
 
-        pf = puzzler.pocket.PocketFitter(pieces, triple_raft, pocket, num_refine)
+        pf = puzzler.pocket.PocketFitter(raftinator, triple_raft, pocket, num_refine)
 
         candidates = set(pieces.keys()) - set(triple_raft.coords.keys())
 
