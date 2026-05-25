@@ -355,17 +355,12 @@ class PocketFitter:
             seam_fe = None
 
         raft = r.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
-        mse = self.compute_error_with_refinement(raft)
-        
-        return ([mse], seam_fe)
-
-    def compute_error_with_refinement(self, raft):
-
-        r = self.raftinator
 
         seams = r.get_seams_for_raft(raft)
         for _ in range(self.num_refine):
             raft = r.refine_alignment_within_raft(raft, seams)
             seams = r.get_seams_for_raft(raft)
             
-        return r.get_total_error_for_raft_and_seams(raft, seams)
+        mse = r.get_total_error_for_raft_and_seams(raft, seams)
+        
+        return (mse, seam_fe)

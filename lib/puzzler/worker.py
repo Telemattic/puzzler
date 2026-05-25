@@ -27,7 +27,7 @@ class Worker:
         
         for match in pf.candidate_matches(pieces):
             mse, _ = pf.measure_fit(match.src_label, match.feature_pairs)
-            fits.append((mse[-1], match.src_label, match.feature_pairs))
+            fits.append((mse, match.src_label, match.feature_pairs))
 
         return sorted(fits, key=operator.itemgetter(0))
         

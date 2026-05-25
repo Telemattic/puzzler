@@ -1012,7 +1012,7 @@ class PuzzleSolver:
             if compute_seam_fit_error and min_seam_error > seam_fit_error.mse:
                 min_seam_error = seam_fit_error.mse
                 
-            fits.append((mse[-1], match.src_label, match.feature_pairs))
+            fits.append((mse, match.src_label, match.feature_pairs))
 
         return sorted(fits, key=operator.itemgetter(0))
 

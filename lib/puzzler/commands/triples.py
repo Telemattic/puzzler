@@ -80,7 +80,7 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
                    'drop_piece': drop_label,
                    'fit_piece': match.src_label,
                    'raft': desc,
-                   'mse': tuple(mse),
+                   'mse': mse,
                    'seam_mse': seam_fit_error.mse,
                    'lower_bound_mse': match.min_seam_error,
                    'rank': None}
