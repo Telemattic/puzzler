@@ -891,7 +891,12 @@ class PuzzleSolver:
             # UI sentinel -- there is no more progress to be made
             self.corners = []
             return False
-        
+
+        # rank the fits by MSE, previously they were ranked by how
+        # good they were compared to the second best fit, but that
+        # only works if you're doing the work to find the second-best
+        # fit, and instead we're trying to score as few pieces as
+        # possible
         fits.sort(key=operator.itemgetter(1))
 
         for i, f in enumerate(fits[:20]):
