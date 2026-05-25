@@ -80,8 +80,8 @@ class SegmenterTk:
         w, h = img.shape[1], img.shape[0]
         self.image_raw = (w, h)
 
-        self.max_w = 1200
-        self.max_h = 800
+        self.max_w = 2000
+        self.max_h = 1400
 
         s = 1
         if w > self.max_w or h > self.max_h:
