@@ -3,6 +3,7 @@ import itertools
 import math
 import numpy as np
 import operator
+import scipy.spatial
 from typing import NamedTuple, Optional, Set
 
 Feature = puzzler.raft.Feature
@@ -69,6 +70,46 @@ def tab_features_for_piece(piece, be_forgiving=True):
             retval.append((a, b))
 
     return retval
+
+def find_unmatched_tabs(pieces, coords):
+
+    tab_features = []
+    tab_coords = []
+    for l, c in coords.items():
+        p = pieces[l]
+        for tab_no, tab in enumerate(p.tabs):
+            tab_features.append(Feature(l,'tab',tab_no))
+            tab_coords.append(c.xform.apply_v2(tab.ellipse.center))
+
+    covered = set()
+    
+    kdtree = scipy.spatial.KDTree(np.vstack(tab_coords))
+    for a, b in kdtree.query_pairs(100.):
+        covered.add(a)
+        covered.add(b)
+
+    unmatched = set()
+    overlaps = puzzler.solver.OverlappingPieces(pieces, coords)
+
+    for i, f in enumerate(tab_features):
+        
+        if i in covered:
+            continue
+    
+        is_unmatched = True
+        
+        p = pieces[f.piece]
+        t = p.tabs[f.index]
+        for n in overlaps(tab_coords[i], 0): #t.ellipse.semi_major):
+            if n == f.piece:
+                continue
+            print(f"Ignoring unmatched tab {f!s} because it overlaps {n}")
+            is_unmatched = False
+
+        if is_unmatched:
+            unmatched.add(f)
+
+    return unmatched
 
 class PocketTabMatcher:
 
@@ -158,6 +199,14 @@ class Pocket(NamedTuple):
     tab_b: Feature
     pieces: Set[str]
 
+    def tab_dsts(self):
+        s = set()
+        if self.tab_a is not None:
+            s.add(self.tab_a.piece)
+        if self.tab_b is not None:
+            s.add(self.tab_b.piece)
+        return tuple(s)
+
     def __str__(self):
         s = '{' + ', '.join(self.pieces) + '}'
         return f"Pocket({self.tab_a!s}, {self.tab_b!s}, {s})"
@@ -211,9 +260,24 @@ class PocketFinder:
 
     def find_pockets_on_frontiers(self, frontiers = None):
 
+        if True:
+            pockets = []
+            for tab in find_unmatched_tabs(self.pieces, self.raft.coords):
+                pockets += self.get_pockets_for_tab(tab)
+
+            return set(pockets)
+
         if frontiers is None:
             fc = puzzler.raft.RaftFeaturesComputer(self.pieces)
             frontiers = fc.compute_frontiers(self.raft.coords)
+
+        if False:
+            tf = self.get_tabs_on_frontiers(frontiers)
+            ut = find_unmatched_tabs(self.pieces, self.raft.coords)
+            if tf != ut:
+                print("find_pockets_on_frontiers:")
+                print(f"  {tf-ut=}")
+                print(f"  {ut-tf=}")
 
         pockets = []
         for tab in self.get_tabs_on_frontiers(frontiers):
@@ -290,29 +354,18 @@ class PocketFitter:
         else:
             seam_fe = None
 
-        new_raft = r.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
+        raft = r.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
+        mse = self.compute_error_with_refinement(raft)
+        
+        return ([mse], seam_fe)
 
-        mse = self.compute_mse_with_refinement(new_raft)
-
-        return (mse, seam_fe)
-
-    def compute_mse_with_refinement(self, raft):
-        return [i.mse for i in self.compute_fit_error_with_refinement(raft)]
-
-    def compute_fit_error_with_refinement(self, raft):
-
-        fit_error = []
+    def compute_error_with_refinement(self, raft):
 
         r = self.raftinator
 
         seams = r.get_seams_for_raft(raft)
-        fit_error.append(r.get_total_fit_error_for_raft_and_seams(raft, seams))
-                
         for _ in range(self.num_refine):
             raft = r.refine_alignment_within_raft(raft, seams)
-            
             seams = r.get_seams_for_raft(raft)
-            fit_error.append(r.get_total_fit_error_for_raft_and_seams(raft, seams))
-
-        return fit_error
-
+            
+        return r.get_total_error_for_raft_and_seams(raft, seams)
