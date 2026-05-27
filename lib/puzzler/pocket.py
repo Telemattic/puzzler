@@ -260,27 +260,8 @@ class PocketFinder:
 
     def find_pockets_on_frontiers(self, frontiers = None):
 
-        if True:
-            pockets = []
-            for tab in find_unmatched_tabs(self.pieces, self.raft.coords):
-                pockets += self.get_pockets_for_tab(tab)
-
-            return set(pockets)
-
-        if frontiers is None:
-            fc = puzzler.raft.RaftFeaturesComputer(self.pieces)
-            frontiers = fc.compute_frontiers(self.raft.coords)
-
-        if False:
-            tf = self.get_tabs_on_frontiers(frontiers)
-            ut = find_unmatched_tabs(self.pieces, self.raft.coords)
-            if tf != ut:
-                print("find_pockets_on_frontiers:")
-                print(f"  {tf-ut=}")
-                print(f"  {ut-tf=}")
-
         pockets = []
-        for tab in self.get_tabs_on_frontiers(frontiers):
+        for tab in find_unmatched_tabs(self.pieces, self.raft.coords):
             pockets += self.get_pockets_for_tab(tab)
 
         return set(pockets)

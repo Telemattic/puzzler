@@ -191,8 +191,6 @@ class PuzzleSGFactory:
         self.pieces = pieces
         self.raftinator = raftinator
         self.selection = None
-        self.frontiers = []
-        self.render_frontier_details = False
         self.render_vertex_details = False
         self.renderer = None
         self.font = None
@@ -217,10 +215,6 @@ class PuzzleSGFactory:
         if self.selection is not None:
             self.draw_rotate_handles(self.selection)
 
-        if self.frontiers:
-            for f in self.frontiers:
-                self.draw_frontier(f)
-
         sg = self.scenegraphbuilder.commit(None, None)
 
         lodf = puzzler.sgbuilder.LevelOfDetailFactory()
@@ -232,21 +226,6 @@ class PuzzleSGFactory:
 
         sgb = self.scenegraphbuilder
             
-        with puzzler.sgbuilder.insert_sequence(sgb):
-                
-            sgb.add_translate(p.coords.xy)
-
-            sgb.add_rotate(p.coords.angle)
-
-            props = self.props | {'points.outline':color, 'points.fill':color+(0.25,), 'tabs.ellipse.outline':color, 'tags':(tag,)}
-            sgb.add_node(PuzzleSGFactory.piece_factory(p.piece.label, props))
-
-            self.draw_normals_and_vertexes_and_seams(p, color, tag)
-
-    def draw_normals_and_vertexes_and_seams(self, p, color, tag):
-
-        sgb = self.scenegraphbuilder
-
         def draw_vertexes(vertexes, color):
             vmap = collections.defaultdict(list)
             for i, v in enumerate(vertexes):
@@ -286,7 +265,15 @@ class PuzzleSGFactory:
             sgb.add_points([vb], radius=6, fill='', outline=color, width=1)
             sgb.add_text(vb, "b", font=('Courier New', 12))
 
-        if self.seams:
+        with puzzler.sgbuilder.insert_sequence(sgb):
+                
+            sgb.add_translate(p.coords.xy)
+
+            sgb.add_rotate(p.coords.angle)
+
+            props = self.props | {'points.outline':color, 'points.fill':color+(0.25,), 'tabs.ellipse.outline':color, 'tags':(tag,)}
+            sgb.add_node(PuzzleSGFactory.piece_factory(p.piece.label, props))
+
             for seam in self.seams:
                 if seam.src.piece == p.piece.label:
                     draw_seam(seam.src, color, False)
@@ -319,50 +306,6 @@ class PuzzleSGFactory:
                     sgb.add_rotate(i * math.pi / 2)
                     sgb.add_polygon(points, outline='black', fill='', width=1, tags=tags)
                     
-    def draw_frontier(self, frontier):
-
-        piece_dict = dict((i.piece.label, i.piece) for i in self.pieces)
-        
-        fe = puzzler.solver.FrontierExplorer(piece_dict)
-
-        tabs = collections.defaultdict(list)
-        for label, tab_no in fe.find_tabs(frontier):
-            tabs[label].append(tab_no)
-
-        piece_dict = dict((i.piece.label, i) for i in self.pieces)
-
-        sgb = self.scenegraphbuilder
-        
-        for l, tab_nos in tabs.items():
-            p = piece_dict[l]
-            with puzzler.sgbuilder.insert_sequence(sgb):
-                sgb.add_translate(p.coords.xy)
-                sgb.add_rotate(p.coords.angle)
-                for tab_no in tab_nos:
-                    p0, v = fe.get_tab_center_and_direction((l, tab_no))
-                    p1 = p0 + v * 100
-                    sgb.add_lines(np.array((p0, p1)), fill='red', width=1, arrow='last')
-
-        if not self.render_frontier_details:
-            return
-
-        for l, (a, b) in frontier:
-            p = piece_dict[l]
-            with puzzler.sgbuilder.insert_sequence(sgb):
-                sgb.add_translate(p.coords.xy)
-                sgb.add_rotate(p.coords.angle)
-                sgb.add_points([p.piece.points[b]], radius=10, outline='purple')
-                
-        for i, (l, (a, b)) in enumerate(frontier):
-            p = piece_dict[l]
-            with puzzler.sgbuilder.insert_sequence(sgb):
-                sgb.add_translate(p.coords.xy)
-                sgb.add_rotate(p.coords.angle)
-                v = p.piece.points[a]
-                sgb.add_points([v], radius=8, fill='pink')
-                label = str(i)
-                sgb.add_text(v, label, font=('Courier New', 12))
-
 class CanvasHitTester:
 
     def __init__(self, canvas):
@@ -515,9 +458,6 @@ class AlignTk:
         f = PuzzleSGFactory(self.pieces, self.solver.raftinator)
 
         f.selection = self.selection
-        f.frontiers = self.solver.frontiers
-        if self.var_render_frontier.get():
-            f.render_frontier_details = True
         if self.var_render_vertexes.get():
             f.render_vertex_details = True
         if self.render_seams:
@@ -537,11 +477,6 @@ class AlignTk:
 
     def do_render_vertexes(self):
 
-        self.scenegraph = None
-        self.render()
-
-    def do_render_frontier(self):
-        
         self.scenegraph = None
         self.render()
 
@@ -594,10 +529,6 @@ class AlignTk:
         raft2 = raftinator.refine_alignment_within_raft(raft)
         mse2 = raftinator.get_total_error_for_raft_and_seams(raft2)
 
-        if False:
-            rfc = puzzler.raft.RaftFeaturesComputer(pieces)
-            rfc.compute_features(raft.coords)
-        
         print(f"raft: {mse=:.3f} {mse2=:.3f}")
 
         for p in self.pieces:
@@ -679,12 +610,6 @@ class AlignTk:
 
         b3 = ttk.Button(self.controls, text='Refine', command=self.do_refine)
         b3.grid(column=2, row=0, sticky=W)
-
-        self.var_render_frontier = IntVar(value=0)
-        b4 = ttk.Checkbutton(self.controls, text="Frontier",
-                             command=self.do_render_frontier,
-                             variable=self.var_render_frontier)
-        b4.grid(column=3, row=0, sticky=W)
 
         self.var_render_tabs = IntVar(value=0)
         b3 = ttk.Checkbutton(self.controls, text="Tabs",
@@ -813,10 +738,6 @@ class AlignTk:
 
         pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
 
-        if False:
-            rfc = puzzler.raft.RaftFeaturesComputer(pieces)
-            rfc.compute_features(raft.coords)
-
         self.render_seams = seams
 
         self.scenegraph = None
@@ -889,14 +810,6 @@ def align_ui(args):
     if args.tabs:
         tab_pairs = puzzler.tabpairs.load_tab_pairs(args.tabs)
 
-    if args.num_workers:
-        ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers, expected, args.directory)
-        raft = ps.solve()
-        n_pieces = len(ps.pieces)
-        n_placed = len(raft.coords) if raft else 0
-        print(f"all done! {n_pieces=} {n_placed=}")
-        return
-
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
@@ -916,7 +829,6 @@ def add_parser(commands):
     parser_align.add_argument("labels", nargs='*')
     parser_align.add_argument("-i", "--input", help="initialize solver")
     parser_align.add_argument("-e", "--expected", help="expected tab matches csv file")
-    parser_align.add_argument("-n", "--num-workers", help="number of workers for parallel solve", default=0, type=int)
     parser_align.add_argument("-d", "--directory", help="directory to log output to")
     parser_align.add_argument("-t", "--tabs", help="fit errors for tab pairs")
     parser_align.set_defaults(func=align_ui)

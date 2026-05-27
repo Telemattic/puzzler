@@ -123,123 +123,10 @@ class BorderSolver:
     
     def link_pieces(self, scores):
 
-        return self.link_pieces_nx(scores)
-
-        print(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
-        
-        rescore = dict()
-        for dst, sources in scores.items():
-            # source is a dict, flatten it into a list so
-            # we can sort it by MSE
-            sources = [(*score, src) for src, score in sources.items()]
-            sources.sort(key=operator.itemgetter(0))
-            rescore[dst] = sources
-
-        # put border candidate pieces in ascending order of MSE for
-        # best fit, hopefully insuring that the false edge pieces get
-        # processed after the true edge pieces
-        candidates = sorted(set(self.corners + self.edges), key=lambda x: rescore[x][0])
-
-        all_pairs = dict()
-        pairs = dict()
-        used = set()
-
-        max_match_error = 70. if len(candidates) < 50 else 20. 
-
-        skipped = set()
-        for dst in candidates:
-
-            best_src = rescore[dst][0]
-            best = best_src[-1]
-
-            # HACK: fix bucks.json puzzle border
-            if False and dst == 'AA22' and best == 'AA13' and rescore[dst][1][-1] == 'AA21':
-                print(f"HACK: fix AA22 to match to AA21 instead of AA13")
-                best_src = rescore[dst][1]
-                best = best_src[-1]
-
-            # skip high error
-            if best_src[0] > max_match_error:
-                continue
-
-            all_pairs[dst] = best
-            
-            # print(f"{dst:4s} <- {best:4s} (mse={best_src[0]:.3f})")
-
-            if best in used:
-                # print(f"best match for {dst} is {best} and it has already been used :O")
-                skipped.add(dst)
-                continue
-
-            used.add(best)
-            pairs[dst] = best
-
-        if True:
-            expected_pairs = dict()
-            if self.expected:
-                for dst in candidates:
-                    dstf = puzzler.raft.Feature(dst, 'tab', self.succ[dst][1])
-                    srcf = self.expected.get(dstf)
-                    print(f"dst={str(dstf)} src={str(srcf)}")
-                    if srcf is not None:
-                        expected_pairs[dst] = srcf.piece
-
-            actual_pairs = all_pairs
-
-            with open('temp/rescores.json', 'w') as f:
-                o = dict()
-                o['scores'] = rescore
-                o['pairs'] = pairs
-                o['all_pairs'] = all_pairs
-                o['corners'] = self.corners
-                o['edges'] = self.edges
-                o['candidates'] = candidates
-                o['pred'] = self.pred
-                o['succ'] = self.succ
-                o['expected_pairs'] = expected_pairs
-                o['actual_pairs'] = actual_pairs
-                f.write(json.dumps(o, indent=4))
-    
-        # print(f"{pairs=}")
-
-        retval = []
-        visited = set()
-        curr = min(self.corners)  # arbitrary, just make it deterministic
-        while curr not in visited:
-            retval.append(curr)
-            visited.add(curr)
-            curr = pairs[curr]
-
-        if curr != retval[0]:
-            raise ValueError(f"When following edge loop didn't circle back to start!")
-
-        n = len(retval)
-        k = len(skipped) + len(pairs) - len(retval)
-        print(f"Found edge solution of length {n}, which omits {k} edge pieces")
-
-        axis_no = 3
-        axes = [0] * 4
-        for i in retval:
-            if len(self.pieces[i].edges) == 2:
-                axis_no = (axis_no + 1) % 4
-            axes[axis_no] += 1
-
-        # rotate to an assumed landscape orientation
-        print(f"pieces on each axis: {axes}")
-        
-        w, h = axes[:2]
-        if w * 1.1 < h:
-            print("rotating to landscape orientation")
-            retval = retval[w:] + retval[:w]
-
-        return retval[::-1]
-    
-    def link_pieces_nx(self, scores):
-
         max_mse = 100090. if len(self.corners) + len(self.edges) < 50 else 20.
         num_extra_edges = 10
 
-        print(f"link_pieces_nx: corners={self.corners}, no. edges={len(self.edges)}")
+        print(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
         
         rescore = dict()
         for dst, sources in scores.items():
@@ -512,332 +399,11 @@ class OverlappingPiecesKDTree:
 def OverlappingPieces(pieces, coords):
     return OverlappingPiecesKDTree(pieces, coords)
                 
-class ClosestPieces:
-
-    def __init__(self, pieces, coords, axes_opt, distance_query_cache):
-        self.pieces = pieces
-        self.coords = coords
-        self.axes_opt = axes_opt
-        self.overlaps = OverlappingPieces(pieces, coords)
-        self.max_dist = 50
-        self.distance_query_cache = distance_query_cache
-
-        # axes_opt: optional coordinates of the 4 axes
-        #
-        #    +<--- 2 ---+
-        #    |          ^
-        #    3          |
-        #    |          1
-        #    v          |
-        #    +--- 0 --->+
-        #
-        # e.g. (0, puzzle_width, puzzle_height, 0)
-        assert axes_opt is None or len(axes_opt) == 4
-
-    def __call__(self, src_label):
-
-        src_piece = self.pieces[src_label]
-        src_coords = self.coords[src_label]
-        num_points = len(src_piece.points)
-        
-        ret_dist = np.full(num_points, self.max_dist)
-        ret_no = np.zeros(num_points, dtype=np.int32)
-        ret_labels = ['none']
-
-        def piece_overlap(dst_label):
-            dst_piece = self.pieces[dst_label]
-            dst_coords = self.coords[dst_label]
-
-            dst_dist = np.abs(
-                self.distance_query_cache.query(dst_piece, dst_coords, src_piece, src_coords))
-
-            ii = np.nonzero(dst_dist < ret_dist)[0]
-            if 0 == len(ii):
-                return
-            
-            ret_dist[ii] = dst_dist[ii]
-            ret_no[ii] = len(ret_labels)
-            ret_labels.append(dst_label)
-
-        candidates = self.overlaps(src_coords.xy, src_piece.radius + self.max_dist).tolist()
-
-        for dst_label in candidates:
-
-            if dst_label != src_label:
-                piece_overlap(dst_label)
-
-        src_points = None
-
-        def axis_overlap(xy, loc, label):
-
-            center = src_coords.xy[xy]
-            radius = src_piece.radius + self.max_dist
-            overlaps = center - radius <= loc <= center + radius
-            if not overlaps:
-                return
-
-            nonlocal src_points
-            if src_points is None:
-                transform = puzzler.render.Transform()
-                transform.translate(src_coords.xy).rotate(src_coords.angle)
-                src_points = transform.apply_v2(src_piece.points)
-            
-            dst_dist = np.abs(src_points[:,xy] - loc)
-            ii = np.nonzero(dst_dist < ret_dist)[0]
-            if 0 == len(ii):
-                return
-            
-            ret_dist[ii] = dst_dist[ii]
-            ret_no[ii] = len(ret_labels)
-            ret_labels.append(label)
-
-        if self.axes_opt:
-            axis_overlap(1, self.axes_opt[0], 'axis0')
-            axis_overlap(0, self.axes_opt[1], 'axis1')
-            axis_overlap(1, self.axes_opt[2], 'axis2')
-            axis_overlap(0, self.axes_opt[3], 'axis3')
-
-        retval = collections.defaultdict(list)
-
-        i = 0
-        for key, group in itertools.groupby(ret_no):
-            j = len(list(group))
-            key_s = ret_labels[key]
-            retval[key_s].append((i, i+j-1))
-            i += j
-            
-        for v in retval.values():
-            if len(v) >= 2:
-                head = v[0]
-                tail = v[-1]
-                if 0 == head[0] and i-1 == tail[1]:
-                    v[0] = (tail[0], head[1])
-                    v.pop()
-
-        return retval
-
-class BoundaryComputer:
-
-    def __init__(self, pieces):
-        self.pieces = pieces
-
-    def find_boundaries_from_adjacency(self, adjacency):
-
-        successors, neighbors, nodes_on_frontier = self.compute_successors_and_neighbors(adjacency)
-        boundaries = self.find_boundaries(successors, neighbors, nodes_on_frontier)[0]
-        return [self.simplify_boundary(i) for i in boundaries]
-
-    @staticmethod
-    def to_dotty(f, successors, neighbors, nodes_on_frontier):
-
-        assert all(neighbors[v] == k for k, v in neighbors.items())
-
-        node_set = successors.keys() | set(successors.values()) | neighbors.keys() | set(neighbors.values())
-        nodes = dict()
-        for i, n in enumerate(node_set):
-            nodes[n] = f"node_{i}"
-
-        print('digraph G {', file=f)
-
-        for k, v in nodes.items():
-            attr = f'label="{k}"'
-            if k in nodes_on_frontier:
-                attr += ' style=bold'
-            print(f'  {v} [{attr}]', file=f)
-
-        for k, v in successors.items():
-            print(f'  {nodes[k]} -> {nodes[v]} [style=dashed]', file=f)
-
-        for k, v in neighbors.items():
-            if nodes[k] <= nodes[v]:
-                print(f'  {nodes[k]} -> {nodes[v]} [dir=both]', file=f)
-
-        print('}', file=f)
-
-    @staticmethod
-    def simplify_boundary(boundary):
-
-        # Gross: we can end up with the same piece appearing
-        # consecutively on the boundary and get confused, just
-        # smoosh them all together and pray
-
-        if len(boundary) > 1 and boundary[0][0] == boundary[-1][0]:
-            for i, b in enumerate(boundary):
-                if boundary[0][0] != b[0]:
-                    break
-
-            boundary = boundary[i:] + boundary[:i]
-
-        retval = []
-        for k, g in itertools.groupby(boundary, key=operator.itemgetter(0)):
-            g = list(j for _, j in g)
-            a, b = g[0][0], g[-1][1]
-            retval.append((k, (a,b)))
-                    
-        return retval
-            
-    def compute_successors_and_neighbors(self, adjacency):
-
-        src_and_range_to_dst = dict()
-        src_and_dst_to_range = dict()
-
-        successors = dict()
-    
-        for src_label, src_adjacency_list in adjacency.items():
-        
-            src = self.pieces[src_label]
-            n = len(src.points)
-        
-            def range_length(r):
-                a, b = r
-                return len(puzzler.commands.align.RingRange(a, b+1, n))
-
-            ranges = []
-            for dst_label, src_ranges in src_adjacency_list.items():
-                # print(f"{src_label=} {dst_label=} {src_ranges=}")
-                if dst_label == 'none':
-                    ranges += src_ranges
-                else:
-                    r = max(src_ranges, key=range_length)
-                    ranges.append(r)
-                    src_and_range_to_dst[(src_label, r)] = dst_label
-                    src_and_dst_to_range[(src_label, dst_label)] = r
-
-            ranges.sort()
-            for prev, curr in pairwise_circular(ranges):
-                successors[(src_label, prev)] = (src_label, curr)
-
-        neighbors = dict()
-
-        nodes_on_frontier = set()
-
-        for (src_label, src_range) in successors:
-
-            if dst_label := src_and_range_to_dst.get((src_label, src_range)):
-                if dst_range := src_and_dst_to_range.get((dst_label, src_label)):
-                    neighbors[(src_label, src_range)] = (dst_label, dst_range)
-            else:
-                nodes_on_frontier.add((src_label, src_range))
-
-        return (successors, neighbors, nodes_on_frontier)
-
-    def find_boundaries(self, successors, neighbors, nodes_on_frontier):
-
-        covered = set()
-        retval = []
-        fullpaths = []
-
-        for head in nodes_on_frontier:
-
-            if head in covered:
-                continue
-
-            frontier = [head]
-            visited = set(frontier)
-
-            fullpath = [head]
-
-            # on the frontier, therefore has no neighbor, must take
-            # successor
-            curr = successors[head]
-
-            while curr != head:
-
-                if neighbor := neighbors.get(curr):
-                    # if the current node has a neighbor (is not on the
-                    # frontier) then jump to the neighbor and then to its
-                    # successor (by definition the neighbor's neighbor would
-                    # take us back to curr)
-                    curr = neighbor
-                else:
-                    # the current node has no neighbor, and is
-                    # therefore on the frontier
-                    visited.add(curr)
-                    frontier.append(curr)
-
-                fullpath.append(curr)
-                curr = successors[curr]
-
-            covered |= visited
-
-            retval.append(frontier)
-            fullpaths.append(fullpath)
-
-        return retval, fullpaths
-
-class FrontierExplorer:
-
-    def __init__(self, pieces):
-        self.pieces = pieces
-
-    def find_tabs(self, frontier):
-
-        retval = []
-        
-        for l, (a, b) in frontier:
-            p = self.pieces[l]
-            rr = puzzler.commands.align.RingRange(a, b, len(p.points))
-            
-            included_tabs = [i for i, tab in enumerate(p.tabs) if all(j in rr for j in tab.tangent_indexes)]
-
-            def position_in_ring(i):
-                tab = p.tabs[i]
-                begin = tab.tangent_indexes[0]
-                if begin < rr.a:
-                    begin += rr.n
-                return begin
-
-            included_tabs.sort(key=position_in_ring)
-
-            retval += [(l, i) for i in included_tabs]
-
-        return retval
-
-    def find_interesting_corners(self, frontier, coords):
-
-        tabs = self.find_tabs(frontier)
-        dirs = []
-        for tab in tabs:
-            p, v = self.get_tab_center_and_direction(tab)
-            t = coords[tab[0]].xform
-            dirs.append((t.apply_v2(p), t.apply_n2(v)))
-            
-        scores = []
-        for i, curr_dir in enumerate(dirs):
-            p1, v2 = dirs[i-1]
-            p3, v4 = curr_dir
-            t = np.cross(p3 - p1, v4)
-            u = np.cross(p3 - p1, v2)
-            d = np.cross(v2, v4)
-            if d != 0.:
-                t /= d
-                u /= d
-            else:
-                t = 0.
-                u = 0.
-            scores.append((np.dot(v2, v4), t, u))
-            
-        return [(scores[i], tabs[i-1], tabs[i]) for i in range(len(tabs))]
-
-    def get_tab_center_and_direction(self, tab):
-
-        p = self.pieces[tab[0]]
-        t = p.tabs[tab[1]]
-        v = p.points[np.array(t.tangent_indexes)] - t.ellipse.center
-        v = v / np.linalg.norm(v, axis=1)
-        v = np.sum(v, axis=0)
-        v = v / np.linalg.norm(v)
-        if not t.indent:
-            v = -v
-        return (t.ellipse.center, v)
-
 class PuzzleSolver:
 
     def __init__(self, pieces, *, dirname = None, expected = None, tab_pairs = None):
         self.pieces = pieces
         self.raft = None
-        self.frontiers = None
-        self.corners = []
         self.distance_query_cache = puzzler.align.DistanceQueryCache()
         self.use_raftinator = True
         self.raftinator = puzzler.raft.Raftinator(pieces)
@@ -899,8 +465,6 @@ class PuzzleSolver:
         width, height = self.raft.size
         print(f"puzzle_size: {width=:.1f} {height=:.1f}")
 
-        self.update_adjacency()
-
         if self.dirname:
             self.save_tab_matches(self.next_path('matches_' + ts, 'csv'))
             save_json(self.next_path('solver_' + ts, 'json'), self)
@@ -919,7 +483,7 @@ class PuzzleSolver:
         if self.raft is None:
             return False
 
-        if not self.corners:
+        if len(self.pieces) <= len(self.raft.coords):
             return False
 
         self.distance_query_cache.purge()
@@ -927,8 +491,6 @@ class PuzzleSolver:
         fits = self.score_pockets()
 
         if not fits:
-            # UI sentinel -- there is no more progress to be made
-            self.corners = []
             return False
 
         # rank the fits by MSE, previously they were ranked by how
@@ -984,18 +546,11 @@ class PuzzleSolver:
 
         seams = self.raftinator.get_seams_for_raft(new_raft)
 
-        if True:
-            rafc = puzzler.raft.RaftAxisFeaturesComputer(self.pieces)
-            axis_features = rafc.compute_axis_features(new_raft.coords)
-        else:
-            rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
-            axis_features = rfc.get_axis_features(new_raft.coords)
+        rafc = puzzler.raft.RaftAxisFeaturesComputer(self.pieces)
+        axis_features = rafc.compute_axis_features(new_raft.coords)
 
         if True:
             refined_raft = self.raftinator.aligner.delta_refine_alignment_within_raft(
-                new_raft, seams, axis_features)
-        elif len(new_raft.coords) > 350:
-            refined_raft = self.raftinator.aligner.partitioned_refine_alignment_within_raft(
                 new_raft, seams, axis_features)
         else:
             refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
@@ -1006,8 +561,6 @@ class PuzzleSolver:
     def update_raft(self, raft):
 
         self.raft = raft
-
-        self.update_adjacency()
 
         if self.dirname:
             ts = datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -1104,35 +657,6 @@ class PuzzleSolver:
             writer.writeheader()
             writer.writerows(rows)
                 
-    def update_adjacency(self):
-
-        self.frontiers = []
-        self.corners = []
-        if len(self.raft.coords) < len(self.pieces):
-            self.corners = [None]
-        return
-
-        coords = self.raft.coords
-        width, height = self.raft.size
-        axes_opt = (0., width, height, 0.)
-        closest_pieces = ClosestPieces(self.pieces, coords, axes_opt, self.distance_query_cache)
-        adjacency = dict((i, closest_pieces(i)) for i in self.raft.coords)
-        
-        frontiers = BoundaryComputer(self.pieces).find_boundaries_from_adjacency(adjacency)
-        
-        fe = FrontierExplorer(self.pieces)
-        corners = []
-        for f in frontiers:
-            corners += fe.find_interesting_corners(f, coords)
-        good_corners = []
-        for (s, t, u), tab0, tab1 in corners:
-            is_interesting = abs(s) < .5 and 50 < t < 1000 and 50 < u < 1000
-            if is_interesting:
-                good_corners.append((tab0, tab1))
-
-        self.frontiers = frontiers
-        self.corners = good_corners
-
 def load_json(path, pieces):
 
     with open(path, 'r') as f:
@@ -1169,7 +693,6 @@ def from_json(pieces, s):
 
     solver = PuzzleSolver(pieces)
     solver.raft = raft
-    solver.update_adjacency()
 
     return solver
 

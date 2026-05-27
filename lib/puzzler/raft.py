@@ -33,14 +33,11 @@ class Feature(NamedTuple):
             x = '{' + x + '}'
         return self.piece + x + str(self.index)
 
-Frontier = Sequence[Feature]
 Features = Sequence[Feature]
-Frontiers = Sequence[Frontier]
 
 FeaturePair = Tuple[Feature,Feature]
 FeaturePairs = Sequence[FeaturePair]
 
-AxisFeatures = Mapping[int,Frontier]
 Size = Tuple[float,float]
 
 @dataclass
@@ -69,12 +66,14 @@ class RaftFactory:
         coords = dst_raft.coords | self.transform_coords(src_raft_coord, src_raft.coords)
         return Raft(coords, dst_raft.size)
 
+AxisFeatures = List[Features]
+
 class RaftAxisFeaturesComputer:
 
     def __init__(self, pieces: Pieces):
         self.pieces = pieces
 
-    def compute_axis_features(self, coords: Coords):
+    def compute_axis_features(self, coords: Coords) -> AxisFeatures:
 
         helper = FeatureHelper(self.pieces, coords)
 
@@ -135,193 +134,6 @@ class RaftAxisFeaturesComputer:
             curr = successor_edge(curr)
 
         return axis_features
-
-class RaftFeatures(NamedTuple):
-    tabs: Frontiers
-    axes: Mapping[int,Frontier]
-
-class RaftFeaturesComputer:
-
-    def __init__(self, pieces: Pieces):
-        self.pieces = pieces
-        self.distance_query_cache = puzzler.align.DistanceQueryCache(purge_interval=10_000)
-
-    def compute_features(self, coords: Coords) -> RaftFeatures:
-
-        tabs = []
-        edges = []
-        for frontier in self.compute_frontiers(coords):
-            if any(f.kind == 'edge' for f in frontier):
-                edges.append(frontier)
-            if any(f.kind == 'tab' for f in frontier):
-                tabs.append(frontier)
-
-        if len(edges) > 1:
-            raise ValueError("all edges should be contained in a single frontier!")
-
-        axes = self.split_frontier_into_axes(edges[0], coords) if edges else dict()
-
-        return RaftFeatures(tabs, axes)
-
-    def get_axis_features(self, coords):
-
-        rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
-            
-        border = None
-        for frontier in rfc.compute_frontiers(coords):
-            if all(i.kind == 'edge' for i in frontier):
-                border = frontier
-                break
-
-        if border is None:
-            return None
-
-        axes = rfc.split_frontier_into_axes(border, coords)
-
-        # convert from a dict to an array
-        axes = [axes.get(i, []) for i in range(4)]
-
-        fh = FeatureHelper(self.pieces, coords)
-
-        # rotate the array so that the "natural" axis 0 is first
-        for i, axis in enumerate(axes):
-            if len(axis) == 0:
-                continue
-            vec = fh.get_edge_unit_vector(axis[0])
-            if np.dot(vec, np.array((-1, 0))) > .8:
-                break
-
-        if i < 4:
-            axes = axes[i:] + axes[:i]
-
-        if False:
-            afc = RaftAxisFeaturesComputer(self.pieces)
-            axes2 = afc.compute_axis_features(coords)
-
-        return axes
-    
-    def split_frontier_into_axes(self, frontier: Frontier, coords: Coords) -> Frontiers:
-
-        edges = []
-        
-        for k, g in itertools.groupby(frontier, key=operator.attrgetter('kind')):
-            if k == 'edge':
-                edges += list(g)
-
-        if len(edges) == 0:
-            print(frontier)
-            raise ValueError("split_frontier_into_axes: frontier contains no edges")
-
-        helper = FeatureHelper(self.pieces, coords)
-        
-        axes = [helper.get_edge_unit_vector(edges[0])]
-        for _ in range(3):
-            x, y = axes[-1]
-            axes.append(np.array((-y, x)))
-
-        axes = np.array(axes)
-
-        axis_nos = []
-        for f in edges:
-            v = helper.get_edge_unit_vector(f)
-            i = np.argmax(np.sum(axes * v, axis=1))
-            axis_nos.append((i, f))
-
-        # rotate the edge so we don't split an axis if we can avoid it
-        if len(axis_nos) > 1 and axis_nos[0][0] == axis_nos[-1][0]:
-            for i, axis_no in enumerate(axis_nos):
-                if axis_no[0] != axis_nos[0][0]:
-                    break
-            axis_nos = axis_nos[i:] + axis_nos[:i]
-
-        axes = dict()
-        for axis_no, group in itertools.groupby(axis_nos, key=operator.itemgetter(0)):
-            if axis_no in axes:
-                raise ValueError("axis order is nonsense, indicative of bad edge labeling")
-            axes[axis_no] = [f for _, f in group]
-
-        return axes
-
-    def compute_frontiers(self, coords: Coords) -> Frontiers:
-
-        return [self.compute_frontier_for_boundary(i) for i in self.compute_boundaries(coords)]
-
-    def compute_frontier_tabs_for_piece(self, coords: Coords, label: str) -> Features:
-
-        closest = puzzler.solver.ClosestPieces(
-            self.pieces, coords, None, self.distance_query_cache)
-
-        features = []
-        for a, b in closest(label).get('none', []):
-            for f in self.compute_ordered_features_for_segment(label, a, b):
-                if f.kind == 'tab':
-                    features.append(f)
-
-        return features
-
-    def compute_boundaries(self, coords: Coords) -> Boundaries:
-        
-        closest = puzzler.solver.ClosestPieces(
-            self.pieces, coords, None, self.distance_query_cache)
-        adjacency = dict((i, closest(i)) for i in coords)
-
-        bc = puzzler.solver.BoundaryComputer(self.pieces)
-        return bc.find_boundaries_from_adjacency(adjacency)
-
-    def compute_frontier_for_boundary(self, boundary) -> Frontier:
-
-        frontier = []
-        for label, (a, b) in boundary:
-            frontier += self.compute_ordered_features_for_segment(label, a, b)
-        return frontier
-
-    def compute_ordered_features_for_segment(self, label, a, b):
-
-        p = self.pieces[label]
-        n = len(p.points)
-        segment = puzzler.commands.align.RingRange(a, b, n)
-        
-        def midpoint(indexes):
-            i, j = indexes
-            if i < j:
-                m = (i + j) // 2
-            else:
-                m = ((i + j + n) // 2) % n
-            return m
-
-        def is_edge_included(edge):
-            return midpoint(edge.fit_indexes) in segment
-
-        def is_tab_included(tab):
-            return midpoint(tab.tangent_indexes) in segment
-
-        def position_in_ring(f):
-            if f.kind == 'tab':
-                m = midpoint(p.tabs[f.index].tangent_indexes)
-            else:
-                m = midpoint(p.edges[f.index].fit_indexes)
-            # adjust the midpoint so that points that occur later in
-            # the segment always have a higher reported midpoint, even
-            # if the segment "wraps" from high indices to low indices.
-            # An alternative would be to report these points as
-            # relative offsets within the segment, i.e. perform all of
-            # these calculations and then subtract a, so it should
-            # always be the case that 0 <= m < len(segment)
-            if a > b and m < b:
-                m += n
-            return m
-            
-        features = []
-        
-        for i, edge in enumerate(p.edges):
-            if is_edge_included(edge):
-                features.append(Feature(label, 'edge', i))
-                
-        for i, tab in enumerate(p.tabs):
-            if is_tab_included(tab):
-                features.append(Feature(label, 'tab', i))
-
-        return sorted(features, key=position_in_ring)
 
 class FeatureHelper:
 
@@ -686,7 +498,7 @@ class RaftAligner:
             self,
             raft: Raft,
             seams: Sequence[Seam],
-            axis_features: Optional[Frontiers] = None) -> Raft:
+            axis_features: Optional[AxisFeatures] = None) -> Raft:
 
         # HACK HACK HACK
         #
@@ -725,8 +537,8 @@ class RaftAligner:
             self,
             raft: Raft,
             seams: Sequence[Seam],
-            axis_features: Optional[Frontiers] = None,
-            fixed_pieces: Optional[set] = None) -> Raft:
+            axis_features: Optional[AxisFeatures] = None,
+            fixed_pieces: Optional[Set[str]] = None) -> Raft:
 
         verbose = False
 
