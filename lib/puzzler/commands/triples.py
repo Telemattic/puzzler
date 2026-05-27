@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 Feature = puzzler.raft.Feature
 
-def try_triples(pieces, quad, num_refine, tab_pairs = None):
+def try_triples(quad, *, pieces, num_refine=1, tab_pairs=None, early_exit=False):
 
     raftinator = puzzler.raft.Raftinator(pieces)
     
@@ -57,7 +57,7 @@ def try_triples(pieces, quad, num_refine, tab_pairs = None):
 
         for match in pf.candidate_matches(candidates, tab_pairs):
 
-            if match.min_seam_error is not None and match.min_seam_error > min_seam_error:
+            if early_exit and match.min_seam_error is not None and match.min_seam_error > min_seam_error:
                 break
 
             mse, seam_fit_error = pf.measure_fit(match.src_label, match.feature_pairs, compute_seam_fit_error=True)
@@ -94,39 +94,35 @@ def try_triples(pieces, quad, num_refine, tab_pairs = None):
 
     return retval2
 
-TRIPLES_PUZZLE = None
-TRIPLES_REFINE = None
-TRIPLES_FIT_ERROR = None
+TRIPLES_KWARGS = None
 
-def triples_init(puzzle_path, num_refine, tabs_path):
+def triples_init(puzzle_path, num_refine, tabs_path, early_exit):
 
-    global TRIPLES_PUZZLE, TRIPLES_REFINE, TRIPLES_FIT_ERROR
+    global TRIPLES_KWARGS
 
-    TRIPLES_PUZZLE = puzzler.file.load(puzzle_path)
-    TRIPLES_REFINE = num_refine
-    TRIPLES_FIT_ERROR = None
+    puzzle = puzzler.file.load(args.puzzle)
+    pieces = {p.label: p for p in puzzle.pieces}
+    
+    kwargs = {'pieces':pieces, 'num_refine':num_refine, 'tab_pairs':None, 'early_exit':early_exit}
     if tabs_path:
-        TRIPLES_FIT_ERROR = puzzler.tabpairs.load_tab_pairs(tabs_path)
+        kwargs['tab_pairs'] = puzzler.tabpairs.load_tab_pairs(tabs_path)
+
+    TRIPLES_KWARGS = kwargs
 
 def triples_work(quad):
 
-    pieces = {p.label: p for p in TRIPLES_PUZZLE.pieces}
-    return try_triples(pieces, quad, TRIPLES_REFINE, TRIPLES_FIT_ERROR)
+    return try_triples(quad, **TRIPLES_KWARGS)
 
 def triples_main(args):
 
-    puzzle_path = args.puzzle
-    input_csv_path = args.quads
-    output_csv_path = args.output
-
-    puzzle = puzzler.file.load(puzzle_path)
+    puzzle = puzzler.file.load(args.puzzle)
     
     pieces = {p.label: p for p in puzzle.pieces}
     
     assert len(pieces) == 1026
 
     quads = []
-    with open(input_csv_path, 'r', newline='') as ifile:
+    with open(args.quads, 'r', newline='') as ifile:
         reader = csv.DictReader(ifile)
         for row in reader:
             if int(row['rank']) == 1:
@@ -134,7 +130,7 @@ def triples_main(args):
                 row['quad_no'] = 4 * len(quads)
                 quads.append(row)
 
-    with open(output_csv_path, 'w', newline='') as ofile:
+    with open(args.output, 'w', newline='') as ofile:
         fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft mse seam_mse lower_bound_mse rank'
         writer = csv.DictWriter(ofile, fieldnames=fieldnames.split())
         writer.writeheader()
@@ -143,7 +139,7 @@ def triples_main(args):
             
             with mp.Pool(args.num_workers,
                          triples_init,
-                         [puzzle_path, args.refine, args.tabs],
+                         [args.puzzle, args.refine, args.tabs, args.early_exit],
                          maxtasksperchild=None) as pool:
                 
                 pbar = tqdm(total=len(quads), smoothing=0)
@@ -152,12 +148,12 @@ def triples_main(args):
                     pbar.update()
         else:
 
-            tab_pairs = None
+            kwargs = {'pieces':pieces, 'num_refine':args.refine, 'tab_pairs':None, 'early_exit':args.early_exit}
             if args.tabs:
-                tab_pairs = puzzler.tabpairs.load_tab_pairs(args.tabs)
-
+                kwargs['tab_pairs'] = puzzler.tabpairs.load_tab_pairs(args.tabs)
+            
             for quad in tqdm(quads, smoothing=0):
-                writer.writerows(try_triples(pieces, quad, args.refine, tab_pairs))
+                writer.writerows(try_triples(quad, **kwargs))
 
 def add_parser(commands):
 
@@ -171,5 +167,7 @@ def add_parser(commands):
     parser_triples.add_argument("-r", "--refine", default=1, type=int,
                                 help="number of refinement passes for fit (default %(default)i)")
     parser_triples.add_argument("--tabs", default=None, help="CSV of fit error for all possible tab matches")
+    parser_triples.add_argument("--early-exit", default=False, action='store_true',
+                                help="stop the search if the tab-pairs says no better match is possible")
     parser_triples.set_defaults(func=triples_main)
     
