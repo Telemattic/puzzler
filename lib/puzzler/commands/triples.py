@@ -57,7 +57,7 @@ def try_triples(pieces, quad, num_refine, tab_pairs = None):
 
         for match in pf.candidate_matches(candidates, tab_pairs):
 
-            if match.min_seam_error > min_seam_error:
+            if match.min_seam_error is not None and match.min_seam_error > min_seam_error:
                 break
 
             mse, seam_fit_error = pf.measure_fit(match.src_label, match.feature_pairs, compute_seam_fit_error=True)
