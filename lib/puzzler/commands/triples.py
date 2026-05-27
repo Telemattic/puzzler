@@ -100,7 +100,7 @@ def triples_init(puzzle_path, num_refine, tabs_path, early_exit):
 
     global TRIPLES_KWARGS
 
-    puzzle = puzzler.file.load(args.puzzle)
+    puzzle = puzzler.file.load(puzzle_path)
     pieces = {p.label: p for p in puzzle.pieces}
     
     kwargs = {'pieces':pieces, 'num_refine':num_refine, 'tab_pairs':None, 'early_exit':early_exit}
