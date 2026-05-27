@@ -134,13 +134,13 @@ class PocketTabMatcher:
 
         self.dst_tab_pair = (dst_tab_a, dst_tab_b)
 
-    def candidate_matches_for_piece(self, src_label, fit_error_for_tabs=None):
+    def candidate_matches_for_piece(self, src_label, tab_pairs=None):
 
         def lower_bound_error(feature_pairs):
 
             err = puzzler.raft.FitError(0.,0)
             for fp in feature_pairs:
-                err += fit_error_for_tabs[fp]
+                err += tab_pairs.get_fit_error(*fp)
             return err.mse
 
         retval = []
@@ -148,21 +148,21 @@ class PocketTabMatcher:
 
             feature_pairs = PocketTabMatcher.make_feature_pairs(self.dst_tab_pair, src_tab_pair)
             if len(feature_pairs):
-                mse = lower_bound_error(feature_pairs) if fit_error_for_tabs else None
+                mse = lower_bound_error(feature_pairs) if tab_pairs else None
                 retval.append(PocketTabMatcher.Match(src_label, feature_pairs, mse))
                 
         return retval
         
-    def candidate_matches(self, candidates, fit_error_for_tabs=None):
+    def candidate_matches(self, candidates, tab_pairs=None):
 
         retval = []
         for src_label in candidates:
             try:
-                retval += self.candidate_matches_for_piece(src_label, fit_error_for_tabs)
+                retval += self.candidate_matches_for_piece(src_label, tab_pairs)
             except PocketFitter.FitException as x:
                 print(x)
 
-        if fit_error_for_tabs:
+        if tab_pairs:
             retval.sort(key=operator.attrgetter('min_seam_error'))
         
         return retval
@@ -333,8 +333,8 @@ class PocketFitter:
 
         self.tab_matcher = PocketTabMatcher(self.pieces, pocket)
 
-    def candidate_matches(self, candidates, fit_error_for_tabs=None):
-        return self.tab_matcher.candidate_matches(candidates, fit_error_for_tabs)
+    def candidate_matches(self, candidates, tab_pairs=None):
+        return self.tab_matcher.candidate_matches(candidates, tab_pairs)
 
     def measure_fit(self, src_label, feature_pairs, compute_seam_fit_error=False):
 
@@ -362,5 +362,8 @@ class PocketFitter:
             seams = r.get_seams_for_raft(raft)
             
         mse = r.get_total_error_for_raft_and_seams(raft, seams)
+
+        if mse is None:
+            mse = float("+inf")
         
         return (mse, seam_fe)

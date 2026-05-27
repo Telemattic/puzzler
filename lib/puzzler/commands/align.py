@@ -375,12 +375,12 @@ class CanvasHitTester:
 
 class AlignTk:
 
-    def __init__(self, parent, pieces, directory, expected, fit_error_for_tab_pairs):
+    def __init__(self, parent, pieces, directory, expected, tab_pairs):
         
         self.pieces = pieces
 
         pieces_dict = {i.piece.label: i.piece for i in pieces}
-        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, dirname=directory, expected=expected, fit_error_for_tab_pairs=fit_error_for_tab_pairs)
+        self.solver = puzzler.solver.PuzzleSolver(pieces_dict, dirname=directory, expected=expected, tab_pairs=tab_pairs)
 
         self.draggable = None
         self.selection = None
@@ -594,8 +594,9 @@ class AlignTk:
         raft2 = raftinator.refine_alignment_within_raft(raft)
         mse2 = raftinator.get_total_error_for_raft_and_seams(raft2)
 
-        rfc = puzzler.raft.RaftFeaturesComputer(pieces)
-        rfc.compute_features(raft.coords)
+        if False:
+            rfc = puzzler.raft.RaftFeaturesComputer(pieces)
+            rfc.compute_features(raft.coords)
         
         print(f"raft: {mse=:.3f} {mse2=:.3f}")
 
@@ -812,8 +813,9 @@ class AlignTk:
 
         pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
 
-        rfc = puzzler.raft.RaftFeaturesComputer(pieces)
-        rfc.compute_features(raft.coords)
+        if False:
+            rfc = puzzler.raft.RaftFeaturesComputer(pieces)
+            rfc.compute_features(raft.coords)
 
         self.render_seams = seams
 
@@ -859,20 +861,6 @@ def cross_check_expected_and_pieces(expected, pieces):
             s = ', '.join(str(i) for i in (b-c))
             print(f"    unknown tabs in expected: {s}")
     
-def read_fit_error_for_tab_pairs(path):
-
-    retval = dict()
-    with open(path, 'r', newline='') as ifile:
-        reader = csv.DictReader(ifile)
-
-        for row in reader:
-            dst = puzzler.raft.Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
-            src = puzzler.raft.Feature(row['src_label'], 'tab', int(row['src_tab_no']))
-            fit_error = puzzler.raft.FitError(float(row['sse']), int(row['n']))
-            retval[dst,src] = fit_error
-
-    return retval
-
 def align_ui(args):
 
     puzzle = puzzler.file.load(args.puzzle)
@@ -897,9 +885,9 @@ def align_ui(args):
         expected = read_expected_tab_matches(args.expected)
         cross_check_expected_and_pieces(expected, by_label)
 
-    fit_error_for_tab_pairs = None
+    tab_pairs = None
     if args.tabs:
-        fit_error_for_tab_pairs = read_fit_error_for_tab_pairs(args.tabs)
+        tab_pairs = puzzler.tabpairs.load_tab_pairs(args.tabs)
 
     if args.num_workers:
         ps = puzzler.psolve.ParallelSolver(args.puzzle, args.num_workers, expected, args.directory)
@@ -912,7 +900,7 @@ def align_ui(args):
     pieces = [Piece(by_label[l]) for l in sorted(labels)]
 
     root = Tk()
-    ui = AlignTk(root, pieces, args.directory, expected, fit_error_for_tab_pairs)
+    ui = AlignTk(root, pieces, args.directory, expected, tab_pairs)
     root.bind('<Key-Escape>', lambda e: root.destroy())
     root.title("Puzzler: align")
 

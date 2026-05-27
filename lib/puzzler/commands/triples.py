@@ -15,7 +15,7 @@ HACK = False
 
 Feature = puzzler.raft.Feature
 
-def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
+def try_triples(pieces, quad, num_refine, tab_pairs = None):
 
     raftinator = puzzler.raft.Raftinator(pieces)
     
@@ -60,7 +60,7 @@ def try_triples(pieces, quad, num_refine, fit_error_for_tab_pairs = None):
 
         min_seam_error = 10000.
 
-        for match in pf.candidate_matches(candidates, fit_error_for_tab_pairs):
+        for match in pf.candidate_matches(candidates, tab_pairs):
 
             if match.min_seam_error > min_seam_error:
                 break
@@ -114,26 +114,14 @@ def triples_init(puzzle_path, num_refine, tabs_path):
 
     TRIPLES_PUZZLE = puzzler.file.load(puzzle_path)
     TRIPLES_REFINE = num_refine
-    TRIPLES_FIT_ERROR = load_fit_error_for_tab_pairs(tabs_path)
+    TRIPLES_FIT_ERROR = None
+    if tabs_path:
+        TRIPLES_FIT_ERROR = puzzler.tabpairs.load_tab_pairs(tabs_path)
 
 def triples_work(quad):
 
     pieces = {p.label: p for p in TRIPLES_PUZZLE.pieces}
     return try_triples(pieces, quad, TRIPLES_REFINE, TRIPLES_FIT_ERROR)
-
-def load_fit_error_for_tab_pairs(path):
-
-    retval = dict()
-    with open(path, 'r', newline='') as ifile:
-        reader = csv.DictReader(ifile)
-
-        for row in reader:
-            dst = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
-            src = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
-            fit_error = puzzler.raft.FitError(float(row['fwd_sse']), int(row['fwd_n']))
-            retval[dst,src] = fit_error
-
-    return retval
 
 def triples_main(args):
 
@@ -174,10 +162,12 @@ def triples_main(args):
                     pbar.update()
         else:
 
-            fit_error_for_tab_pairs = load_fit_error_for_tab_pairs(args.tabs) if args.tabs else None
+            tab_pairs = None
+            if args.tabs:
+                tab_pairs = puzzler.tabpairs.load_tab_pairs(args.tabs)
 
             for quad in tqdm(quads, smoothing=0):
-                writer.writerows(try_triples(pieces, quad, args.refine, fit_error_for_tab_pairs))
+                writer.writerows(try_triples(pieces, quad, args.refine, tab_pairs))
 
 def add_parser(commands):
 
