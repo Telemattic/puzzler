@@ -6,10 +6,8 @@ import operator
 import numpy as np
 import re
 import scipy
-from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Tuple
+from typing import Any, Iterable, List, Mapping, NamedTuple, Optional, Set, Sequence, Tuple
 from dataclasses import dataclass
-
-# import puzzler.spatial
 
 Piece = 'puzzler.puzzle.Puzzle.Piece'
 Pieces = Mapping[str,Piece]
@@ -71,6 +69,73 @@ class RaftFactory:
         coords = dst_raft.coords | self.transform_coords(src_raft_coord, src_raft.coords)
         return Raft(coords, dst_raft.size)
 
+class RaftAxisFeaturesComputer:
+
+    def __init__(self, pieces: Pieces):
+        self.pieces = pieces
+
+    def compute_axis_features(self, coords: Coords):
+
+        helper = FeatureHelper(self.pieces, coords)
+
+        def piece_closest_to_origin(corners: List[str]) -> str:
+            xy = np.array([coords[i].xy for i in corners])
+            dist = np.linalg.norm(xy, axis=1)
+            return corners[np.argmin(dist)]
+
+        def get_axes_from_corner(corner) -> np.ndarray:
+            axes = [helper.get_edge_unit_vector(Feature(corner, 'edge', 0))]
+            for _ in range(3):
+                x, y = axes[-1]
+                # rotate CCW
+                axes.append(np.array((-y, x)))
+            return np.array(axes)
+        
+        def get_axis_for_edge(axes, f: Feature) -> int:
+            v = helper.get_edge_unit_vector(f)
+            return np.argmax(np.sum(axes * v, axis=1))
+
+        edge_features = []
+        edge_starts = []
+        corners = []
+        kdtree = None
+
+        # do this in deterministic order so it's repeatable
+        # (debugging, etc.)
+        for label in sorted(coords.keys()):
+            p = self.pieces[label]
+            for i, edge in enumerate(p.edges):
+                f = Feature(label, 'edge', i)
+                edge_features.append(f)
+                edge_starts.append(helper.get_edge_points(f)[0])
+            if len(p.edges) == 2:
+                corners.append(label)
+
+        if 0 == len(edge_features):
+            return None
+
+        def successor_edge(curr: Feature) -> Feature:
+            head = helper.get_edge_points(curr)[1]
+            d, i = kdtree.query(head)
+            return edge_features[i]
+
+        corner0 = piece_closest_to_origin(corners)
+        axes = get_axes_from_corner(corner0)
+
+        axis_features = list([] for _ in range(4))
+
+        edge_starts = np.array(edge_starts)
+        kdtree = scipy.spatial.KDTree(edge_starts)
+
+        curr = Feature(corner0, 'edge', 1)
+        visited = set()
+        while curr not in visited:
+            visited.add(curr)
+            axis_features[get_axis_for_edge(axes, curr)].append(curr)
+            curr = successor_edge(curr)
+
+        return axis_features
+
 class RaftFeatures(NamedTuple):
     tabs: Frontiers
     axes: Mapping[int,Frontier]
@@ -128,6 +193,10 @@ class RaftFeaturesComputer:
 
         if i < 4:
             axes = axes[i:] + axes[:i]
+
+        if False:
+            afc = RaftAxisFeaturesComputer(self.pieces)
+            axes2 = afc.compute_axis_features(coords)
 
         return axes
     
@@ -505,8 +574,6 @@ class RaftAligner:
 
         icp = puzzler.icp.IteratedClosestPoint()
         
-        pieces_with_seams = set(s.src.piece for s in seams) | set(s.dst.piece for s in seams)
-
         helper = FeatureHelper(self.pieces, raft.coords)
 
         dst_edge_points = helper.get_edge_points(dst_edge)
@@ -615,12 +682,51 @@ class RaftAligner:
 
         return src_raft_coord
 
+    def delta_refine_alignment_within_raft(
+            self,
+            raft: Raft,
+            seams: Sequence[Seam],
+            axis_features: Optional[Frontiers] = None) -> Raft:
+
+        # HACK HACK HACK
+        #
+        # assume the pieces added most recently to the coords are the
+        # delta, which relies on:
+        #
+        # 1. coords maintaining insertion order and never messing it
+        # up when rafts are merged, etc. and
+        #
+        # 2. magically knowing that this method is called every N
+        # insertions
+
+        adjacency = collections.defaultdict(set)
+        for i in seams:
+            adjacency[i.dst.piece].add(i.src.piece)
+            adjacency[i.src.piece].add(i.dst.piece)
+
+        changes = set()
+
+        next_queue = set(list(raft.coords.keys())[-20:])
+        for _ in range(3):
+            print(f"{len(next_queue)=}")
+            curr_queue = next_queue
+            next_queue = set()
+            for i in curr_queue:
+                if i not in changes:
+                    changes.add(i)
+                    next_queue |= adjacency[i]
+
+        fixed_pieces = set(raft.coords.keys()) - changes
+        print(f"{len(changes)=} {len(fixed_pieces)=}")
+        return self.refine_alignment_within_raft(
+            raft, seams, axis_features, fixed_pieces)
+
     def refine_alignment_within_raft(
             self,
             raft: Raft,
             seams: Sequence[Seam],
             axis_features: Optional[Frontiers] = None,
-            fixed_piece: Optional[str] = None) -> Raft:
+            fixed_pieces: Optional[set] = None) -> Raft:
 
         verbose = False
 
@@ -637,8 +743,10 @@ class RaftAligner:
                 icp.make_axis(np.array((0, 1), dtype=float)),
                 icp.make_axis(np.array((-1, 0), dtype=float), 0., True)
             ]
-        elif fixed_piece is None:
-            fixed_piece = self.find_piece_closest_to_origin(raft)
+            if fixed_pieces is None:
+                fixed_pieces = set()
+        elif fixed_pieces is None:
+            fixed_pieces = set([self.find_piece_closest_to_origin(raft)])
 
         if verbose:
             print(f"refine_alignment_within_raft: {fixed_piece=}")
@@ -646,7 +754,8 @@ class RaftAligner:
         bodies = dict()
         for piece in pieces_with_seams:
             coord = raft.coords[piece]
-            bodies[piece] = icp.make_rigid_body(coord.angle, coord.xy, fixed=(piece == fixed_piece))
+            fixed = piece in fixed_pieces
+            bodies[piece] = icp.make_rigid_body(coord.angle, coord.xy, fixed=fixed)
 
         for i in seams:
             src_body = bodies[i.src.piece]
@@ -667,6 +776,8 @@ class RaftAligner:
         if axis_features:
             for axis_no, frontier in enumerate(axis_features):
                 for f in frontier:
+                    if f.piece in fixed_pieces:
+                        continue
                     e = self.pieces[f.piece].edges[f.index]
                     icp.add_axis_correspondence(bodies[f.piece], e.line.pts, axes[axis_no])
 
@@ -945,7 +1056,10 @@ class Raftinator:
         if seams is None:
             seams = self.get_seams_for_raft(raft)
 
-        return self.aligner.refine_alignment_within_raft(raft, seams=seams, fixed_piece=fixed)
+        if isinstance(fixed,str):
+            fixed = {fixed}
+
+        return self.aligner.refine_alignment_within_raft(raft, seams=seams, fixed_pieces=fixed)
 
     def make_raft_from_string(self, s: str) -> Raft:
 
@@ -1040,7 +1154,7 @@ class FitError:
 
     @property
     def mse(self) -> float:
-        return self.sse / self.n if self.n > 0 else 0.
+        return self.sse / self.n if self.n > 0 else None
 
     def __add__(self, that: 'FitError') -> 'FitError':
         return FitError(self.sse + that.sse, self.n + that.n)

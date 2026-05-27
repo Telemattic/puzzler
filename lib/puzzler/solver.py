@@ -446,12 +446,18 @@ class EdgeScorer:
         src_coord = r.aligner.rough_align_edge_and_tab(dst_raft, src_raft, edge_pair, tab_pair)
         raft = r.factory.merge_rafts(dst_raft, src_raft, src_coord)
 
-        seams = r.get_seams_for_raft(raft)
-        raft = r.aligner.refine_edge_alignment_within_raft(raft, seams, edge_pair)
-                    
+        seam = r.seamstress.seam_between_pieces(
+            dst_label, raft.coords[dst_label], src_label, raft.coords[src_label])
+        raft = r.aligner.refine_edge_alignment_within_raft(raft, [seam], edge_pair)
+
+        if True:
+            seam = r.seamstress.seam_between_pieces(
+                dst_label, raft.coords[dst_label], src_label, raft.coords[src_label])
+            return puzzler.raft.FitError(seam.error, len(seam.src.indices)).mse
+        
         return r.get_total_error_for_raft_and_seams(raft)
 
-class OverlappingPieces:
+class OverlappingPiecesLinear:
 
     def __init__(self, pieces, coords):
         labels = []
@@ -472,6 +478,39 @@ class OverlappingPieces:
         dist = np.linalg.norm(center - self.centers, axis=1)
         ii = np.nonzero(self.radii + radius > dist)[0]
         return np.take(self.labels, ii)
+                
+class OverlappingPiecesKDTree:
+
+    def __init__(self, pieces, coords):
+        labels = []
+        centers = []
+        radii = []
+        for k, v in pieces.items():
+            if k not in coords:
+                continue
+            labels.append(k)
+            centers.append(coords[k].xy)
+            radii.append(v.radius)
+
+        self.labels = np.array(labels)
+        self.centers = np.array(centers)
+        self.radii = np.array(radii)
+        self.max_radius = np.max(radii)
+        self.kdtree = scipy.spatial.KDTree(self.centers)
+
+    def __call__(self, center, radius):
+        # get all the points possibly close enough (bounded by the
+        # largest radius associated with any candidate point)
+        retval = []
+        for i in self.kdtree.query_ball_point(center, radius+self.max_radius):
+            r = radius + self.radii[i]
+            d = center - self.centers[i]
+            if r*r >= np.sum(d*d):
+                retval.append(i)
+        return np.take(self.labels, retval)
+
+def OverlappingPieces(pieces, coords):
+    return OverlappingPiecesKDTree(pieces, coords)
                 
 class ClosestPieces:
 
@@ -794,7 +833,7 @@ class FrontierExplorer:
 
 class PuzzleSolver:
 
-    def __init__(self, pieces, *, dirname = None, expected = None, fit_error_for_tab_pairs = None):
+    def __init__(self, pieces, *, dirname = None, expected = None, tab_pairs = None):
         self.pieces = pieces
         self.raft = None
         self.frontiers = None
@@ -806,7 +845,7 @@ class PuzzleSolver:
         self.start_time = time.monotonic()
         self.dirname = dirname
         self.expected = expected
-        self.fit_error_for_tab_pairs = fit_error_for_tab_pairs
+        self.tab_pairs = tab_pairs
 
     def solve(self):
         if self.raft:
@@ -945,11 +984,22 @@ class PuzzleSolver:
 
         seams = self.raftinator.get_seams_for_raft(new_raft)
 
-        rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
-        axis_features = rfc.get_axis_features(new_raft.coords)
-        
-        refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
-            new_raft, seams, axis_features)
+        if True:
+            rafc = puzzler.raft.RaftAxisFeaturesComputer(self.pieces)
+            axis_features = rafc.compute_axis_features(new_raft.coords)
+        else:
+            rfc = puzzler.raft.RaftFeaturesComputer(self.pieces)
+            axis_features = rfc.get_axis_features(new_raft.coords)
+
+        if True:
+            refined_raft = self.raftinator.aligner.delta_refine_alignment_within_raft(
+                new_raft, seams, axis_features)
+        elif len(new_raft.coords) > 350:
+            refined_raft = self.raftinator.aligner.partitioned_refine_alignment_within_raft(
+                new_raft, seams, axis_features)
+        else:
+            refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
+                new_raft, seams, axis_features)
 
         self.update_raft(refined_raft)
 
@@ -979,7 +1029,10 @@ class PuzzleSolver:
             v = [i for i in v if i[1] not in raft.coords]
             
             if len(v) > 1:
-                r = v[0][0] / v[1][0]
+                if v[1][0] != 0.:
+                    r = v[0][0] / v[1][0]
+                else:
+                    r = float('nan')
                 fits.append((r, *v[0]))
             elif v:
                 fits.append((1., *v[0]))
@@ -1000,10 +1053,10 @@ class PuzzleSolver:
 
         candidates = set(self.pieces.keys()) - set(self.raft.coords.keys())
         
-        compute_seam_fit_error = self.fit_error_for_tab_pairs is not None
+        compute_seam_fit_error = self.tab_pairs is not None
         min_seam_error = 10000.
         
-        for match in pf.candidate_matches(candidates, self.fit_error_for_tab_pairs):
+        for match in pf.candidate_matches(candidates, self.tab_pairs):
 
             if compute_seam_fit_error and match.min_seam_error > min_seam_error:
                 break;
@@ -1052,6 +1105,12 @@ class PuzzleSolver:
             writer.writerows(rows)
                 
     def update_adjacency(self):
+
+        self.frontiers = []
+        self.corners = []
+        if len(self.raft.coords) < len(self.pieces):
+            self.corners = [None]
+        return
 
         coords = self.raft.coords
         width, height = self.raft.size
