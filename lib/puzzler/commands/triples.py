@@ -11,8 +11,6 @@ from typing import Any, Iterable, Mapping, Optional, Sequence, Set, Tuple
 
 from tqdm import tqdm
 
-HACK = False
-
 Feature = puzzler.raft.Feature
 
 def try_triples(pieces, quad, num_refine, tab_pairs = None):
@@ -30,9 +28,6 @@ def try_triples(pieces, quad, num_refine, tab_pairs = None):
     retval2 = []
 
     quad_no = quad['quad_no']
-
-    if HACK and quad_no != 8:
-        return []
 
     for drop_quadrant in 'ul_piece', 'ur_piece', 'll_piece', 'lr_piece':
 
@@ -87,20 +82,15 @@ def try_triples(pieces, quad, num_refine, tab_pairs = None):
 
             retval.append(row)
 
-        retval.sort(key=lambda x: x['mse'][-1])
+        retval.sort(key=operator.itemgetter('mse'))
         for i, row in enumerate(retval, start=1):
             row['rank'] = i
-            row['mse'] = ','.join(f"{i:.3f}" for i in row['mse'])
-            for k in 'seam_mse', 'lower_bound_mse':
+            for k in 'mse', 'seam_mse', 'lower_bound_mse':
                 if row[k] is not None:
                     row[k] = decimal.Decimal(f"{row[k]:.3f}")
                    
-
         retval2 += retval
         quad_no += 1
-
-        if HACK:
-            break
 
     return retval2
 
