@@ -139,10 +139,11 @@ def compute_bounding_box(points):
 
 class Polygon(Geometry):
 
-    def __init__(self, points, props):
+    def __init__(self, points, props, bbox=None):
         assert is_array_CV_32(points)
         super().__init__(props)
         self.points = points
+        self.bbox = bbox
 
     def accept(self, v):
         v.visit_polygon(self)
@@ -505,10 +506,10 @@ class EllipsePredicate(Predicate):
 
 class PolygonPredicate(Predicate):
 
-    def __init__(self, polygon, tags=None):
+    def __init__(self, polygon, tags=None, bbox=None):
         # required for pointPolygonTest
         assert is_array_CV_32(polygon)
-        self.bbox = compute_bounding_box(polygon)
+        self.bbox = bbox if bbox else compute_bounding_box(polygon)
         self.polygon = polygon
         self._tags = tags
 
@@ -650,7 +651,7 @@ class BuildHitTester(SceneGraphVisitor):
         self.objects.append(pred)
 
     def visit_polygon(self, p):
-        pred = PolygonPredicate(p.points, p.props.get('tags'))
+        pred = PolygonPredicate(p.points, p.props.get('tags'), p.bbox)
         pred = TransformPredicate(self.matrix, self.inverse, pred)
         self.objects.append(pred)
 

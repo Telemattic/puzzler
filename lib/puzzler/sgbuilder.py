@@ -1,5 +1,6 @@
 import puzzler.scenegraph as sg
 import cv2 as cv
+import functools
 import numpy as np
 from contextlib import contextmanager
 
@@ -122,7 +123,7 @@ class LevelOfDetailFactory(sg.SceneGraphCloner):
         nodes = []
         for eps in self.epsilons:
             points = simplify_polygon(p.points, eps)
-            nodes.append(sg.Polygon(points, p.props))
+            nodes.append(sg.Polygon(points, p.props, p.bbox))
 
         self.append(sg.LevelOfDetail(self.scales, nodes))
 
@@ -179,7 +180,7 @@ class PieceSceneGraphFactory:
         if self.opt['label.render']:
             self.do_label(p)
 
-        bbox = sg.compute_bounding_box(p.points)
+        bbox = self.get_bounding_box(p.label)
 
         return sg.BoundingBox(bbox, sg.Sequence(self.nodes))
 
@@ -217,7 +218,7 @@ class PieceSceneGraphFactory:
                  'fill': self.opt['points.fill'],
                  'width': self.opt['points.width'],
                  'tags':tags}
-        polygon = sg.Polygon(p.points, props)
+        polygon = sg.Polygon(p.points, props, bbox=self.get_bounding_box(p.label))
         lod = self.levelofdetail.visit_node(polygon)
         self.add_node(lod)
 
@@ -229,3 +230,7 @@ class PieceSceneGraphFactory:
 
     def add_node(self, n):
         self.nodes.append(n)
+
+    @functools.cache
+    def get_bounding_box(self, label):
+        return sg.compute_bounding_box(self.pieces[label].points)
