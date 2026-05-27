@@ -13,3 +13,4 @@ from . import render
 from . import segment
 from . import worker
 from . import psolve
+from . import tabpairs

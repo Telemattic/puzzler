@@ -2,6 +2,7 @@ import csv
 import json
 import mmap
 import puzzler
+import re
 import struct
 
 Feature = puzzler.raft.Feature
@@ -35,7 +36,7 @@ class TabPairsMMap:
             
     def __init__(self, path):
         self.f = open(path, 'rb')
-        self.mm = mmap.mmap(f.fileno(), 0, access=mmap.MAP_DENYWRITE)
+        self.mm = mmap.mmap(self.f.fileno(), length=0, access=mmap.ACCESS_READ)
 
         magic, length, offset = struct.unpack_from('LLQ', self.mm, offset=0)
         assert magic == TabPairsMMap.MAGIC
@@ -62,18 +63,31 @@ class TabPairsMMap:
 class TabPairsCSV:
 
     def __init__(self, path):
-        self.data = {}
+        self.data = TabPairsCSV.read_dict_from_file(path)
+        
+    def get_fit_error(self, dst_tab, src_tab):
+        return self.data[(dst_tab,src_tab)]
+
+    @staticmethod
+    def read_dict_from_file(path):
+        data = {}
         with open(path, 'r', newline='') as f:
-            reader = csv.DictReader(ifile)
+            reader = csv.DictReader(f)
             for row in reader:
                 dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
                 src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
                 err_sse = float(row['sse'])
                 err_n = int(row['n'])
-                self.data[(dst_tab,src_tab)] = FitError(err_sse, errr_n)
+                data[(dst_tab,src_tab)] = FitError(err_sse, err_n)
+        return data
 
-    def get_fit_error(self, dst_tab, src_tab):
-        return self.data[(dst_tab,src_tab)]
+def load_tab_pairs(path):
+
+    if re.search(r"\.csv$", path):
+        return TabPairsCSV(path)
+    elif re.search(r"\.mmap$", path):
+        return TabPairsMMap(path)
+    raise Exception(f"load_tab_pairs: don't know how to parse {path}")
 
 def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs):
 
