@@ -10,76 +10,75 @@ import operator
 import puzzler
 from tqdm import tqdm
 
-def score_pair2(piece_a, piece_b, fp):
+Feature = puzzler.raft.Feature
     
-    r = puzzler.raft.Raftinator({piece_a.label:piece_a, piece_b.label:piece_b})
-    raft = r.make_raft_from_feature_pairs(fp)
+class ScoreComputer:
+
+    def __init__(self, pieces):
+        self.raftinator = puzzler.raft.Raftinator(pieces)
+
+    def score_feature_pairs(self, feature_pairs):
+
+        r = self.raftinator
+        raft = r.make_raft_from_feature_pairs(feature_pairs)
     
-    seams = r.get_seams_for_raft(raft)
-    mse = r.get_fit_error_for_seams(seams).mse
-    mse2 = r.get_total_error_for_raft_and_seams(raft, seams)
-    
-    # print(f"{r.format_feature_pairs(fp)}: MSE={mse:.3f} MSE2={mse2:.3f}")
+        seams = r.get_seams_for_raft(raft)
+        return r.get_total_error_for_raft_and_seams(raft, seams)
 
-    return mse2
+    def score_pair_align_all_tabs(self, piece_a, piece_b):
 
-def score_pair(piece_a, piece_b):
+        n_tabs = len(piece_a.tabs)
+        if n_tabs != len(piece_b.tabs):
+            return None
 
-    Feature = puzzler.raft.Feature
-    
-    n_tabs = len(piece_a.tabs)
-    if n_tabs != len(piece_b.tabs):
-        return None
+        label_a = piece_a.label
+        label_b = piece_b.label
 
-    label_a = piece_a.label
-    label_b = piece_b.label
+        best_score = None
 
-    best_score = None
+        for j in range(n_tabs):
 
-    for j in range(n_tabs):
-        
-        tab_mismatch = False
-        feature_pairs = []
-        for i in range(n_tabs):
-            feature_pairs.append((Feature(label_a, 'tab', (i+j) % n_tabs), Feature(label_b, 'tab', i)))
-            tab_a = piece_a.tabs[(i+j) % n_tabs]
-            tab_b = piece_b.tabs[i % n_tabs]
-            if tab_a.indent != tab_b.indent:
-                tab_mismatch = True
-                
-        if tab_mismatch:
-            continue
+            tab_mismatch = False
+            feature_pairs = []
+            for i in range(n_tabs):
+                feature_pairs.append((Feature(label_a, 'tab', (i+j) % n_tabs), Feature(label_b, 'tab', i)))
+                tab_a = piece_a.tabs[(i+j) % n_tabs]
+                tab_b = piece_b.tabs[i % n_tabs]
+                if tab_a.indent != tab_b.indent:
+                    tab_mismatch = True
 
-        score = score_pair2(piece_a, piece_b, feature_pairs)
-        if best_score is None or score < best_score:
-            best_score = score
-    
-    return best_score
-
-def score_pair_alt(piece_a, piece_b):
-
-    Feature = puzzler.raft.Feature
-    
-    label_a = piece_a.label
-    label_b = piece_b.label
-
-    best_score = None
-
-    for i, tab_a in enumerate(piece_a.tabs):
-        for j, tab_b in enumerate(piece_b.tabs):
-            if tab_a.indent != tab_b.indent:
+            if tab_mismatch:
                 continue
 
-            fp = (Feature(label_a, 'tab', i), Feature(label_b, 'tab', j))
-            score = score_pair2(piece_a, piece_b, [fp])
+            score = self.score_feature_pairs(feature_pairs)
             if best_score is None or score < best_score:
                 best_score = score
-    
-    return best_score
+
+        return best_score
+
+    def score_pair_align_one_tab(self, piece_a, piece_b):
+
+        label_a = piece_a.label
+        label_b = piece_b.label
+
+        best_score = None
+
+        for i, tab_a in enumerate(piece_a.tabs):
+            for j, tab_b in enumerate(piece_b.tabs):
+                if tab_a.indent != tab_b.indent:
+                    continue
+
+                fp = (Feature(label_a, 'tab', i), Feature(label_b, 'tab', j))
+                score = self.score_feature_pairs([fp])
+                if best_score is None or score < best_score:
+                    best_score = score
+
+        return best_score
 
 def score_puzzles(lhs, rhs, ofile):
     
     no_matches = []
+    score_computer = ScoreComputer({i.label: i for i in (lhs.pieces + rhs.pieces)})
     
     writer = csv.DictWriter(ofile, fieldnames='lhs rhs rank score'.split())
     writer.writeheader()
@@ -88,7 +87,7 @@ def score_puzzles(lhs, rhs, ofile):
 
         rows = []
         for r in rhs.pieces:
-            score = score_pair_alt(l, r)
+            score = score_computer.score_pair_align_one_tab(l, r)
             if score is not None:
                 rows.append({'lhs':l.label, 'rhs':r.label, 'rank':None, 'score':score})
 
