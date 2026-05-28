@@ -1,5 +1,6 @@
 import puzzler
 import collections
+import copy
 import csv
 from datetime import datetime
 import functools
@@ -412,6 +413,7 @@ class PuzzleSolver:
         self.dirname = dirname
         self.expected = expected
         self.tab_pairs = tab_pairs
+        self.last_refine = None
 
     def solve(self):
         if self.raft:
@@ -542,6 +544,26 @@ class PuzzleSolver:
         if self.raft is None:
             return
 
+        delta = None
+        not_a_superset = False
+        if self.last_refine:
+            delta = set(self.raft.coords.keys()) - set(self.last_refine.coords.keys())
+            for p, c1 in self.last_refine.coords.items():
+                c2 = self.raft.coords.get(p)
+                if c2 is None:
+                    print(f"refine: not a superset, {p} from last refine is missing")
+                    not_a_superset = True
+                elif c2.angle != c1.angle or np.any(c2.xy != c1.xy):
+                    print(f"refine: coordinate of {p} has changed, adding to delta")
+                    delta.add(p)
+        else:
+            not_a_superset = True
+
+        if not_a_superset:
+            delta = set(self.raft.coords.keys())
+
+        print(f"refine: delta=({','.join(delta)})")
+
         new_raft = self.raft
 
         seams = self.raftinator.get_seams_for_raft(new_raft)
@@ -549,12 +571,14 @@ class PuzzleSolver:
         rafc = puzzler.raft.RaftAxisFeaturesComputer(self.pieces)
         axis_features = rafc.compute_axis_features(new_raft.coords)
 
-        if True:
+        if len(delta):
             refined_raft = self.raftinator.aligner.delta_refine_alignment_within_raft(
-                new_raft, seams, axis_features)
+                new_raft, delta, seams, axis_features)
         else:
             refined_raft = self.raftinator.aligner.refine_alignment_within_raft(
                 new_raft, seams, axis_features)
+
+        self.last_refine = copy.deepcopy(refined_raft)
 
         self.update_raft(refined_raft)
 

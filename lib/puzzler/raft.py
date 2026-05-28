@@ -497,6 +497,7 @@ class RaftAligner:
     def delta_refine_alignment_within_raft(
             self,
             raft: Raft,
+            delta: Set[str],
             seams: Sequence[Seam],
             axis_features: Optional[AxisFeatures] = None) -> Raft:
 
@@ -518,7 +519,7 @@ class RaftAligner:
 
         changes = set()
 
-        next_queue = set(list(raft.coords.keys())[-20:])
+        next_queue = delta
         for _ in range(3):
             print(f"{len(next_queue)=}")
             curr_queue = next_queue
