@@ -78,6 +78,7 @@ class TabComputer:
         self.max_mse   = 500
         self.min_angle = math.radians(220)
         self.max_semi_major = 90.
+        self.min_semi_major = 20.
 
         # override for 100 piece puzzle which has significantly larger
         # pieces
@@ -87,6 +88,7 @@ class TabComputer:
 
         for defect in self.compute_convexity_defects(self.perimeter, self.approx_poly):
 
+            # [ start_point, end_point, farthest_point, approximate_distance_to_farthest_point]
             if defect[3] < 8000:
                 continue
             
@@ -146,6 +148,11 @@ class TabComputer:
             if e.semi_major > self.max_semi_major:
                 if self.verbose:
                     print("   ellipse too big, rejecting")
+                continue
+
+            if e.semi_major < self.min_semi_major:
+                if self.verbose:
+                    print("   ellipse too small, rejecting")
                 continue
 
             if self.indexes_overlap(tab):
@@ -353,23 +360,17 @@ class TabComputer:
             v = pt - center
             return v / np.linalg.norm(v)
 
-        def closest_point_to_axis(axis, i):
+        def closest_point_to_axis(axis, r):
 
             closest_idx = None
             closest_dot = 0
             
-            for j in range(150):
+            for i in r:
                 
-                vec = make_unit_vector(i+j)
+                vec = make_unit_vector(i)
                 dot = np.sum(vec * axis)
                 if closest_dot < dot:
-                    closest_idx = i+j
-                    closest_dot = dot
-
-                vec = make_unit_vector(i-j)
-                dot = np.sum(vec * axis)
-                if closest_dot < dot:
-                    closest_idx = i-j
+                    closest_idx = i % n
                     closest_dot = dot
 
             return closest_idx
@@ -377,8 +378,8 @@ class TabComputer:
         avg = make_unit_vector(b) + make_unit_vector(a)
         avg = avg / np.linalg.norm(avg)
 
-        aa = closest_point_to_axis(avg, a)
-        bb = closest_point_to_axis(avg, b)
+        aa = closest_point_to_axis(avg, range(a+20, a-150, -1))
+        bb = closest_point_to_axis(avg, range(b-20, b+150, 1))
         
         # print(f"  {aa=} {bb=}")
 
@@ -856,7 +857,7 @@ def feature_view(args):
     root.wm_resizable(0, 0)
     root.mainloop()
 
-def clean_edges(label, edges):
+def clean_edges(label, edges, verbose=True):
 
     def edge_len(e):
         return np.linalg.norm(e.line.pts[1] - e.line.pts[0])
@@ -867,7 +868,8 @@ def clean_edges(label, edges):
     if len(edges) > 2:
         # should probably figure out if some of the edges should be
         # merged instead of just blindly keeping the two longest
-        print(f"HACK: piece \"{label}\" has {len(edges)} edges, keeping 2 longest edges")
+        if verbose:
+            print(f"HACK: piece \"{label}\" has {len(edges)} edges, keeping 2 longest edges")
         edges = sorted(edges, key=edge_len)[-2:]
     
     assert len(edges) == 2, f"piece \"{label}\" has {len(edges)} edges?!"
@@ -877,14 +879,16 @@ def clean_edges(label, edges):
     v1 = puzzler.math.unit_vector(l1.pts[1] - l1.pts[0])
     cross = np.cross(v0, v1)
     if np.abs(cross) < 0.9:
-        print(f"HACK: piece {label} has {len(edges)} edges, but doesn't look like a corner, only keeping longest edge")
+        if verbose:
+            print(f"HACK: piece {label} has {len(edges)} edges, but doesn't look like a corner, only keeping longest edge")
         len0 = np.linalg.norm(l0.pts[1] - l0.pts[0])
         len1 = np.linalg.norm(l1.pts[1] - l1.pts[0])
         edges.pop(1 if len0 > len1 else 0)
         n = 1
     elif cross > 0:
         # are the edges in the right order?
-        print(f"CORNER: edges of corner {label} in wrong order, reversing them")
+        if verbose:
+            print(f"CORNER: edges of corner {label} in wrong order, reversing them")
         edges = [e1, e0]
 
     return edges
@@ -911,7 +915,7 @@ def feature_update_pieces(pieces, verbose=False, epsilon=10.):
         for edge in sorted(ec.edges, key=operator.itemgetter('fit_indexes')):
             edges.append(puzzler.feature.Edge(edge['fit_indexes'], edge['line']))
 
-        piece.edges = clean_edges(piece.label, edges)
+        piece.edges = clean_edges(piece.label, edges, verbose=False)
 
 def feature_update(args):
             
