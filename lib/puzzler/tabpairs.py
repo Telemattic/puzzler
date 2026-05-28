@@ -38,8 +38,9 @@ class TabPairsMMap:
         self.f = open(path, 'rb')
         self.mm = mmap.mmap(self.f.fileno(), length=0, access=mmap.ACCESS_READ)
 
-        magic, length, offset = struct.unpack_from('LLQ', self.mm, offset=0)
-        assert magic == TabPairsMMap.MAGIC
+        magic, length, offset = struct.unpack_from('=LLQ', self.mm, offset=0)
+        if magic != TabPairsMMap.MAGIC:
+            raise ValueError(f"TabPairsMMap: bad magic number {magic:X}")
 
         s = self.mm[offset:offset+length].decode()
         o = json.loads(s)
@@ -52,7 +53,7 @@ class TabPairsMMap:
         
     def get_fit_error(self, dst_tab, src_tab):
         o = self.offset_computer(dst_tab, src_tab)
-        sse, n = struct.unpack_from("fH", self.mm, o)
+        sse, n = struct.unpack_from("=fH", self.mm, o)
         return FitError(sse, n)
 
     @staticmethod
@@ -119,7 +120,7 @@ def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs
 
     with open(mmap_opath, 'w+b') as ofile:
         mm = mmap.mmap(ofile.fileno(), file_length)
-        struct.pack_into('LLQ', mm, 0, TabPairsMMap.MAGIC, json_length, json_offset)
+        struct.pack_into('=LLQ', mm, 0, TabPairsMMap.MAGIC, json_length, json_offset)
         mm[json_offset:json_offset+json_length] = json_bytes
 
         with open(csv_ipath, 'r', newline='') as ifile:
@@ -131,6 +132,6 @@ def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs
                 err_n = int(row['n'])
 
                 o = offset_computer(dst_tab, src_tab)
-                struct.pack_into('fH', mm, o, err_sse, err_n)
+                struct.pack_into('=fH', mm, o, err_sse, err_n)
 
     
