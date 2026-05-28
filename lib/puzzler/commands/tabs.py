@@ -75,28 +75,34 @@ class TabsComputer:
 
     def compute_fit(self, dst, src):
 
-        r = self.raftinator
-
-        raft = r.align_and_merge_rafts_with_feature_pairs(
-            r.factory.make_raft_for_piece(dst.piece),
-            r.factory.make_raft_for_piece(src.piece),
-            [(dst, src)])
-
         desc = format_feature_pair((dst, src))
 
-        for i in range(self.refine):
+        retval = {'dst_label':dst.piece, 'dst_tab_no':dst.index,
+                  'src_label':src.piece, 'src_tab_no':src.index,
+                  'raft':desc, 'sse':None, 'n':None}
+        try:
+            r = self.raftinator
+
+            raft = r.align_and_merge_rafts_with_feature_pairs(
+                r.factory.make_raft_for_piece(dst.piece),
+                r.factory.make_raft_for_piece(src.piece),
+                [(dst, src)])
+
+            for i in range(self.refine):
+                seam = r.seamstress.seam_between_pieces(
+                    dst.piece, raft.coords[dst.piece], src.piece, raft.coords[src.piece])
+                raft = r.refine_alignment_within_raft(raft, seams=[seam], fixed=dst.piece)
+
             seam = r.seamstress.seam_between_pieces(
                 dst.piece, raft.coords[dst.piece], src.piece, raft.coords[src.piece])
-            raft = r.refine_alignment_within_raft(raft, seams=[seam], fixed=dst.piece)
 
-        seam = r.seamstress.seam_between_pieces(
-            dst.piece, raft.coords[dst.piece], src.piece, raft.coords[src.piece])
+            fit_error = puzzler.raft.FitError(seam.error, len(seam.src.indices))
+            retval['sse'] = fit_error.sse
+            retval['n'] = fit_error.n
+        except Exception as x:
+            print(f"error processing {desc},", x)
 
-        fit_error = puzzler.raft.FitError(seam.error, len(seam.src.indices))
-
-        return {'dst_label':dst.piece, 'dst_tab_no':dst.index,
-                'src_label':src.piece, 'src_tab_no':src.index,
-                'raft':desc, 'sse':fit_error.sse, 'n':fit_error.n}
+        return retval
 
 def worker(args, src_q, dst_q):
 

@@ -63,3 +63,4 @@ Processing pipeline:
   app.py -p name.json points update
   app.py -p name.json lint update
   app.py -p name.json features update
+  app.py -p name.json tabs -o tabs_name.json -n 28  # compute error for all possible tab pairs, and do it in parallel

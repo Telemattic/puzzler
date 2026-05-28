@@ -49,11 +49,15 @@ def quadmaster(pieces, quad):
 
     tab_features_for_piece = puzzler.pocket.tab_features_for_piece
 
-    ul_tabs = tab_features_for_piece(pieces[ul])
-    ur_tabs = tab_features_for_piece(pieces[ur])
-    ll_tabs = tab_features_for_piece(pieces[ll])
-    lr_tabs = tab_features_for_piece(pieces[lr])
-
+    try:
+        ul_tabs = tab_features_for_piece(pieces[ul])
+        ur_tabs = tab_features_for_piece(pieces[ur])
+        ll_tabs = tab_features_for_piece(pieces[ll])
+        lr_tabs = tab_features_for_piece(pieces[lr])
+    except puzzler.pocket.PocketFitter.FitException as x:
+        print(f"skipping quad {ul},{ur},{ll},{lr} due to error, ", x)
+        return []
+    
     retval = []
     # note tab_pairs are in CW order here
     for i in itertools.product(ul_tabs, ur_tabs, lr_tabs, ll_tabs):
@@ -127,8 +131,8 @@ def quads_main(args):
     for label, piece in pieces.items():
         try:
             puzzler.pocket.tab_features_for_piece(piece, be_forgiving=False)
-        except puzzler.pocket.FitException:
-            print(f"{label} has problem with tab_features_for_piece!")
+        except puzzler.pocket.PocketFitter.FitException as x:
+            print(f"{label} has problem with tab_features_for_piece!", x)
 
     f = open(output_csv_path, 'w', newline='')
     writer = csv.DictWriter(f, fieldnames='col_no row_no ul_piece ur_piece ll_piece lr_piece raft mse rank'.split())

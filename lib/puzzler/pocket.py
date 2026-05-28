@@ -49,7 +49,7 @@ def tab_features_for_piece(piece, be_forgiving=True):
                 n_collisions += 1
                 continue
 
-            raise PocketFitter.FitException(f"{piece.label} has multiple tabs at {d=}")
+            raise PocketFitter.FitException(f"{piece.label} has multiple tabs at {d=} and {len(piece.tabs)} total tabs")
 
         dirs[d] = (piece.label, tab_no, tab.indent)
 
