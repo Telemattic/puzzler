@@ -55,3 +55,11 @@ Profiling:
   # note, -- makes sure that the python command line isn't parsed as part of the py-spy arguments
   
   py-spy record -f speedscope -o prof.ss -s -- python app.py -p 100.json align
+
+Processing pipeline:
+
+  app.yy -p name.json init
+  app.py -p name.json scan add  (repeat as necessary)
+  app.py -p name.json points update
+  app.py -p name.json lint update
+  app.py -p name.json features update
