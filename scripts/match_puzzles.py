@@ -6,7 +6,8 @@ sys.path.insert(0, lib)
 
 import argparse
 import csv
-import operator
+import itertools
+import multiprocessing as mp
 import puzzler
 from tqdm import tqdm
 
@@ -15,6 +16,7 @@ Feature = puzzler.raft.Feature
 class ScoreComputer:
 
     def __init__(self, pieces):
+        self.pieces = pieces
         self.raftinator = puzzler.raft.Raftinator(pieces)
 
     def score_feature_pairs(self, feature_pairs):
@@ -62,14 +64,14 @@ class ScoreComputer:
                 retval.append((fa, fb))
         return retval
 
-    def score_pair_align_all_tabs(self, piece_a, piece_b):
+    def score_pair_align_all_tabs(self, label_a, label_b):
+
+        piece_a = self.pieces[label_a]
+        piece_b = self.pieces[label_b]
 
         n_tabs = len(piece_a.tabs)
         if n_tabs != len(piece_b.tabs):
             return None
-
-        label_a = piece_a.label
-        label_b = piece_b.label
 
         best_score = None
 
@@ -93,10 +95,10 @@ class ScoreComputer:
 
         return best_score
 
-    def score_pair_align_one_tab(self, piece_a, piece_b):
+    def score_pair_align_one_tab(self, label_a, label_b):
 
-        label_a = piece_a.label
-        label_b = piece_b.label
+        piece_a = self.pieces[label_a]
+        piece_b = self.pieces[label_b]
 
         best_score = None
 
@@ -112,42 +114,44 @@ class ScoreComputer:
 
         return best_score
 
-def score_puzzles(lhs, rhs, ofile):
+    def score_pieces(self, lhs_pieces, rhs_pieces):
     
-    no_matches = []
+        rows = []
+        for l, r in itertools.product(lhs_pieces, rhs_pieces):
+            score = self.score_pair_align_one_tab(l, r)
+            if score is not None:
+                rows.append({'lhs':l[2:], 'rhs':r[2:], 'score':score})
+
+        return rows
+
+def worker(args, src_q, dst_q):
+
+    lhs = puzzler.file.load(args.left)
+    for i in lhs.pieces:
+        i.label = 'l_' + i.label
+    
+    rhs = puzzler.file.load(args.right)
+    for i in rhs.pieces:
+        i.label = 'r_' + i.label
+
     score_computer = ScoreComputer({i.label: i for i in (lhs.pieces + rhs.pieces)})
     
-    writer = csv.DictWriter(ofile, fieldnames='lhs rhs rank score'.split())
-    writer.writeheader()
+    job = src_q.get()
+    while job:
 
-    for l in tqdm(lhs.pieces):
+        rows = score_computer.score_pieces(*job)
 
-        rows = []
-        for r in rhs.pieces:
-            score = score_computer.score_pair_align_one_tab(l, r)
-            if score is not None:
-                rows.append({'lhs':l.label, 'rhs':r.label, 'rank':None, 'score':score})
+        dst_q.put(rows)
+        job = src_q.get()
 
-        if not rows:
-            no_matches.append(l.label)
+    return
 
-        rows.sort(key=operator.itemgetter('score'))
-        for rank, row in enumerate(rows, start=1):
-            row['lhs'] = row['lhs'][2:]
-            row['rhs'] = row['rhs'][2:]
-            row['rank'] = rank
-
-        writer.writerows(rows)
-
-    if no_matches:
-        print(f"LHS pieces with no matches in RHS: {', '.join(no_matches)}")
-
-def main():
-    parser = argparse.ArgumentParser(prog='match_puzzles')
-    parser.add_argument("-l", "--left", help="left puzzle", required=True)
-    parser.add_argument("-r", "--right", help="right puzzle", required=True)
-    parser.add_argument("-o", "--output", help="output filename", required=True)
-    args = parser.parse_args()
+def iterate_over_puzzles(lhs, rhs):
+    lhs = [i.label for i in lhs]
+    rhs = [i.label for i in rhs]
+    return list(itertools.product(itertools.batched(lhs, 32), itertools.batched(rhs, 32)))
+    
+def match_puzzles(args):
 
     lhs = puzzler.file.load(args.left)
     for i in lhs.pieces:
@@ -158,7 +162,49 @@ def main():
         i.label = 'r_' + i.label
 
     with open(args.output, 'w', newline='') as ofile:
-        score_puzzles(lhs, rhs, ofile)
+        writer = csv.DictWriter(ofile, fieldnames='lhs rhs score'.split())
+        writer.writeheader()
+        
+        if args.num_workers:
+            src_q = mp.Queue()
+            dst_q = mp.Queue()
+
+            workers = [mp.Process(target=worker, args=(args, src_q, dst_q)) for _ in range(args.num_workers)]
+            for p in workers:
+                p.start()
+
+            num_jobs = 0
+            for p in iterate_over_puzzles(lhs.pieces, rhs.pieces):
+                src_q.put(p)
+                num_jobs += 1
+                
+            pbar = tqdm(total=num_jobs, smoothing=0)
+            while num_jobs > 0:
+                job = dst_q.get()
+                num_jobs -= 1
+                pbar.update()
+                writer.writerows(job)
+
+            for _ in workers:
+                src_q.put(None)
+
+            for p in workers:
+                p.join()
+                
+        else:
+            score_computer = ScoreComputer({i.label: i for i in (lhs.pieces + rhs.pieces)})
+            for l, r in tqdm(iterate_over_puzzles(lhs.pieces, rhs.pieces), smoothing=0):
+                writer.writerows(score_computer.score_pieces(l, r))
+
+def main():
+    parser = argparse.ArgumentParser(prog='match_puzzles')
+    parser.add_argument("-l", "--left", help="left puzzle", required=True)
+    parser.add_argument("-r", "--right", help="right puzzle", required=True)
+    parser.add_argument("-o", "--output", help="output filename", required=True)
+    parser.add_argument("-n", "--num-workers", help="parallel processing", default=0, type=int)
+    args = parser.parse_args()
+
+    match_puzzles(args)
 
 if __name__ == '__main__':
     main()
