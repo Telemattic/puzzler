@@ -6,10 +6,13 @@ sys.path.insert(0, lib)
 
 import argparse
 import csv
+import decimal
 import itertools
 import multiprocessing as mp
+import operator
 import puzzler
-from tqdm import tqdm
+import re
+import tqdm
 
 Feature = puzzler.raft.Feature
     
@@ -151,7 +154,7 @@ def iterate_over_puzzles(lhs, rhs):
     rhs = [i.label for i in rhs]
     return list(itertools.product(itertools.batched(lhs, 32), itertools.batched(rhs, 32)))
     
-def match_puzzles(args):
+def command_score(args):
 
     lhs = puzzler.file.load(args.left)
     for i in lhs.pieces:
@@ -178,7 +181,7 @@ def match_puzzles(args):
                 src_q.put(p)
                 num_jobs += 1
                 
-            pbar = tqdm(total=num_jobs, smoothing=0)
+            pbar = tqdm.tqdm(total=num_jobs, smoothing=0)
             while num_jobs > 0:
                 job = dst_q.get()
                 num_jobs -= 1
@@ -193,18 +196,67 @@ def match_puzzles(args):
                 
         else:
             score_computer = ScoreComputer({i.label: i for i in (lhs.pieces + rhs.pieces)})
-            for l, r in tqdm(iterate_over_puzzles(lhs.pieces, rhs.pieces), smoothing=0):
+            for l, r in tqdm.tqdm(iterate_over_puzzles(lhs.pieces, rhs.pieces), smoothing=0):
                 writer.writerows(score_computer.score_pieces(l, r))
 
+def command_rank(args):
+
+    with open(args.input, 'r', newline='') as ifile:
+        reader = csv.DictReader(ifile)
+        fieldnames = reader.fieldnames
+        if 'rank' in fieldnames:
+            print("match_puzzles: {args.input} already has a rank column?")
+            fieldnames.remove(rank)
+            
+        data = []
+        for row in reader:
+            row['score'] = float(row['score'])
+            data.append(row)
+
+    def nice_sort(s):
+        m = re.fullmatch(r"([A-Z]+)(\d+)", s)
+        c = int(m[2])
+        r = 0
+        for i in m[1]:
+            r = r*26 + ord(i) - ord('A') + 1
+        return (r, c)
+
+    data.sort(key=lambda x: nice_sort(x['lhs']))
+
+    with open(args.output, 'w', newline='') as ofile:
+        writer = csv.DictWriter(ofile, fieldnames=fieldnames + ['rank'])
+        writer.writeheader()
+        
+        for k, g in itertools.groupby(data, key=operator.itemgetter('lhs')):
+            rows = sorted(list(g), key=operator.itemgetter('score'))
+            for i, row in enumerate(rows, start=1):
+                row['score'] = decimal.Decimal(f"{row['score']:.3f}")
+                row['rank'] = i
+            writer.writerows(rows)
+
+def command_none(args):
+    print("fnord.")
+            
 def main():
     parser = argparse.ArgumentParser(prog='match_puzzles')
-    parser.add_argument("-l", "--left", help="left puzzle", required=True)
-    parser.add_argument("-r", "--right", help="right puzzle", required=True)
-    parser.add_argument("-o", "--output", help="output filename", required=True)
-    parser.add_argument("-n", "--num-workers", help="parallel processing", default=0, type=int)
-    args = parser.parse_args()
+    parser.set_defaults(func=command_none)
 
-    match_puzzles(args)
+    commands = parser.add_subparsers()
+    
+    parser_score = commands.add_parser("score", help="score the puzzle comparison")
+    parser_score.add_argument("-l", "--left", help="left puzzle", required=True)
+    parser_score.add_argument("-r", "--right", help="right puzzle", required=True)
+    parser_score.add_argument("-n", "--num-workers", help="parallel processing", default=0, type=int)
+    parser_score.add_argument("-o", "--output", help="output filename", required=True)
+    parser_score.set_defaults(func=command_score)
+    
+    parser_rank = commands.add_parser("rank", help="rank the already computed scores")
+    parser_rank.add_argument("-i", "--input", help="input filename", required=True)
+    parser_rank.add_argument("-o", "--output", help="output filename", required=True)
+    parser_rank.set_defaults(func=command_rank)
+    
+    args = parser.parse_args()
+    args.func(args)
 
 if __name__ == '__main__':
     main()
