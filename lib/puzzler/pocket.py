@@ -324,8 +324,13 @@ class PocketFitter:
         src_raft = r.factory.make_raft_for_piece(src_label)
 
         src_coord = r.aligner.rough_align(self.dst_raft, src_raft, feature_pairs)
-        src_coord = r.aligner.refine_alignment_between_rafts(
-            self.dst_raft, src_raft, src_coord)
+
+        try:
+            src_coord = r.aligner.refine_alignment_between_rafts(
+                self.dst_raft, src_raft, src_coord)
+        except puzzler.raft.RaftAligner.AlignException as x:
+            print(f"PocketFitter.measure_fit: {r.format_feature_pairs(feature_pairs)} has no seams for alignment!", x)
+            return (float("+inf"), puzzler.raft.FitError(0.,0.))
 
         if compute_seam_fit_error:
             seams = r.seamstress.seams_between_rafts(self.dst_raft, src_raft, src_coord)

@@ -639,8 +639,11 @@ class PuzzleSolver:
                 break;
                 
             mse, seam_fit_error = pf.measure_fit(match.src_label, match.feature_pairs, compute_seam_fit_error)
-            if compute_seam_fit_error and min_seam_error > seam_fit_error.mse:
-                min_seam_error = seam_fit_error.mse
+            if compute_seam_fit_error:
+                if seam_fit_error.mse is None:
+                    print(f"score_pocket: {self.raftinator.format_feature_pairs(match.feature_pairs)}, {seam_fit_error=}")
+                elif min_seam_error > seam_fit_error.mse:
+                    min_seam_error = seam_fit_error.mse
                 
             fits.append((mse, match.src_label, match.feature_pairs))
 

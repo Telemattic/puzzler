@@ -232,6 +232,9 @@ class NormalsComputer:
 
 class RaftAligner:
 
+    class AlignException(Exception):
+        pass
+
     def __init__(self, pieces: Pieces, seamstress: 'RaftSeamstress', normals: NormalsComputer) -> None:
         self.pieces = pieces
         self.seamstress = seamstress
@@ -240,7 +243,7 @@ class RaftAligner:
     def rough_align(self, dst_raft: Raft, src_raft: Raft, feature_pairs: FeaturePairs) -> Coord:
 
         if len(feature_pairs) == 0:
-            raise ValueError("no features to align")
+            raise RaftAligner.AlignException("no features to align")
 
         if all(self.is_tab_pair(i) for i in feature_pairs):
             return self.rough_align_multiple_tabs(dst_raft, src_raft, feature_pairs)
@@ -250,7 +253,7 @@ class RaftAligner:
             if self.is_edge_pair(a) and self.is_tab_pair(b):
                 return self.rough_align_edge_and_tab(dst_raft, src_raft, a, b)
 
-        raise ValueError("don't know how to align features")
+        raise RaftAligner.AlignException("don't know how to align features")
 
     def is_edge_pair(self, p: FeaturePair) -> bool:
         return p[0].kind == 'edge' and p[1].kind == 'edge'
@@ -375,7 +378,7 @@ class RaftAligner:
             return piece_points[np.arange(a, b, 10) % n]
 
         if len(raft.coords) != 2:
-            raise ValueError("expected raft with exactly two pieces")
+            raise RaftAligner.AlignException("expected raft with exactly two pieces")
 
         dst_edge, src_edge = edges
 
@@ -446,7 +449,7 @@ class RaftAligner:
             seamstress.seams_between_rafts(dst_raft, src_raft, src_raft_coord))
 
         if len(seams) == 0:
-            raise ValueError("refine_alignment_between_rafts: no seams found")
+            raise RaftAligner.AlignException("refine_alignment_between_rafts: no seams found")
 
         global_src_points = []
         global_dst_points = []
