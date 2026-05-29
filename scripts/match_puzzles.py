@@ -25,6 +25,43 @@ class ScoreComputer:
         seams = r.get_seams_for_raft(raft)
         return r.get_total_error_for_raft_and_seams(raft, seams)
 
+    def all_tab_alignments(self, piece_a, piece_b):
+
+        n_tabs = len(piece_a.tabs)
+        if n_tabs != len(piece_b.tabs):
+            return []
+
+        def make_feature_pairs(offset):
+            retval = []
+            for i in range(n_tabs):
+                tab_a = piece_a.tabs[(i+offset) % n_tabs]
+                tab_b = piece_b.tabs[i]
+                if tab_a.indent != tab_b.indent:
+                    return None
+                fa = Feature(piece_a.label, 'tab', (i+offset) % n_tabs)
+                fb = Feature(piece_b.label, 'tab', i)
+                retval.append((fa, fb))
+            return retval
+            
+        retval = []
+        for i in range(n_tabs):
+            if x := make_feature_pairs(i):
+                retval.append(x)
+
+        return retval
+
+    def single_tab_alignments(self, piece_a, piece_b):
+
+        retval = []
+        for i, tab_a in enumerate(piece_a.tabs):
+            for j, tab_b in enumerate(piece_b.tabs):
+                if tab_a.indent != tab_b.indent:
+                    continue
+                fa = Feature(piece_a.label, 'tab', i)
+                fb = Feature(piece_b.label, 'tab', j)
+                retval.append((fa, fb))
+        return retval
+
     def score_pair_align_all_tabs(self, piece_a, piece_b):
 
         n_tabs = len(piece_a.tabs)
