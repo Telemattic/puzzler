@@ -75,7 +75,7 @@ class TabComputer:
         self.perimeter = perimeter
         self.verbose   = verbose
         self.approx_poly = ApproxPolyComputer(self.perimeter, epsilon)
-        self.max_mse   = 500
+        self.max_mse   = 100
         self.min_angle = math.radians(220)
         self.max_semi_major = 90.
         self.min_semi_major = 20.
