@@ -504,17 +504,6 @@ class RaftAligner:
             seams: Sequence[Seam],
             axis_features: Optional[AxisFeatures] = None) -> Raft:
 
-        # HACK HACK HACK
-        #
-        # assume the pieces added most recently to the coords are the
-        # delta, which relies on:
-        #
-        # 1. coords maintaining insertion order and never messing it
-        # up when rafts are merged, etc. and
-        #
-        # 2. magically knowing that this method is called every N
-        # insertions
-
         adjacency = collections.defaultdict(set)
         for i in seams:
             adjacency[i.dst.piece].add(i.src.piece)
@@ -524,7 +513,6 @@ class RaftAligner:
 
         next_queue = delta
         for _ in range(3):
-            print(f"{len(next_queue)=}")
             curr_queue = next_queue
             next_queue = set()
             for i in curr_queue:
@@ -533,7 +521,6 @@ class RaftAligner:
                     next_queue |= adjacency[i]
 
         fixed_pieces = set(raft.coords.keys()) - changes
-        print(f"{len(changes)=} {len(fixed_pieces)=}")
         return self.refine_alignment_within_raft(
             raft, seams, axis_features, fixed_pieces)
 
