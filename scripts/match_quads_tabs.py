@@ -1,4 +1,5 @@
 import argparse
+import collections
 import csv
 
 def load_quads(input_csv_path):
@@ -46,29 +47,39 @@ def match_it(quads):
             all_tabs.add(a)
             all_tabs.add(b)
     
-    matching_tabs = dict()
+    matching_tabs = collections.defaultdict(set)
     for quad in quads:
         
-        if quad['rank'] != 1 or quad['mse'] > 10.:
+        if quad['rank'] != 1: # or quad['mse'] > 10.:
             continue
 
         for a, b in parse_raft(quad['raft']):
-            
-            if a in matching_tabs:
-                assert matching_tabs[a] == b
-            else:
-                matching_tabs[a] = b
-                
-            if b in matching_tabs:
-                assert matching_tabs[b] == a
-            else:
-                matching_tabs[b] = a
 
-    for tab in all_tabs:
-        if tab not in matching_tabs:
-            print(f"Tab '{tab}' has no match")
+            matching_tabs[a].add(b)
+            matching_tabs[b].add(a)
 
-    return matching_tabs
+    def get_source(dst):
+        srcs = matching_tabs[dst]
+        if len(srcs) != 1:
+            return ''
+        return next(iter(srcs))
+
+    retval = dict()
+    unknown = set()
+    for dst in matching_tabs.keys():
+        src = get_source(dst)
+        if src and dst == get_source(src):
+            retval[dst] = src
+        else:
+            unknown.add(dst)
+
+    unknown |= all_tabs - set(retval.keys())
+
+    for dst in sorted(unknown):
+        srcs = ','.join(matching_tabs[dst])
+        print(f"{dst}: ({srcs})")
+
+    return retval
 
 def main():
 
