@@ -90533,65 +90533,65 @@
           555
         ]
       },
-      "points": "eJyFVYthxCAIjUHD/ovdAB2mbcJHvmkRkCiH+CCXn6/vD8zJfMs9gOQEIE3jJGG153FuGvY44s4mCUKBOTbIWfv0SMumNYsKhoh5hB2N5Ay2wF1q39HNfu/98dUdilP27CND9ffZdWeWzPNCml+vAJ173C2ppj2f50vcHscxjnEcJEe0hq0MWdBRVbtibMEeQp2QFJJczNetL2Ehs94IWfGvkdQjEloP8od7nSlgwRcSVjofpsFvnXv1wIQYZJKXmt7uyZPjVDu3IPHlYMPf0CSrvwmmOZhYEfjf3xaGBWBh4LkYqFVBX0LMJevK21Qbs1F88G/TspAG0w4hotylHVMfxMZPb8CuRO1w118KzoHS6Hy65RFaPgPVoLFE81BjPTKFZey/Z/cfTARJq5gRvgjEy0gP1lxcvR3GG+sAu9/GWBJb8S4emuRqMVXu5Oi7tiBeNV3T6+xQ9iJMjVeNVjyaL+3+TBK0k3H12EZgC4ipecwn9gzuOj1h17VPWCs2S2ya1DmrSV/oF5vxIcc=",
+      "points": "eJx9VQmihCAIzUi5/8XmAP8wfyZZZJFCwR3kgfX9+//AdXG9+S5AfAKQpHITCJ+rbeeiZsMWVxbJeVLMukFsLeuRujX92kToZE6jnlRKO91TX7x3ufM+tHFcLwbPR/0Y/Epxu8Im5OkH/Xl+8yC5WDkM1Ypdkabau781jq0d7TiIj9hrNtNkQssuyhmrpmwSaoMkkHhwHUhlYL8F0+o8ErKYx/g46xPVasgb9zJTwIIdkqp0zkqFH517eS4iVEEaedP0Ci9+467GTPBJJ/rFsOFvaL4Qbp08FRHAbft+MmGGzASyhEAjhhY7dDIHNYW3iDY+tOWhqhvu4zMENUPEhZwHMfHTC1iR2DPcocvMyciCk3TdY3jYMlAFGl0kF+104vsby4KKVP8tZoIkPed/gqrpRmpY77Ie4DA3nEAP+7Zsazbjt3ho0lbTqTwhmL+1DtHV5KKXecO2FmFKx8oT+47iR7v+kgTt1SWChm0EdgMxJY/tiTmDK05TbR/LAhv16eKTJmVOL64v9AM5tiG0",
       "tabs": [
         {
           "fit_indexes": [
-            795,
-            1036
+            796,
+            1035
           ],
           "ellipse": {
             "center": [
-              -62.46442888294614,
-              173.3852448228317
+              -62.22085074173147,
+              173.02869545187022
             ],
-            "semi_major": 56.42622610815287,
-            "semi_minor": 50.72736812938377,
-            "phi": 2.752707496835189
+            "semi_major": 56.102314360001756,
+            "semi_minor": 50.5761571309854,
+            "phi": 2.8068065429539337
           },
           "indent": true,
           "tangent_indexes": [
-            777,
-            1068
+            780,
+            1067
           ]
         },
         {
           "fit_indexes": [
-            1428,
-            1704
+            1427,
+            1703
           ],
           "ellipse": {
             "center": [
-              232.13832126843297,
-              26.658990024695875
+              232.15841650979112,
+              26.665553760216117
             ],
-            "semi_major": 60.05234377960356,
-            "semi_minor": 57.37979727530533,
-            "phi": 2.716112769479419
+            "semi_major": 60.05041499508111,
+            "semi_minor": 57.372624987817,
+            "phi": 2.7121738065332996
           },
           "indent": false,
           "tangent_indexes": [
-            1418,
-            1723
+            1422,
+            1722
           ]
         },
         {
           "fit_indexes": [
-            2078,
+            2077,
             101
           ],
           "ellipse": {
             "center": [
-              -13.427433345633926,
-              -249.63196027649016
+              -13.428305775692788,
+              -249.61852118608667
             ],
-            "semi_major": 60.85317716103793,
-            "semi_minor": 56.331920040304325,
-            "phi": 0.9853181036234588
+            "semi_major": 60.85561620680302,
+            "semi_minor": 56.32133935466892,
+            "phi": 0.9864116718143026
           },
           "indent": false,
           "tangent_indexes": [
-            2071,
+            2070,
             121
           ]
         }
@@ -90600,16 +90600,16 @@
         {
           "fit_indexes": [
             250,
-            647
+            646
           ],
           "line": {
             "pt0": [
-              -207.3129644138555,
-              -205.9907786858519
+              -207.43610423458534,
+              -204.99818641227003
             ],
             "pt1": [
-              -260.45086004903516,
-              190.9907786858519
+              -260.4631267224459,
+              190.99818641227003
             ]
           }
         }
@@ -90626,26 +90626,26 @@
           565
         ]
       },
-      "points": "eJyFVgt2AyEIlDUsZ+j9L9gT9HXlIwOmKSKicUVxhIyvn+/5esjFNDEXz3k5P8VZabWkGlmli8gFpbiicbGn+8cXLGd1mgiji10YvazGLm3TLp24tOyCT13Zy2KtfGv1stgUJ7GqLKXBQa3Z3LFALmx22IzqFnKH1vjh4mrmCw9dmnmMRmfCD96PqzVfp/uzF+psfVTPkavg48PcMuXoUrLjaKwynnasdpMstjJExrsSYrELpLXqKou1UgEsQBY2VaBL7Qzbb4DijV5Drl9rPri/gMu1cv1gg8Ne6cxXOsHJj6S5NjkJnIsvFw5SX6XPg2OXFfoCuDShAXLjVAys0WdrT6vuH3lPwOUCZcCF90llUAYiA7qBBBlgZgODEBEGBwODl4PykcTz6fhHJ6UPNrBNuLFhEKeC8YL1dmrDfQG82IA2D91aPQjJEY4ivHEJS3cPfVWDKKfrp8nzqeWDo1Mj7NKfE6n/QCBwNqlBElKzFF7zI0uJwqCEyu96/Emvc/m/gXefAmH6MMeKezdB3kJYdQ36q0CooN1jpaHFcKL2dg5zmLD0DQJS9rFaYchrt2c2zkQLlDkNc9Mrk1PkNBgv4dLXtITNbhA2d/i3+xrewgflFq6Te1qHq8t7ZfUgw7k5/mpM3H5N99ziPg7UfzLtq/ZfB7+vbkf9F6U+I34=",
+      "points": "eJyFVoGRxCAIlBhiDd9/g1/BzYmALJj5RwQkmiiukvbz+e33JBNdRRfu/TKexXiRaFoWaaWLyASFuFyZ2N1t8AWv09pV+EeFTSjdWn2We9ZBnA02wae92IrwqvysakVYDaOhdfFICp2rhtrj94uNF9kUYoZL+9p8fT22Bm1R/fDCJpo7FWGNdYQ/Wm7mx9k+OpuFXc++9TsvTQo2HDUpbeometOYZQlRo70VF8ImkOStUoRXpQRYgOyeVIEulTXsuAGKN3oVuXtzCmrvtPl3oCGwigO6g0NPaY9T2vdhcjln2QmCiycXFkL5UKqLir82jgc4gODjlGNHc240+Vrhb7FPwGkDYbvH0Sk5R2stIyCP8eq4MEmICIWDgsHKQRFiqL32ItAF2CrsY00hTgnjgfUzNIr7BPihjqWEnoFXU72P/HpjuJawYZ2y5TegvnvAJ8+jFgcO1kRJU3lOtR/VBzGOUm+zh2KJxJDZ2IpHvobhPjeT31r8l5378n+Ot6FAmD40sMOiGyAvN1gKzWsjdgGPim+X4URBkvLW4A2UFCYO0BywiZz2eBJd+TQSLVDktJKZPDl5TgN/ui71UrSErYSoPeNbYx1HYRR/dnHqfI550vHyDZ9NZlg3+69G39Pn+o/C5d5HR/6TwbEpZaScAaKkF6EvpN0jfg==",
       "tabs": [
         {
           "fit_indexes": [
             59,
-            353
+            352
           ],
           "ellipse": {
             "center": [
-              -44.43090578866848,
-              -165.91307635353763
+              -44.3766968401616,
+              -165.80545930471203
             ],
-            "semi_major": 66.22089327302574,
-            "semi_minor": 60.740742063192336,
-            "phi": 3.0481696159651084
+            "semi_major": 66.23923125239833,
+            "semi_minor": 60.57980541161815,
+            "phi": 3.0356331755735093
           },
           "indent": true,
           "tangent_indexes": [
             36,
-            373
+            374
           ]
         },
         {
@@ -90655,12 +90655,12 @@
           ],
           "ellipse": {
             "center": [
-              -163.74003898052888,
-              3.8451371485817565
+              -163.7539921113898,
+              3.8426192974376656
             ],
-            "semi_major": 57.55549946894772,
-            "semi_minor": 54.40040484562759,
-            "phi": 1.275243993373207
+            "semi_major": 57.56237053757175,
+            "semi_minor": 54.39758022593168,
+            "phi": 1.2731100965428666
           },
           "indent": true,
           "tangent_indexes": [
@@ -90675,32 +90675,32 @@
           ],
           "ellipse": {
             "center": [
-              8.46916064657933,
-              268.43567914191334
+              8.473702849759807,
+              268.43546567920737
             ],
-            "semi_major": 58.761275755390486,
-            "semi_minor": 55.61160029848477,
-            "phi": 2.1526287802149158
+            "semi_major": 58.75251458594791,
+            "semi_minor": 55.627267230738006,
+            "phi": 2.1511938274377056
           },
           "indent": false,
           "tangent_indexes": [
             1298,
-            1587
+            1584
           ]
         },
         {
           "fit_indexes": [
-            1955,
+            1959,
             2214
           ],
           "ellipse": {
             "center": [
-              261.22284442536574,
-              -48.816923476653535
+              261.9992660959984,
+              -49.1540977746148
             ],
-            "semi_major": 57.31089776004762,
-            "semi_minor": 55.58973120309723,
-            "phi": 1.4382837560770378
+            "semi_major": 57.49054447178879,
+            "semi_minor": 54.50000926267429,
+            "phi": 1.3043977564098737
           },
           "indent": false,
           "tangent_indexes": [
@@ -90722,25 +90722,25 @@
           520
         ]
       },
-      "points": "eJyVVltixCAIDLrK/U+05+pP2yivEW3TIiJRggqjydfH57u+kCqKKkLbKnxTGVxKneVMJJVcmxXEoCpqLeZLfM9ZfGqnJtU4Wit7Pw7dRYV52ozGrmNrsUXbJgz4+M5ntWDI1AEKb0qEaEaPjC66go1YhfPeiI1KI5pVy3SuMxUpmL0QBKujWG1FpaZkCil8HFJLZiHBkMBITmbNVcugFf9KRWHqsV5kXvlGx5G9sz6Mp+AcTBACRdIsRXMkTJgyZMoP6cVsYDZu5QOXA4suRM1gvpn7LHd7N12FUVuUNprWo67qbN3H9MfTswiZ7RZaANxzSQQgxg0QBMSQLSzAFhGwRgg7TA6nF7srJMxfJz+qNsmSC1zvgYihn82Iz9Y2ug1Sah9H0qroYEwH67k01qytxCsoeNM4Wz92rVNsHtMK9t6D+0HN5A3UwYP6+Dw0u27gdoH7qvo94zVdZnYzydcGqWtxpYcIPZ+aHgeFDyflUoaTcrju8bjrsVge/WrZsOBfEjmSNrGtJad8T8k/qO0vayB4JueFd7+np72yctTyZ+YPfU/0+zvruuJvQ6Ch2OiGC0j3kuzucWbAwRL5HwLueGoOckG4/wilP6ptT9/b9iRG",
+      "points": "eJyVVll6AyEIHjTq/U/Uc/Wl7ci+OMlXRDCCG/w6+f3++eovT92LToJ1J76pbW6tYzkTUAVtaRXZ9gRASmfbE9MaurTSoIosAqUUZ7Ie32AhMxUnPDWdqbtd7ePSQbsZ1F753Gw+ZjyBF6pcjDB8IHTBZSy0WChXRT4shQArF0f3cjl7JiDuTak7rYckoDAhdrg4kAXyCY5priz+AbQEVabGMNVQB5k2XuloqZ39gz3G5uTiEdAoy1Q4RcTgM+YZ8o80MDuIj3qp4VJcgYGFYbVuXhPLrW81WQiN0BhbjWmVVHDSOXC+hTOToNVuwcVhG7cEEcN2MohNQIW1GbhBYV0gnK6106mPhA4HvakNeK2UmsuHt5IZlrTX2fvJ+mYNOFvSCDg4w8EbF1+ctUgrgmKV1prFGucouDqYn0cfetfBPAWIiMixedNW9Imgh2XYw6TvVdd3Rmt6zAZLmsoRLjRN8eqi9MqkW+OCsg435WJ2N0W/CCl57qrLE5BQCgUL9gGhKykLy15yymtK/kGjDuZArB1A+0D47GQdmq7zZH7f94E+DQkbC/9UDBpzjGFvpQ/hcsE9/bTAP8Rb4TQM4/M1hv0PSt/bcqg/pBYkOw==",
       "tabs": [
         {
           "fit_indexes": [
-            436,
+            437,
             699
           ],
           "ellipse": {
             "center": [
-              -161.92423971772416,
-              -37.7912774065613
+              -161.94692696689927,
+              -37.78694177315699
             ],
-            "semi_major": 57.08159019624261,
-            "semi_minor": 55.445068416331104,
-            "phi": 1.0854643397468218
+            "semi_major": 57.08402210733115,
+            "semi_minor": 55.43305971548184,
+            "phi": 1.0524843335561558
           },
           "indent": true,
           "tangent_indexes": [
-            425,
+            426,
             720
           ]
         },
@@ -90751,12 +90751,12 @@
           ],
           "ellipse": {
             "center": [
-              -50.21592516841517,
-              173.8080445140634
+              -50.24666687679695,
+              173.85206699393683
             ],
-            "semi_major": 56.93610117755654,
-            "semi_minor": 53.84869034989943,
-            "phi": 1.1825027518312343
+            "semi_major": 56.98752712177911,
+            "semi_minor": 53.802800112708546,
+            "phi": 1.1810722795611581
           },
           "indent": true,
           "tangent_indexes": [
@@ -90771,12 +90771,12 @@
           ],
           "ellipse": {
             "center": [
-              176.62383841061177,
-              0.22823751403240944
+              176.63154675765009,
+              0.21304670715455143
             ],
-            "semi_major": 60.08472189684675,
-            "semi_minor": 54.639328969061104,
-            "phi": 0.6599525879534691
+            "semi_major": 60.094587860847774,
+            "semi_minor": 54.65388933002593,
+            "phi": 0.6600934835254493
           },
           "indent": true,
           "tangent_indexes": [
@@ -90786,22 +90786,22 @@
         },
         {
           "fit_indexes": [
-            2439,
+            2438,
             130
           ],
           "ellipse": {
             "center": [
-              -5.997431770535984,
-              -264.52569208648646
+              -6.001005094638294,
+              -264.5316461630523
             ],
-            "semi_major": 60.34910274779509,
-            "semi_minor": 58.168328504844624,
-            "phi": 0.9802785628542627
+            "semi_major": 60.34758063991701,
+            "semi_minor": 58.14199725539668,
+            "phi": 0.977596334276678
           },
           "indent": false,
           "tangent_indexes": [
-            2432,
-            147
+            2431,
+            145
           ]
         }
       ],
@@ -90818,86 +90818,86 @@
           625
         ]
       },
-      "points": "eJydFQlyxCBI1yX8/0v9UH/QFuVGN5kpcpl4cA3+fv98jfeEIWyIGG8ZCi8dE1UI9CCMMXVhRrpybefziCvoxWZPAqgKFL4tcGWwxp6QBcH85MQjPK7T+Cy3gmseVPeMrQLHJO17di5sd1o4HCVpJW8layExXYax/ipDcNGERtgIFwmgcSEX2PyLruSd65h53DqTz3drjiEfm5J/joc81W3jODkcfrvxwx5yxGLUk4ihi5P0OYOGkYiGIOJFSIBCApBVUA2uOEuAic9zkRnadZ5QjAa5ODnVPc+N8ywQK80yXiPKNF6xmnNtHxsTR98KeBXYGoJmYDQ8+vJJb8F3y0Y8J5T/thvrTM/hXM64gychJbRMNrj/e7ugFAKedAxiFgfXxyWGL8ew5Wj2Zon3AkgspMP6QQy1hI/rvHEpakmaFbXykw4uQUVUWKdBMNkbUgPO70hqvNp30+O5P1ze1gXlJr71EP2nvOFxhrefxE8or+f2Uv4PNpc/QXizOcA5JOApYa59TXEyy7kVgMkrNEG0rufEWaZr1pV8/fbUZh7hD5+LIlk=",
+      "points": "eJydVQt2xCAI1HUN9z9TT9NLtFWQz6DZvNcRFZOoMBD9/f75au+BxsJde6+ieGmZot1CDZ011aX6I4CsMtdW6MZmCKBnpad2+8CVJpp4ckC27R5PXyo/7FZwzUl118Sq7gK9PUfnnJhAFEtzWUFLcUtRq7GTYl19pbKE60QZUoZwXSBrV8VOVf1SZvIyczleU9Z3a46Mt03Bl+0hTHlaOw4Oi3+ceDNnOGIcVegidWEATxOoGI1UiLgZuIYM0KoLHdWuWr/iCEDQznVJGrLtbHsLKwQVETzVOBeJ80LMNIt4ZlRqe8Vsxtw+HkzCviWw5Gw1W9xAMNyTGPxKPlLBdI/fYLJTmoY/QViHKabJew9RiAFNgw2f3z58AKlAJz0aRJYfl+YGLRoim7VY4D0BoAnhsPPgEAhJdMl2y0k24RLObmwOjnX7Dborpo8yMJt3hwMY7xE4ePXchctzv7j8WJ/ClTeSXTfun+NGxxF9fLQ26un23G7Kf2Hz+BaBUCHYKXFOwuHkyaYpJ3kXSnihPq9Zeup5lSiPbXhHjYmYEq7Z2O74A1ZeIlU=",
       "tabs": [
         {
           "fit_indexes": [
-            360,
-            636
+            376,
+            630
           ],
           "ellipse": {
             "center": [
-              -239.82519146346232,
-              -28.90127228970588
+              -246.10656511866938,
+              -28.092835480222057
             ],
-            "semi_major": 64.39228117581007,
-            "semi_minor": 57.346782936177235,
-            "phi": 0.11484600560171998
+            "semi_major": 60.29841121631249,
+            "semi_minor": 54.400607919913156,
+            "phi": 0.9088974747768448
           },
           "indent": false,
           "tangent_indexes": [
-            360,
-            657
+            354,
+            648
           ]
         },
         {
           "fit_indexes": [
-            962,
-            1234
+            955,
+            1228
           ],
           "ellipse": {
             "center": [
-              -35.74853193890086,
-              182.06970545090536
+              -35.864716482437956,
+              182.3918007683138
             ],
-            "semi_major": 62.38299040205656,
-            "semi_minor": 52.67720332626645,
-            "phi": 2.051470906647948
+            "semi_major": 62.82349804113482,
+            "semi_minor": 52.61510253317002,
+            "phi": 2.047589274225217
           },
           "indent": true,
           "tangent_indexes": [
-            966,
-            1257
+            960,
+            1251
           ]
         },
         {
           "fit_indexes": [
-            1631,
-            1893
+            1614,
+            1902
           ],
           "ellipse": {
             "center": [
-              261.48295405898494,
-              0.9485702436125326
+              256.14961646170167,
+              0.03386902181804484
             ],
-            "semi_major": 58.256151842138294,
-            "semi_minor": 55.01910844748273,
-            "phi": 1.2929153663289692
+            "semi_major": 62.55563711914515,
+            "semi_minor": 56.7905369066864,
+            "phi": 0.4030399003575253
           },
           "indent": false,
           "tangent_indexes": [
-            1610,
-            1907
+            1600,
+            1902
           ]
         },
         {
           "fit_indexes": [
-            2208,
-            119
+            2199,
+            126
           ],
           "ellipse": {
             "center": [
-              -7.571516347228982,
-              -265.2053757270694
+              -8.42745868760131,
+              -262.1181995040052
             ],
-            "semi_major": 56.51363773591388,
-            "semi_minor": 54.57891095793355,
-            "phi": 2.9866641760728228
+            "semi_major": 59.25136070764577,
+            "semi_minor": 55.33235415112752,
+            "phi": 2.054334426220455
           },
           "indent": false,
           "tangent_indexes": [
-            2192,
-            132
+            2186,
+            126
           ]
         }
       ],
@@ -90914,25 +90914,25 @@
           595
         ]
       },
-      "points": "eJyFVYthxSAIJH73n6xDdI+2UQ44NXkFomj8wSH+fv985ZKVrH6lzwMS5OY0tbu6ktIFuXnIJNFPJqNiDgEliC0XlP3TvRMdBmLVbtCQooJCqaKoxkOIWshkVHVoUDCs6tS5yly20lbZ+MW76VAezDg6HrteQBvoBAQrGEfXqT+PVOTkiraPNSgNzMASKOrZU3aXTJTMR9AKdRey2CLQI0GXPYkiMuFAHpBsDEWkoEWK6mL6pH6TdJll723K/O7i5qYVmva/Y7jo3LGML+i7X3YbzH2XG+B3Y+/bW1uRjjmAxG4qX1oRGEa0NY3a+q89D2hbj7TjV+NtzDud3WPIvCQLGENe8s8oIp5w1qVtG0WkY2uGi4wwWAlZ4tao0IzhecPzBZKMJgzPGcakLjkp0lBtRBZsfEbp5kNz5dIO3cVAXwaPtSO//Utlb3yex8Nb1Eu2JVP7Yqt4IMXpAzlZ+yiyevdbqatBAjD4F3tXRq5tNhWDkIAc+NVirwBRxkNQ/BEoyM2UzVY+HzfLifye0WP29IZtHvYXi1y+6MeEV+Dw4P0BqrUhSQ==",
+      "points": "eJyFVQlixCAIdNWQ/7+sj+g/2iowMBp3C6hovGCQ/H7/fLXejNC+pc8TqsvgqhrRy2XwFKVipSh7w+yiZVK1EnsRtSh2dqXLuKDZDerGU7wyury6wFOIJGWwXOCpu+LTLluqu+i2Fx2F8995tz6UgxmPgePQG9AmOgnBCsZj6KmfZxp45ZX9mBtYOpiJpaNod68tXBIotfRWZ/DIYkRgRIJt+ySKSA+sDEg2hiKyeI+UstRG96Ay+FZNVLSMarBY4118t0W3LRtctGBvPz0eQ833kI/K3bmNJdPndeK6BpDQi8OjLcUMY9q6QbJ8lvNneYykqw7bwDmLe0piFKmCcoXfnpwUBZQBTzDb1jjFTtTjS15Gi5AFAsAl2mARqixlTIlUIUgUkS8iZYBJXVISspBmoiTEGt+x3PAhXLn0Uw8puzZ57p3p7V/qe8eNfbec5gspaSecF4aSsdPCCBs2stwrB4So8ShtM5cEzP0L3CLLM4BpQMADIAnDhRr+A50SXouf15HXf1vkyl41K9puRAid7R92cHFYg77sk65PqHdqx4F/x8EhUw==",
       "tabs": [
         {
           "fit_indexes": [
-            92,
+            113,
             355
           ],
           "ellipse": {
             "center": [
-              -102.40037304570595,
-              -133.92903898735645
+              -99.46874435997348,
+              -128.1253812659518
             ],
-            "semi_major": 66.08133658096958,
-            "semi_minor": 54.85670967110945,
-            "phi": 1.170653881944205
+            "semi_major": 58.029517149503356,
+            "semi_minor": 55.57575225563604,
+            "phi": 1.5483938940926025
           },
           "indent": true,
           "tangent_indexes": [
-            92,
+            100,
             370
           ]
         },
@@ -90943,57 +90943,57 @@
           ],
           "ellipse": {
             "center": [
-              -196.20483822582037,
-              156.14567039565813
+              -196.21781379555358,
+              156.16552455143233
             ],
-            "semi_major": 67.00636577856125,
-            "semi_minor": 57.514438449661164,
-            "phi": 2.2237245196692808
+            "semi_major": 66.9893153051005,
+            "semi_minor": 57.52314346315001,
+            "phi": 2.2219597721746154
           },
           "indent": false,
           "tangent_indexes": [
             649,
-            929
+            928
           ]
         },
         {
           "fit_indexes": [
-            1229,
-            1475
+            1228,
+            1468
           ],
           "ellipse": {
             "center": [
-              199.9455731408296,
-              170.43933942362423
+              200.44732655906967,
+              171.35936597171988
             ],
-            "semi_major": 58.74355987572785,
-            "semi_minor": 57.557038691803605,
-            "phi": 2.738954654125075
+            "semi_major": 59.00088614900589,
+            "semi_minor": 56.192455014894016,
+            "phi": 2.6730435632105927
           },
           "indent": false,
           "tangent_indexes": [
-            1217,
-            1486
+            1216,
+            1485
           ]
         },
         {
           "fit_indexes": [
             1741,
-            1993
+            1991
           ],
           "ellipse": {
             "center": [
-              173.57221485854853,
-              -201.33756428752847
+              173.84154953338887,
+              -201.5832619663328
             ],
-            "semi_major": 60.095602394075975,
-            "semi_minor": 56.14779927092935,
-            "phi": 1.5679741337493553
+            "semi_major": 59.957786462663954,
+            "semi_minor": 55.89319870734124,
+            "phi": 1.5124181088399185
           },
           "indent": false,
           "tangent_indexes": [
             1730,
-            2007
+            2006
           ]
         }
       ],
@@ -91010,85 +91010,85 @@
           615
         ]
       },
-      "points": "eJyFVQl2xSAIdIl6vF68Z+rrFxgZ1LQIKGgEAU36+vmuj0KdKK3Wp9QJxVgpVZqhkMAasFQXSdNdBJ5qFmDwaTJqSoLNu3aIh0ZUJl+WbAw21Dp7puOyj0ucKTwrSI2ikYVyzsrTRGtJCBzdrrF1gpPJtwRFtjaERc5G5UwAK+ekxCNXzbvnB2UBaIs8/I7GjC8NpQNxR+a13MQqPFG/2NHgNJ2jnme6dFF1tldFmPygZNEhGVlOaMiTUCWaTXEueXH4mOsE5TEmSps4uuCHejemBG4wqB+OugFAtlQDE4VgM4IX7ipPZetYKZek1WkViipFmVJ1xmTiRtG1Cw+Ql4illkFs6F0rl7jCT3KZvV/CS0enjEoowjKLkiQHSdJ8WRre2n8q3yVM7Qv/+vwQwM5qGLEAKOGUbHqNMqKQr2FnNlY1Sy2nEaFTeduwu9tbqX+oBaTW1lNELz+e/+1BepHoryLQFacpY+7QGdLlPwQe+jXsY4TVuLbqvb+gt3b5RZ7iuxDEuwl/2DsisEIw2lhh6FxWg855SN3PeabUIssZFcMw/nBO74dYfyofPL/QZCFt",
+      "points": "eJyNVQt2xCAITCTq8fbiPVNfV2D4abdFQFGjyBC9Xt9f9AjRYi5ETyOmJtKoNVWLWZisES0y4UK61lqWdAds+HRudRHm7pUXNKrNja72YUpR2EN2D475UXO75ZEWRyUuXt4HviUCt6hb+b4Wa7lYoFHVHp0Hlu8D8cJNGVvSBoUiAaaISctHJsHd8UFagLpJgkOZpVSKhQYecQfykm68q4eTiqPJ6X1sM48fJpSornbqTINvZhSdLhXVrg6DsSO0r2gqwtqOeYL0mIu5LB4TMoYqEWilGerprF8r8ZKywWJVoS4JGly7PTvDYZsnKJIUWRqS0/GzXKz/mf9+NmjIRuI9bvxwW1jhZvA4Ol9VrcIhcyc60jQNEmMDjFY9WMb8tfzVJatsQ3Xip88PhvKWDDPjH/A2rP0+QtAvS+89Iq6mJfNilkju04A13O2S6W/piUPpdhPlq9+vor7db8UKj8qiIcJbqXKHEM5hITX/YYR+P2EZkYPy+l0etvoUnp7F+mD+0/g8Zve30zq9xnlY+BEH4ORAZlgzvgdElXoCFFFn9fTtXUluA1+DV0D9AZ0DIWc=",
       "tabs": [
         {
           "fit_indexes": [
-            339,
+            357,
             613
           ],
           "ellipse": {
             "center": [
-              -145.8044329324527,
-              -93.42539695421172
+              -141.4936173921978,
+              -89.88452383991513
             ],
-            "semi_major": 66.0429042634688,
-            "semi_minor": 56.5453610152596,
-            "phi": 0.695075197172677
+            "semi_major": 58.69330714070657,
+            "semi_minor": 57.637186332934036,
+            "phi": 0.5572582491152613
           },
           "indent": true,
           "tangent_indexes": [
-            343,
+            345,
             631
           ]
         },
         {
           "fit_indexes": [
             954,
-            1199
+            1198
           ],
           "ellipse": {
             "center": [
-              -100.0624132478731,
-              153.74719949983515
+              -100.07128140988776,
+              153.75275295469154
             ],
-            "semi_major": 57.53403119125388,
-            "semi_minor": 54.12782757797405,
-            "phi": 2.535846747348069
+            "semi_major": 57.511690736450454,
+            "semi_minor": 54.11959782353159,
+            "phi": 2.538444079924769
           },
           "indent": true,
           "tangent_indexes": [
             941,
-            1218
+            1217
           ]
         },
         {
           "fit_indexes": [
-            1579,
-            1841
+            1578,
+            1840
           ],
           "ellipse": {
             "center": [
-              240.58728788401208,
-              94.80569429603673
+              240.61117662594492,
+              94.80610572607762
             ],
-            "semi_major": 61.10305592554221,
-            "semi_minor": 56.86442383256874,
-            "phi": 0.6494733192812233
+            "semi_major": 61.06747942222051,
+            "semi_minor": 56.88429046080337,
+            "phi": 0.6510480106441335
           },
           "indent": false,
           "tangent_indexes": [
-            1558,
-            1841
+            1557,
+            1840
           ]
         },
         {
           "fit_indexes": [
-            2123,
+            2118,
             89
           ],
           "ellipse": {
             "center": [
-              93.28190454030106,
-              -250.72705672816568
+              93.13429467355546,
+              -249.96446479360114
             ],
-            "semi_major": 57.80287487485997,
-            "semi_minor": 53.79775329980174,
-            "phi": 0.9016347924050527
+            "semi_major": 58.23801666236502,
+            "semi_minor": 54.21656203680391,
+            "phi": 1.044790029795045
           },
           "indent": false,
           "tangent_indexes": [
-            2103,
+            2101,
             110
           ]
         }
@@ -91106,7 +91106,7 @@
           560
         ]
       },
-      "points": "eJydVod1xCAMPSwD+89zs2SVJKDGF8hJXoQaNqao4a+PzzfdAiZZI+nSLWpoE5UNuOhSBCjGGVWWC5sJpwU83WjEpIvp6mtfYcvQCQ+fh4GWfAlqnYvyMZ30tOTbRfWRm4ncVGgzUouJoaYysbwmjjaRaUA3MVsUrkaJn/k8RZHbRIFL2HJb8Oexczw4BRIvLh8uLwYfgqGNmVLvSMbB/RCQGox5QJ5QDuXolfTFw4g4zc8TZ6OvQunMww/u+RQKcBhZ9hEYQtuI4+OXhUyB0JF40jDrU+ltysbUGpOLXqVXhWod3JmrpsgY13wum7EL0xUV1mZe0Alxf8R+P225DFhiUnBOeGJIakBmLC9Z9FvhemzAsnDx6ihZqPkvtHm0rwPBSY0FA+xvYif9PrEdiGHg6J+2XP2Xx/8fV0+t/tLfZ6m2c4lYiaotpPz4VnFjAVa1ePBk6enGt6TRrOm2qId1S42ZHFtSqQITwYkkcCtCsaxQMgmJkrvd7/6zRHNB5ukFJHMtvyP0IP2IPTxKZN8fWYe9xmXEjvV0xaeXOMV++suz/VUcvxi0v/NXfjeJiaSJoW4seSEoe9sME8pnKKUYBxX8jr5vsqCuvtD2R/Ubk9YkUw==",
+      "points": "eJyNFomRxCBoiTH0X8/Vcq3sXuQHyc4hIBo/Ps3n9/0zTgatSRrcHCeLqSwkIjjGIRgAlCsuBkcsymgspNm03F0G0eDdZPfTKB05NFLn87AgNTODOJc5SE0j0XbYcaOY+NYR6mSzYQYDNxfAa+FdFhLdgFqtkisTcx2n2TogSGUhw8Eseij4cz95UdaJveg+dC96bCWYylSYZyblwf0ekBqMGpAlIitAI9UWtB8eRuRlvi/cjX5a+XaCeb4FCDyMhDoihlAZsU1+aciAhY4QSpjhEvBa9UV0LVxg1VyVsjkvKhFvpgKPMcmXERmZyY4CfhiRUhLYqVPs425LCMYJScHME4NS4/DcCF7S6NeL67EE1nnfbkfOQsl/puJRdIWCpsqyATB/yY1tfhbcduic/b3BbPoeuv/Vtw+auzjLl9quq0w9OV4SU3tIqfo1W0KeQIibNj01X9K9LOliEe34FYJOUxPFs4WSSOAUDJdlvDPj+zlG87bb279f0XQh0/IMnLlyqAKYalQJU1dTY+3SBnmNrhHV5+mJbx/xkdvtL0/L65DRfbK3iU3EhQ115vuuMRNWxaPeJTDM6y6o7y/eUHZ31PON+Qd9viRL",
       "tabs": [
         {
           "fit_indexes": [
@@ -91115,12 +91115,12 @@
           ],
           "ellipse": {
             "center": [
-              -160.36071110191574,
-              -16.708375686078433
+              -160.36162111145896,
+              -16.705506193128436
             ],
-            "semi_major": 57.841180936707964,
-            "semi_minor": 55.74962265222486,
-            "phi": 2.1885676691843723
+            "semi_major": 57.835091997028954,
+            "semi_minor": 55.757124316627525,
+            "phi": 2.1887946005553287
           },
           "indent": true,
           "tangent_indexes": [
@@ -91130,17 +91130,17 @@
         },
         {
           "fit_indexes": [
-            1112,
+            1113,
             1397
           ],
           "ellipse": {
             "center": [
-              -9.518282163989102,
-              166.85097595995563
+              -9.491701545154108,
+              166.66306355416867
             ],
-            "semi_major": 68.61368452886958,
-            "semi_minor": 56.757645419997615,
-            "phi": 2.8825903825988473
+            "semi_major": 68.60309420724101,
+            "semi_minor": 56.528655230762205,
+            "phi": 2.8953157414072663
           },
           "indent": true,
           "tangent_indexes": [
@@ -91155,12 +91155,12 @@
           ],
           "ellipse": {
             "center": [
-              263.5402452180856,
-              -40.76582264402858
+              263.51154979827095,
+              -40.77076434262566
             ],
-            "semi_major": 57.46137950688038,
-            "semi_minor": 54.33760352501043,
-            "phi": 1.5246697441942467
+            "semi_major": 57.460183005542696,
+            "semi_minor": 54.35692201058863,
+            "phi": 1.5312735640299657
           },
           "indent": false,
           "tangent_indexes": [
@@ -91175,16 +91175,16 @@
           ],
           "ellipse": {
             "center": [
-              -40.83820964054683,
-              -270.1112007402709
+              -40.84689105354269,
+              -270.08346918431283
             ],
-            "semi_major": 59.27180287691047,
-            "semi_minor": 54.95598997336761,
-            "phi": 0.4518251059921506
+            "semi_major": 59.28923568333179,
+            "semi_minor": 54.981908337768026,
+            "phi": 0.45422538747032504
           },
           "indent": false,
           "tangent_indexes": [
-            2400,
+            2399,
             153
           ]
         }
@@ -91202,86 +91202,86 @@
           610
         ]
       },
-      "points": "eJyFVVl2gDAIjFlv1/sfpN99NaxDEpVNjIrCIEk/f7+l3rQYsu7hubpytjwZQxQ1xKXmUkqePIVU6GK9Jk9iu5JdIxHWZ4GKCL+skDpVF2E1MTVNkKmJ3NxImbpI72RM1R5duakxT2kctCpPMSpBXvnjcsgWki64EK9oVF5cw6zx3LmrngNOCq+7cXG74ShfRlhaJZHenKbOA9MgBR5T/QASOJkyceAZ+kr6tkPPunpB2ITmLWKFuW3zY9/iPxmaZT2xrjZoCgNEIMFf6H8TlDHbL+eJ6P+Z1wzNZMx/MTncIUdGR8o71AzEaV9Z0Hm68MEPkUQAbsObYU6eVHZUMyB65eBcWGXoeBl7WbonaT2OvQsNnNLWtqQbdbUk9/QZPY6kxsLziAdSbw2nHPhynz5FhgKOKfoeISlvRA/qe8Z4g/Md5OgqqlSK+XkxBUzmsNLP1w7l6Gi6bwItjPzRQ0GsGN5XI+00FneYDyVVcLXsC7Qj7j6AM3ylbUG+EfXKSntShR2p4XSJU0UNqzs2utbBJSFatX21wr4q36NbJHx36++yH2FvfgjHictH/QPZoyEL",
+      "points": "eJyFVVmWxCAINEbN7eb+95j/eSNSYKGmmy3GhYRFSD9/v3fpsIgh54jfbYi35WRUMQgo1CELghwu5UtQQOUKvjYIaGcJTL9+7B48oUwCmoiWmX0DqnIVrIMVGqi1IZxNrkPeVBWFoLMYju8Z3IE+4pflYC0ZffNEXDGtOlnmJ4765qB7PYc4WXjnYJvMW1RtmnYvRw+akCEd0uCOSVgeCg/I8RGeDyIRvi85K6hiIL52yFni6APN22um7ZBATdv8mrd8JTlXtlfParqGBbq3a2h+dzf6j5Mhdj/zauGybT8ztYUNlwbJ3AtvPzFK8bHj68IXfNEEonBzvBFrGEUpzRG9chhc7GXKeJS9jOxJ5o9j7ibyU0LKxuzdoZlsikJrRRLSeqQFqdXKVY7G2GenuoC6oRjfMVgv0erfc4y3cH4OchxaVIcr5PeiCWzMYaYd105bpmLySOUeEHxi/qAfpWimPcA8fGbhmi5FcDWoiCzF9ondhztPjU2oeujdwqI9qRQWd6wsoaigsnh1KaHjrnULKqitcl/FH1mH9FyjrHuh/Umt+UXdMNw67j+RhSEC",
       "tabs": [
         {
           "fit_indexes": [
-            139,
-            383
+            138,
+            382
           ],
           "ellipse": {
             "center": [
-              -48.81420433879079,
-              -148.38821339088267
+              -48.80398449715756,
+              -149.38861167133854
             ],
-            "semi_major": 56.05069762487249,
-            "semi_minor": 54.75558159401376,
-            "phi": 2.1325457647747688
+            "semi_major": 56.0419652647328,
+            "semi_minor": 54.74545267917648,
+            "phi": 2.1354851278009503
           },
           "indent": true,
           "tangent_indexes": [
-            122,
-            395
+            120,
+            394
           ]
         },
         {
           "fit_indexes": [
-            759,
-            1024
+            754,
+            1023
           ],
           "ellipse": {
             "center": [
-              -182.49184060953536,
-              60.367999433054344
+              -183.0428913173437,
+              59.40097047209741
             ],
-            "semi_major": 66.70615227619763,
-            "semi_minor": 55.981500054627766,
-            "phi": 2.7113209075842146
+            "semi_major": 67.26697857593145,
+            "semi_minor": 56.038487675838844,
+            "phi": 2.7356132746542605
           },
           "indent": true,
           "tangent_indexes": [
-            739,
-            1021
+            738,
+            1020
           ]
         },
         {
           "fit_indexes": [
-            1348,
-            1592
+            1347,
+            1591
           ],
           "ellipse": {
             "center": [
-              119.66457267010709,
-              242.4037532251872
+              119.64517671979837,
+              241.38454328476323
             ],
-            "semi_major": 57.76035519165395,
-            "semi_minor": 56.52926172670827,
-            "phi": 1.9558899752760088
+            "semi_major": 57.78236113088136,
+            "semi_minor": 56.51525047355529,
+            "phi": 1.9361811892328253
           },
           "indent": false,
           "tangent_indexes": [
-            1333,
-            1610
+            1332,
+            1609
           ]
         },
         {
           "fit_indexes": [
-            1907,
-            2160
+            1901,
+            2158
           ],
           "ellipse": {
             "center": [
-              230.76538067033263,
-              -119.37399896064385
+              229.85548419392623,
+              -119.70422183976466
             ],
-            "semi_major": 56.72229919750117,
-            "semi_minor": 55.26727780184326,
-            "phi": 1.412471758380351
+            "semi_major": 57.40518801815941,
+            "semi_minor": 55.82520070725039,
+            "phi": 2.0727813698748125
           },
           "indent": false,
           "tangent_indexes": [
-            1891,
-            2177
+            1890,
+            2175
           ]
         }
       ],
@@ -91298,7 +91298,7 @@
           600
         ]
       },
-      "points": "eJyNVUdyxSAMpVmc7d9/natkYvWCnUSNYjCCp5Ha5/trzjXmmkSDZIod2old+/Juz6lj099LZJ21SIvk1ptFlC7Smy9SIkARBlM2sRtn8qCsFyUxRsEzSdQVtOwduSk89Z3jrcpF62OENxlxywGMg/dPfOopY3Tk3qUNjUmcsQn/+Dh4aURIb9OwadjcBiXQRiEWSQSpQdJ1xLyfqYuRM+xA1h7a3t214DVKock6mSMKHrIWAmw0dlXDnIeLxMqiH9IJM55JjvShCLyi5F97gad0EiTP2L4jzAaf2jAAAwoMlQoUT4Jv+Y3agewOMRIgpZv6hYeapP5+YUUOyiaMslsKpFaGu4s7RTlySbgBvi1w72aWHZLO1kzEaQYzjGSZTJxzLN1BTnmS9RLhUeIBOCDxTbXnw9yvTV4k93zcKfDRi5ATYM5aHi3GpI6Pz0nKj/SInPI32MuHAPTIUuxayCDbUWctt9MIln/GZz/qyHV0Y6W6AuArwr200miZ8UJD9e/euZZE9ix1Z2g68SSVqsqMqSrWVj52LfUFzkDzqug3ynNQp6EuuJ4l4nhdPzMwIc4=",
+      "points": "eJx9VUmW4CAIdcSz1f3XfZV+JaOAphCQqInIJ1h+/v/rfbQ+OlEjFsskmG6Q+5bNMPS15m3nxeeTRIN4y27CSpNkt0lCBMjUhElYedOPxIe0XoTYGjLuSSyeUMfekZvUxPd8rBi0Kw6PsGdgzvpPAB762qW1iq1W6b8Udf4xDbyWPLrDtGXBrmC3FbKjtRupJRwIQoek6/g1FqIqqvomzGQGe1Vr9Bo5UWfp3DwKJ2U1BUZgEzX6SRdWBg1u0P2W5EdtCkAI6AWChLlF9hN+8II2vvcCmBVG2gAAwwlsLOPEg2B2mEpUDFhWjG5xyBqYeApNK40RBcyJxu/EMAWhhvxYkocpLc2qLtOcsKPkcZEDgsYAYHdwWAvN0kJ0qowUmUhcclBgSLVLJc++o8R78u4HEve3hAj/YTvDT8hBv960X3LRyc1Zq6NJGefnazpw+pBdAKHkLwsH+Aws5mIJxWM5vA++IWj0AUEX+IQn7Nc9Mi9TYIYTDsP54D30pnH3jF2De2K/uZ8x+7FghJuHy9IIV0W4VbovVfbRPuViHUN9gUeieWWH8GOQhyEvmG/2OM75CzkgIdA=",
       "tabs": [
         {
           "fit_indexes": [
@@ -91307,36 +91307,36 @@
           ],
           "ellipse": {
             "center": [
-              -145.8225358016823,
-              68.45936242581432
+              -145.85571344047165,
+              68.49255397806473
             ],
-            "semi_major": 57.7826879005562,
-            "semi_minor": 55.937986271527905,
-            "phi": 2.9348719393095855
+            "semi_major": 57.82940395910561,
+            "semi_minor": 55.9166026326507,
+            "phi": 2.923404392233053
           },
           "indent": true,
           "tangent_indexes": [
             662,
-            939
+            938
           ]
         },
         {
           "fit_indexes": [
-            1238,
+            1237,
             1488
           ],
           "ellipse": {
             "center": [
-              111.54125124920522,
-              239.94392406240846
+              111.51882944118069,
+              239.9563435466007
             ],
-            "semi_major": 60.30110308535852,
-            "semi_minor": 54.22054304188011,
-            "phi": 0.13186867868185068
+            "semi_major": 60.29822207648735,
+            "semi_minor": 54.20328423750336,
+            "phi": 0.12977050052460365
           },
           "indent": false,
           "tangent_indexes": [
-            1223,
+            1225,
             1515
           ]
         },
@@ -91347,17 +91347,17 @@
           ],
           "ellipse": {
             "center": [
-              220.9158446190868,
-              -149.56276053155528
+              220.92000128621623,
+              -149.57822462396777
             ],
-            "semi_major": 60.19780384564282,
-            "semi_minor": 52.85493316289065,
-            "phi": 1.3157838963517885
+            "semi_major": 60.22219918063867,
+            "semi_minor": 52.85310483155409,
+            "phi": 1.315079169282725
           },
           "indent": false,
           "tangent_indexes": [
             1789,
-            2083
+            2080
           ]
         }
       ],
@@ -91369,12 +91369,12 @@
           ],
           "line": {
             "pt0": [
-              -172.94114325282408,
-              -248.92833448041472
+              -172.93683298597654,
+              -248.90843308608646
             ],
             "pt1": [
-              -319.1944463467853,
-              -79.78351854692902
+              -319.2100481175391,
+              -79.78083693344477
             ]
           }
         }
@@ -91391,7 +91391,7 @@
           590
         ]
       },
-      "points": "eJyNVYlhwzAI1K/9p+oMXSapxXtgpy0C9BoLDuP31+u799GZtEcav8xuKzxpuNSk6cCpMteLicrFpUo7bBJnLH72MIlaIptqn0Spq+oN7tW1u7s1WITHpY9CmiyT22ESpvXU2SFiMcHURVPjOwy+WZNQaiSD4j741OAJP6MjWX4yc4InMZXYEpf6ke+7/3qGD1aErCbAzCMDKuAzrFO8NP+Ck8KZuqYfv9ipgNOSaJJs9zyMQ6F9+GqHRe21yzoa2mFWOuaBrWxhNsI2yTpJfD+0p1ij+DCMEm7lhmKGW7bJWb3oEmcji+esZOALtgHB2WlbLW9/CQVWgyIhUTDAo9MZus2LhBcdB1sfTXgGZAXe4sDC/QRJY0cTlWijveal52GoE1YgJtcX4SwzFCGvQkMtHauLFbzRci0GPXDa2vlYOhsx+2AzHoPv4LrqGslxntpkAD8Kug7nfAuVRmvcKzCXX60vzRtUE/uLWJmCc92LtpcmafqKAW+Gn4j+SfCy+EsxVBlYhZbQnTmvHOPwARX4fmzqyWxZa7nLAK34D7PrTsxDTMW0PrO/fwkd/gETbiI8",
+      "points": "eJyFVYlhgDAI1HzuP1Vn6DJt5Tk4om0JkBgRCYf4/fH12fvoRpiZxh9Xjx27aLzVfGCRdBqfNysdNx+nD2GVVFXSVlgFnpos4F8F1KF6o7g04BJ0HGuYOI9bi2KaJtOGsIrRepvCSNk8gLopHRbDsMiapxKZLMrmcqZGT6RNHLe59dONpM5z6rlVPs53fr37uguUjnwsqRlqAVrA5UUDlAo+Iybghfqjc8LNgzrKr1nBnFGGdCwvNC+2Zx1W7XTlEFK9rmOJpiFsCmtbxI7Ym6gPcyysgnficzj5e9ghYnkA8YrmE9ucirGGhUg1WF8k+8lN+SI34gYl59puwzPcR05sICWHd46MsVDLHpFoJ9Z4sqJZgDUl7OAuEoC6ceKcKDNda956ClObiP6AHjGj17DM0oP2JrSE3XV5Y5RazXnh7da1m222FbJffFYz+gwk0lF6o3fREReD+FXodu2x5DIUsoX87f032kvLkcx9xbsU2fXs2dmZfOAVg95M/xD8SDhY/qN4fQDYuQjduddVYly+n4M+n7i8Csjci+7ZCrT+wiLcyXXIpbjtz/28/4ka/wD/KSI7",
       "tabs": [
         {
           "fit_indexes": [
@@ -91400,32 +91400,32 @@
           ],
           "ellipse": {
             "center": [
-              -129.48659350762335,
-              -103.88873808132958
+              -129.49756254319576,
+              -103.89676745697471
             ],
-            "semi_major": 58.57807360153316,
-            "semi_minor": 55.423253405135654,
-            "phi": 2.9297905312130714
+            "semi_major": 58.578026350319675,
+            "semi_minor": 55.44322093901677,
+            "phi": 2.9352013340475915
           },
           "indent": true,
           "tangent_indexes": [
             126,
-            395
+            396
           ]
         },
         {
           "fit_indexes": [
             681,
-            927
+            928
           ],
           "ellipse": {
             "center": [
-              -174.768898322901,
-              207.2601915988174
+              -174.5990398288012,
+              207.08540075830905
             ],
-            "semi_major": 58.344610535883575,
-            "semi_minor": 54.15502037430961,
-            "phi": 3.1407846284384866
+            "semi_major": 58.510611739406954,
+            "semi_minor": 54.217743702810516,
+            "phi": 3.0979339722232715
           },
           "indent": false,
           "tangent_indexes": [
@@ -91436,41 +91436,41 @@
         {
           "fit_indexes": [
             1218,
-            1495
+            1491
           ],
           "ellipse": {
             "center": [
-              222.59115917182174,
-              130.36286936663794
+              222.7135884532435,
+              130.62288031589895
             ],
-            "semi_major": 65.9938371197615,
-            "semi_minor": 56.614107348405895,
-            "phi": 0.3564291224177172
+            "semi_major": 65.80576049186143,
+            "semi_minor": 56.57033493993293,
+            "phi": 0.3308349523049108
           },
           "indent": false,
           "tangent_indexes": [
             1223,
-            1512
+            1511
           ]
         },
         {
           "fit_indexes": [
-            1824,
-            2063
+            1823,
+            2062
           ],
           "ellipse": {
             "center": [
-              68.7659363380574,
-              -164.84670785176374
+              68.77356843850102,
+              -164.8575332456952
             ],
-            "semi_major": 57.6992821712745,
-            "semi_minor": 56.2719746378979,
-            "phi": 0.31836681856937865
+            "semi_major": 57.692617556776874,
+            "semi_minor": 56.282310209409786,
+            "phi": 0.3236456747999963
           },
           "indent": true,
           "tangent_indexes": [
-            1810,
-            2088
+            1809,
+            2083
           ]
         }
       ],
@@ -91487,7 +91487,7 @@
           565
         ]
       },
-      "points": "eJyFVgeCKyEIHaKM97/w/m9BeJTs0kaR2EDIM37+tT7hinaw9U9rn4VCAqRc4CHAK+RHF9pHZt14VrrQN7WOKKR8RAY+zAsXbZ7witwoJCLCMDmc6lqzNvd0c9q9SDfE3XTYLexcZasGwP6wO240uXYtqL1uXik6goI7w8epyGtrg8Km+kFa8Q7Sp0kAbZ7wbJ644MgJ4/CmhL5rJMKAnj0zCZGuKgGMdGPdyJ+vaUwv2hHdLKD7DekUyOApixlrchhwMbFoz3iW2WuejdhL/eZGCjo4knYpq6Mv6cugMwG/kTphqD+GF+BcEKPqgGX6pBV0F2ReJ3Q33hRcYDPZgtIB3AckQoO14qMUgrk44wluH9cDxYR388aUwNgSFSB2XCLkN+RCmfgsMnQrcK0JqGrnhrOr1fTLhF+0fxlQGlLFPJem9XN2vAmGli8ZbJIL49jzttocsaDEGsNF9/p1fdens5Yd1oxhhcBV0isgJWFq8oXmVFMrpgCvsYRWCjKMLojNIeElJPCEMBv+/X5zaVBMY7qvyN4OPpc3PZfkVdszw9VzNeoUZs1pLryN9V9B/6mEpM9RUY36mhAqRKoaxd+R1C0n7q2uQAv+A45iIrE=",
+      "points": "eJyFVQlixCAI9CL+/8NtI6AMYHe5gko8AKXMn98+XtiiCy5qrTcWixTq4QsKARoxb+hNZ2Uc7V2qb5Cl+zDcwlhEBhKmhUoMj0pGJRURpsnpurY1HXVNu4hXGYa4mwG7hZ0f2W8DYC/sjusc0D3jSui0sVyqMTDRXGRq6tFv9T/VFv/BRu7xC8YV96DmlNKCwvziApEvTGGlWRz6ppEKg1p45qq0oG2pOWyqZfPeqDtfx5zumssN0llS+mRxh/CpYjljKoUBF+9FPKOso8vCblJI8eZeQ+Nyo6ae9NtlujwRxK2eIMwTj3lpY8TuClh5NVltuXexwg4ht/cKPWUe7CZjpwPwETyEBrxiKfdk9hvmU4jweT1FsLLgYWaMDxjBQwWIDfcQ0hPeQp1YFpnnZoFbI9RrIyv/GF60+sXO6V8Mahp6W5M73nMdb8nZ0ROEmnMTmaSbcWh526POWFBijaFLk3blka/UuV369MWA8oCVtJ/SPlyF7eldGmc6KaanlFpBVT5lMCRZcpmcd2p6KW0o82T8h2c7Z5SL/OSwlnOLJHPxujzpukS/w54JXE+3Uddh1pTmIvgsX8bHncL3Q0WINeHWout4qCXZKBj0ewVa8AeoRiK5",
       "tabs": [
         {
           "fit_indexes": [
@@ -91496,16 +91496,16 @@
           ],
           "ellipse": {
             "center": [
-              -54.23325474574335,
-              -172.19590074222478
+              -54.250240933349424,
+              -172.19812328581725
             ],
-            "semi_major": 58.89563781076498,
-            "semi_minor": 56.82569761556495,
-            "phi": 1.2953715001856374
+            "semi_major": 58.898999241897336,
+            "semi_minor": 56.813216918664644,
+            "phi": 1.3006374726953087
           },
           "indent": true,
           "tangent_indexes": [
-            25,
+            24,
             319
           ]
         },
@@ -91516,12 +91516,12 @@
           ],
           "ellipse": {
             "center": [
-              -163.83314480675648,
-              8.712951142651109
+              -163.79907391019293,
+              8.718125550633205
             ],
-            "semi_major": 58.42291967608712,
-            "semi_minor": 55.42804035272459,
-            "phi": 0.40874980090069357
+            "semi_major": 58.44300594657586,
+            "semi_minor": 55.42477878634982,
+            "phi": 0.40735018379490384
           },
           "indent": true,
           "tangent_indexes": [
@@ -91536,12 +91536,12 @@
           ],
           "ellipse": {
             "center": [
-              13.175709734522052,
-              262.85356925066617
+              13.173237331969949,
+              262.87013607068695
             ],
-            "semi_major": 58.581051816211975,
-            "semi_minor": 55.05620549200533,
-            "phi": 2.086964564985557
+            "semi_major": 58.59753934205602,
+            "semi_minor": 55.03350239366849,
+            "phi": 2.0864281503989184
           },
           "indent": false,
           "tangent_indexes": [
@@ -91556,12 +91556,12 @@
           ],
           "ellipse": {
             "center": [
-              170.0871151102515,
-              -37.07757073867118
+              170.09496100335966,
+              -37.099024878093196
             ],
-            "semi_major": 58.52152917925174,
-            "semi_minor": 53.71921202961675,
-            "phi": 0.6027683675886593
+            "semi_major": 58.536573235869184,
+            "semi_minor": 53.72281441474497,
+            "phi": 0.6030992552877441
           },
           "indent": true,
           "tangent_indexes": [
@@ -91583,7 +91583,7 @@
           630
         ]
       },
-      "points": "eJyFVVuCwyAIDCHW+1+qn3uk3Y08RzQtIuIbGGL+3r8/fClxVnbBLoxOLcZST2/JOqKQsjSpWDdGYxPBUXcZ7KSmZEVqm6bt5uaFQ+Oh36efJ5pdGgJ3fGarLpuWuYgOEJu74LAGG73lye7Jn1acmokBygKj3ZgGKE823wixQGbCkBs9GBaKoWP0jsHHIdWom3A2UUqqKnSbEg2WEhRmVYRKsEvkaVVpO038MIFrdpd8ut1iSxmdEipQn4alE7HpENoRwkEvLYOF2guUNhhF7cWy3NhDmCJ8F+Pe/fJjQhHgTx8I3KaA1vGV9CFypC3V5lD7Y4EPEHufYSIWAhqRxeS3lfCGxSnDpUzdcLHPAtMbduUpsLEkPMB4KJKvHbVH5ctAm5IAFnzq5RmLigkxpYRmYXzS05ccwaZJPOU6Ph74VvgdeqGnu2Um2JmeQ+5D4kNxITSa6+b7eW3rGzv9I6/4UeZDG+Xi5ddlh47jg/R2+Pz2WCwIf8mF1uGcBcgGopkUd9Xy2cEL3Nm267LttroXAgRx4vy11Vg5fkHx0JkCtdena5MYDRNAULcCwi0pv9t/NjUi0A==",
+      "points": "eJyNVUliwCAI1BDj/z/VY5/UVllHNG1HRFATZQn5/vj6pFtA0ckYGVNc0pS4XzZWVVioQjyAYM2YPVThVaNNMshVbhsWtMPQTmvrxinRVMbbrwuvnYYK5tjKUQQd+D67gtTcMPgWg8mDITzuvdjTklEJFKFMYdQT4wJCiz0jQlRn4JRF9CpMM3yqTK1MKoW7oiszUpZaiMLkMUGdxM3h18oRSs5Onq+7WE/LIyXfXlNPu18O3OPOn0N4J7kKxLdp1tw3HVw7XTjxSJvEaA8IbRKyrD1LZ3RnKjCNpiQHS8coQvjDBre4BkV8OX2qBVpSCyoFj2T1AgoQmU6wQNcKyRTN4mqnZffajYO7SZi6OZ19R87xAtt7yc+mNfsWisRxR9ul9r+JtiQBbPhNg/M20a5n6SEpYbAvevmQ3dd1Ya+pDrUDS4UmuubfM7mnfIdrhuGQ+pD30Iwx5nAPGtW17SWWluKK/8nb6zfZKtRyq9dNWkBOh6/vHIotwH8FvMN7tjg2YE05mxv/H0p2OtHBCW/b3pXVQeAnij9b+OqW4FgAHV7oeii7uMHMb5gBfIw2YHaV9Lv9AUXRItY=",
       "tabs": [
         {
           "fit_indexes": [
@@ -91592,12 +91592,12 @@
           ],
           "ellipse": {
             "center": [
-              -246.363642654466,
-              26.082388869503813
+              -246.37059285136806,
+              26.077167754849313
             ],
-            "semi_major": 59.509179815443815,
-            "semi_minor": 53.416463827194235,
-            "phi": 0.7890599174744154
+            "semi_major": 59.51516090380245,
+            "semi_minor": 53.411499006025096,
+            "phi": 0.7903795904758047
           },
           "indent": false,
           "tangent_indexes": [
@@ -91612,12 +91612,12 @@
           ],
           "ellipse": {
             "center": [
-              -6.370733020006374,
-              192.61118145973023
+              -6.36407400314488,
+              192.60009929363204
             ],
-            "semi_major": 64.19131834759247,
-            "semi_minor": 53.30369544581038,
-            "phi": 1.5800541332314328
+            "semi_major": 64.14684288189994,
+            "semi_minor": 53.33599689298833,
+            "phi": 1.5813998304370558
           },
           "indent": true,
           "tangent_indexes": [
@@ -91627,22 +91627,22 @@
         },
         {
           "fit_indexes": [
-            1637,
-            1895
+            1636,
+            1894
           ],
           "ellipse": {
             "center": [
-              260.37760055966146,
-              -42.55478870676914
+              260.3848478804201,
+              -42.554455854476984
             ],
-            "semi_major": 57.5252820345178,
-            "semi_minor": 55.284301067435386,
-            "phi": 1.2479556917549677
+            "semi_major": 57.51810359886771,
+            "semi_minor": 55.27230145387278,
+            "phi": 1.2543279008214316
           },
           "indent": false,
           "tangent_indexes": [
-            1619,
-            1914
+            1615,
+            1913
           ]
         },
         {
@@ -91652,16 +91652,16 @@
           ],
           "ellipse": {
             "center": [
-              -54.163617403195204,
-              -251.32371725789275
+              -54.17802484778681,
+              -251.32484732162135
             ],
-            "semi_major": 56.8104433264106,
-            "semi_minor": 54.41087327188001,
-            "phi": 1.66445323390636
+            "semi_major": 56.81452911861024,
+            "semi_minor": 54.3998443189042,
+            "phi": 1.6681149501812502
           },
           "indent": false,
           "tangent_indexes": [
-            2224,
+            2219,
             146
           ]
         }
@@ -91679,86 +91679,86 @@
           580
         ]
       },
-      "points": "eJx9VWu6qCAIzEzZ/2LOyu7/+50ChBmygwgovoJJj5////rVr6AOkq00oW9n95drN/PTC6tEx+LeXRidT3mYqd3F2AWryi6Mugtd++Ek311LZTwv01hiPHIM1SNoWp1zDmUXoZxkTFE9Q5vhkuYt1sV1MzgGk0UVjF7MDk3s245nLy0ACdTGrZ/4RsbAaNzLTUgVjug8uNUhOD1GotEUIA8dd3FxSySxqqxFwAh7jYlq1Jxt9aTT2UUF7zpng7O3RGpAFcF6EVgJoaETCoNhGi4CiyWQfsCzX6f9g/zzRMS/8siJbBvfLueEjI81vzfPALYjMogZ0wxCbgtjp2wm/yUSCIkGRRaB4Wwtk7+9ktDs6Av1ilYAy/hwgEddJ7EjiaOcTm2BWV8DuGf90DFF8noCGjPuNispBpv1FpR1591FtNpOgil5B7jqjfHuKnozpd4GsWceQCMgcwhe4KOEIaziSOfX2G2jvBXrleCgHVrz2EwNFTUgBgsfEfqVeN9KFeaeX6lsWU89NaTeXq5F+nB6ucbuGbvgiSkvD7xJfB/CY23rO9vehsZ3aNfHkCXsHUJuIed+rmwGTFym/FERsUcOD8gv0Y0j6w==",
+      "points": "eJx1VUt2wCAI1Bjk/pfpxbrvawSEgRhEQMVPBqLt5+933PfDmwbIbIUJfafxqs8zP0dh+gBD+CnGQtcqizP1pyibeNmJTSgNE7L24iDZ2EplFQjMJtqCliQSTU5T65yThE24MmKaLHq6VsNkzKBgWXztSH6ESoaqnT4h7YjfSSAEH/5pRWhI+IY2lhmR62D0K/f21IRQoccozr364PQtvLFsyY1F7SkmWlvVibUKS2Ew3N4+XpW6sa4edBmbqMm7zxnKZUpVSNY7J2vKUNeRCpTT1IdyssDvZz/gNe5rYBD3n/iKQYljDmQ/jJ1i3pPbx7zPzQNKCSmEKpSHF4LIrXjVqdj9ISIRIhuaJhckw9V7BD996XAR5sCxDDygZcW5WYLv2lKKd7YsT6dWYDh6dq5nvahNZriZZrqZ7G7TEuLdA+5+z61lmaXqTgzoHwCu+mC8rTzp5KjNjpdBPYAgwJMYL3AqMNSvpOPgyffYKG/FGbQm1SNbqKNKDcDAgfHsnhZ520vV+yRo1dzIaUKuCcjezq0O79gNb0x5u9KzhBcivNa6urzLd7zJJ2z9Y5LFeZT4c5RfZkHl4HzaxBFbkhSQfxARI/M=",
       "tabs": [
         {
           "fit_indexes": [
-            209,
-            462
+            210,
+            457
           ],
           "ellipse": {
             "center": [
-              -46.78662212796588,
-              -165.7975649396414
+              -46.36826306948789,
+              -164.59912293728743
             ],
-            "semi_major": 57.10665601019563,
-            "semi_minor": 55.703914227357664,
-            "phi": 0.684186284554285
+            "semi_major": 56.540214113096646,
+            "semi_minor": 54.866638885968385,
+            "phi": 0.02953396873009595
           },
           "indent": true,
           "tangent_indexes": [
-            186,
-            475
+            187,
+            476
           ]
         },
         {
           "fit_indexes": [
-            809,
-            1060
+            810,
+            1062
           ],
           "ellipse": {
             "center": [
-              -157.3286676146329,
-              11.367241407817179
+              -157.52649468131764,
+              11.433155101678073
             ],
-            "semi_major": 56.57954675304188,
-            "semi_minor": 54.341387446776544,
-            "phi": 0.9283475688671279
+            "semi_major": 56.54242679913869,
+            "semi_minor": 54.599566592217144,
+            "phi": 0.888129545733977
           },
           "indent": true,
           "tangent_indexes": [
-            793,
-            1076
+            794,
+            1077
           ]
         },
         {
           "fit_indexes": [
             1430,
-            1686
+            1687
           ],
           "ellipse": {
             "center": [
-              5.377083314282131,
-              273.3006086622392
+              5.333849439157739,
+              273.08740322884853
             ],
-            "semi_major": 57.48393207938481,
-            "semi_minor": 55.57017254763819,
-            "phi": 2.658901591959698
+            "semi_major": 57.43330308743918,
+            "semi_minor": 55.83745829816459,
+            "phi": 2.641570996020823
           },
           "indent": false,
           "tangent_indexes": [
-            1414,
-            1703
+            1415,
+            1704
           ]
         },
         {
           "fit_indexes": [
-            2034,
-            2296
+            2035,
+            2298
           ],
           "ellipse": {
             "center": [
-              258.8013809278219,
-              -42.61958112990793
+              258.86640163743795,
+              -42.60480212073094
             ],
-            "semi_major": 60.41118651348454,
-            "semi_minor": 55.21362264381407,
-            "phi": 1.9869318994306862
+            "semi_major": 60.406750790328985,
+            "semi_minor": 55.181655479814275,
+            "phi": 1.9704849028155493
           },
           "indent": false,
           "tangent_indexes": [
-            2016,
-            2311
+            2017,
+            2313
           ]
         }
       ],
@@ -91775,86 +91775,86 @@
           595
         ]
       },
-      "points": "eJyFVgl6BhEMZWI5cG/dQ/QrWV+M/o1ICGKyYMrXzze1CxBjMxrSU0gfxpKOLO90GaA3CQUklAQf2vDsstGhKnLZyDWYt3xUy0auQlwr69eie+79N9jHSKFmLbenS1kwFvQxmUrbuLDV73u+L2xiZHv2alZhfAT0QCgykbdmjT1UpuBSIlfW1MA8FMvpooeOcIRHw8U4eh+siaWZiV0muJL6JvV55ceCsrAsDJhG54LCOLXprChCKV5VA0M1wrvwbhWzceMlAw8XvD0XjrYktRyN9EwBO870eXQppYaq4HjqQbMtCT/Nj8/n8tRD8tea+lnl8t2UyLCTZ/HeTN3EYdSa8xSfE3InB7fkiGI8w9p/whj5bjFHozPk5ITORHkkbeRgGMFJu+vgui8jR65G8Vo57hWGaDW/bQbL7VqDu20K2dvIzvYZ4VXkYARaN08L38LMjrGXwkvrb8l9oyJe3aZ1ucLF/PCbuy61D/eemFmIg8SE3OwwKRZ1eVyGRq7pO4OvDTyw+qbhE0chSQ+e/yLYNdKVMHZ7+fzxGkrte9A7YI89ic41g8a0MjWT3pcw5P41U8oZSLjS/VzYMQB/4znQVEeGfW20w+04A2cOcI16q7Vfk64hig==",
+      "points": "eJyFVQl2xCAIjcHlvr10b9FXQQQ+JjNIQNGgsnn9/P1SfQASrJu6NAvpwxzoQHmjc4ISpTQSOtmEejOlmxujQVGUxihfCVw7NquN0T4GMsYoW+me6wjCBFejuntuParp3rW2RZoQxgC99a7E+GeAtdZaW7rXLron02hqPa8T7Ps9CKQ49aSAbQQOCUaNBjb582QBBiuBPSwwJeUk5T4iZMI18ZroMDYdEy7Bod3Nrj1jTXH9PFxZ2UR2kd1KCfGYYxDvgdcJAypmaQlTkjh1CNFpMQlZnZM3ZJ0G+aKq3NOCwtHUmnf50u6SJF/+epuYxnMzg93RDU58MEJ3ZHFegANz7AC3Lo9Gf6aa8u5Gj/ft83htVbUVY3SGwYhyj9rrNJFHbZdvNkf5Fgl15SwsWqgUatvlplfu6cK+S1frrlnbSJkTzomZM/B6I1/xVfg4Onmw3DH1ssEhXmblG/JNG9RvLMvQT8syInOxE1+A3RYWRSVNUQi/DdUQSoC9ZZ77sRBUoj1/PnThdfPnrWqUxLjx8yTrwPEDs9hktCDquxpfsQznKnx6LDnSa/pOjJ0R2d6eBr21xOJYOzWZPa8AHpJLnu1/HLYhmg==",
       "tabs": [
         {
           "fit_indexes": [
-            205,
-            392
+            211,
+            450
           ],
           "ellipse": {
             "center": [
-              -70.72742092532313,
-              -158.34024553578175
+              -89.70093738573865,
+              -159.24013893969214
             ],
-            "semi_major": 53.15110567424363,
-            "semi_minor": 35.12923710763401,
-            "phi": 1.5508144268357924
+            "semi_major": 56.50722982690073,
+            "semi_minor": 53.00673572638225,
+            "phi": 2.231018845691655
           },
           "indent": true,
           "tangent_indexes": [
-            205,
-            474
+            194,
+            472
           ]
         },
         {
           "fit_indexes": [
-            794,
-            1047
+            796,
+            1048
           ],
           "ellipse": {
             "center": [
-              -163.52995946614539,
-              44.09970977281711
+              -164.35162975133647,
+              40.951939260145075
             ],
-            "semi_major": 60.5299509527898,
-            "semi_minor": 55.56021999356242,
-            "phi": 1.8803969941613743
+            "semi_major": 60.31817836483579,
+            "semi_minor": 55.48146327441828,
+            "phi": 1.848750120519541
           },
           "indent": true,
           "tangent_indexes": [
-            776,
-            1057
+            778,
+            1059
           ]
         },
         {
           "fit_indexes": [
-            1359,
-            1614
+            1361,
+            1618
           ],
           "ellipse": {
             "center": [
-              73.81643007812201,
-              255.08367588929212
+              72.82706044910319,
+              252.16506073674512
             ],
-            "semi_major": 58.47688307542139,
-            "semi_minor": 52.75205299958904,
-            "phi": 0.5697081680082885
+            "semi_major": 58.436171896057964,
+            "semi_minor": 52.76324075687347,
+            "phi": 0.5598054695270038
           },
           "indent": false,
           "tangent_indexes": [
-            1345,
-            1634
+            1347,
+            1638
           ]
         },
         {
           "fit_indexes": [
-            2056,
-            2297
+            2060,
+            2301
           ],
           "ellipse": {
             "center": [
-              160.37752457452274,
-              -74.20443090560296
+              159.37151839301282,
+              -77.19410953998103
             ],
-            "semi_major": 58.135451267370385,
-            "semi_minor": 55.69210957973114,
-            "phi": 1.0882586307831361
+            "semi_major": 58.155738176815845,
+            "semi_minor": 55.6633057848307,
+            "phi": 1.0898028208293422
           },
           "indent": true,
           "tangent_indexes": [
-            2041,
-            2316
+            2045,
+            2320
           ]
         }
       ],
@@ -91871,85 +91871,85 @@
           625
         ]
       },
-      "points": "eJydVgtyxSAIlBj0/rd6J+hx2kYEXBUznSKg+JdFk5+v70++77uJq16RQWVlkYcuSU0BEeTUmC5gsgqsHYMaZZE2sYisZXtYiF2JVuHZBDVb0BdNb875Cs+AOz81kHvgr4NcrrMvTs7YDwhugC6346voIs5tZgNXUVXVN5KvlYZ/bOfjdHr27j1FXplS4yc1dulUXasIT/kwtbeTzNjnF7pEYEehf2NjMvOp4Z9E72U5QprcIx4iSuAsco3VlNJSAOo+fVLjWsojTZeiynLuIsxlZ/Yu3tFnqF2emauIUlKe0owuAL+hmnrEaOwMeMmeFI/B/SkZWZ7iWO0DPhKzfQ0LWUKnhw5edk9TzXqw47D3rtCJ7LqIrx1DxDOiQxu/jTkQB0Veq/hQjjZWLVnwaLgGseEoECKyXojAr/B+yAqlaqkM9kA+nYbtKowCu82mGom+RSSNJzmPh3j60Pb32JM/+P6NHm+6Ttomt9X8RnoGV9OOFWlsryUWHFH7CozfYaDtcx3UHJuirnlty2HzZvkfgrBhocgYgg505Ky6+QS7gqv95dS5JdP1bgiA5c8F6Bd6uCML",
+      "points": "eJydVllixCAIjQvx/sfqCXqbtpHNh8H5KAKjuCEPzfx+/3y13vsUV2JooJoyy0OVy1RABX7L1MBWtg6fw9RY5sIsuqF5FIhcsVah2AQVWzAWm75kZ1eyc0TXP/WlUz8Oj5QHo3VHC/yl7ai0ThJqzXULQM+lFWCDVZU40upOrdbgPZ6uLsBrEXlKYbkmP2Wyi9BwrWKMCsyBeEVZn0n2A4/S+OaN0Dr3/JNKWvXAcXyut5QLglVco7lc11YBkpg+ZfK470emvm9V9kMu5AqZ1hAzhhV40bnDcLqUQwFUBUsD/oXqJRmjubPgLZpYKwcxnnZ9arVsxjxutR2wtDTWPSxlCwY9DfDmfQmm/WDHaZ+Hwqhi14VjbQgAkCmduujDnBNRUqXdRId65tmwYsmj6ZrkhqNQEJH9QiRxxWdFUlMq92LL4/f59AB+NbBCoTKZVHcWLutFbusdDh9aeY572yzbq68P/Fy6k9G6nMtjvNrD27vV1bjPEmdzeAg/w0Cvr3ViOfZlQ9ve19LuV8u/jswGhYMjEXOgs2CNV1xwKIRaFxL0Rfpkkn1XAmz/XID+AJp4IxE=",
       "tabs": [
         {
           "fit_indexes": [
-            433,
-            693
+            435,
+            694
           ],
           "ellipse": {
             "center": [
-              -245.5783627719078,
-              1.8275664805889829
+              -244.7948003748027,
+              2.8858617395200907
             ],
-            "semi_major": 59.57508764894077,
-            "semi_minor": 55.68656471492922,
-            "phi": 1.7815416214339936
+            "semi_major": 59.555824979570346,
+            "semi_minor": 55.468000529067446,
+            "phi": 1.7454108998787297
           },
           "indent": false,
           "tangent_indexes": [
-            421,
-            716
+            422,
+            717
           ]
         },
         {
           "fit_indexes": [
-            1007,
-            1292
+            1008,
+            1293
           ],
           "ellipse": {
             "center": [
-              -21.93241129516811,
-              186.80186756324017
+              -20.931285087637164,
+              187.78157243617764
             ],
-            "semi_major": 65.8624190370882,
-            "semi_minor": 53.24911169555224,
-            "phi": 1.889565333322568
+            "semi_major": 65.83873262888288,
+            "semi_minor": 53.238895898787625,
+            "phi": 1.8895748954769138
           },
           "indent": true,
           "tangent_indexes": [
-            1010,
-            1303
+            1011,
+            1304
           ]
         },
         {
           "fit_indexes": [
-            1702,
+            1703,
             1961
           ],
           "ellipse": {
             "center": [
-              264.29004916174443,
-              -22.1787700161493
+              265.2426021907982,
+              -21.195900968370868
             ],
-            "semi_major": 58.69175315508573,
-            "semi_minor": 54.85685993835278,
-            "phi": 0.84204923129252
+            "semi_major": 58.70718854463104,
+            "semi_minor": 54.884720786232904,
+            "phi": 0.8330991693385704
           },
           "indent": false,
           "tangent_indexes": [
-            1688,
-            1981
+            1689,
+            1979
           ]
         },
         {
           "fit_indexes": [
-            2306,
-            126
+            2305,
+            125
           ],
           "ellipse": {
             "center": [
-              -38.915745978292136,
-              -258.473014213413
+              -37.86037483487603,
+              -257.6133340038002
             ],
-            "semi_major": 58.23008853081982,
-            "semi_minor": 55.088772530642146,
-            "phi": 0.1387986453887301
+            "semi_major": 58.246314140670684,
+            "semi_minor": 54.92433560354387,
+            "phi": 0.1483764731581214
           },
           "indent": false,
           "tangent_indexes": [
-            2292,
+            2289,
             145
           ]
         }
@@ -91967,86 +91967,86 @@
           565
         ]
       },
-      "points": "eJx9VothxCAIDSGG/Se6IbpP24iA/HKIiPiL8NT8/fx+8DLCldFUlThZC8RzsiQhUUCE8hRbh1nxTTbETcO8FmFaq4YPUxkJi9JVv450FrQGvOZ+dY94nvWDxYrbF7gVwDQoO61z33TVpGMyp4dYHAeZJE5SJFWq0k9GrhmAs0y+6BTh41STFjFytnnBxI6dxU/SjqC6fHivDzOMprpDhR6VhkgDTyJIGgQBoU9Xi1pDEML33ku6lV49OgAkwBZ5sFBqPIOajFCsbb2ayCuSFVn05Jse5iRsNJilGCqG2r3ZWSaRSZ11LbMyL8u5RfUmcIUJycwKeQ/7je1yI7kDHU51OfIuyHa/6RG2AwzhI7swkqtQ7BNKisMyKPKYt0irI6djLYh0u8CQi5GViYp59E1pmlFaRqnkri8zCyl8FDqUMFOAAhkq4ZotfqPADEkmA6wdCM2tW9xudJPpuKhgulYStpsSw5WIvkBX2r27X9DVTy/WJ00Wise1eDcXruIM9NY9tKgTntUxvAKX/8zmhW71b0bsZRLxzyL/Egx11nbXrf7y95m5IcCgrTT4CDiwRcZa0r2K7mncH/gP9+Ajtg==",
+      "points": "eJydVUliBCEIHIZW//+jHPOqJC7FKskhiAi2Sgulfn9+ffDzPLwZlWEzeFfm92KUQ9IShPASptMy4ldMeds6m4+TTXDuf0xkJL6U25x6u+fmHvUDZ9gn+52GH0YvWzDYFOI0iS9FNAvfCtWi1+JdJm0xaaBOccqtqGmDl8QKtBiLg96n+jzdRRokjfzPn7zF3Gn+UHJkZzZ83Jt2tMK0VB1MPgJHIFLBk4iSRkGEnZRW1AoicfrPUTU6iJBgzTy5vCuNQtsq3d2F+deIYVWQNWbtU/Y+dum7gprVzRBQevfdrqfLKiJk9eNpbDquK1R7oizJ6sE8IP8KqBdse2z4ZLjD/DaMVdeBv9zkCOsBJv+TZRqHM0YcE9o/O3/BRGFKIFdgNYuju8QMlyNtE13drf6WlrlHtcvInlueEghwHAKdkTCTgUJeyaKI2wgMTB6M6nkY+hurNn887l003WU6LyI2PaeA7aYM7x37xj3cdvHaE4p3EAvNshgUz+sV3tx4oxJl42MyPbX4CIQXuXzTa52LTr4bTmruTHOUmgTLwtUlXv5C07g4GNi2o5Io40CdtOPSPYvubSzpB2chI6s=",
       "tabs": [
         {
           "fit_indexes": [
-            434,
-            686
+            424,
+            675
           ],
           "ellipse": {
             "center": [
-              -160.90008576941335,
-              -7.332398622617093
+              -160.72951324261783,
+              -7.329395904881912
             ],
-            "semi_major": 58.40600791024484,
-            "semi_minor": 53.87963970046898,
-            "phi": 0.7387903283449875
+            "semi_major": 58.2686879301098,
+            "semi_minor": 53.84743667703947,
+            "phi": 0.7711544417407413
           },
           "indent": true,
           "tangent_indexes": [
-            417,
-            701
+            406,
+            690
           ]
         },
         {
           "fit_indexes": [
-            1099,
-            1357
+            1061,
+            1346
           ],
           "ellipse": {
             "center": [
-              -16.979767861038894,
-              176.38117213891306
+              -18.041130989609798,
+              183.38235398094255
             ],
-            "semi_major": 58.66409258337562,
-            "semi_minor": 55.30689837100055,
-            "phi": 0.8440406959910409
+            "semi_major": 65.85036903246699,
+            "semi_minor": 55.9544446975446,
+            "phi": 1.6233916021320118
           },
           "indent": true,
           "tangent_indexes": [
-            1076,
-            1371
+            1066,
+            1367
           ]
         },
         {
           "fit_indexes": [
-            1768,
-            2037
+            1757,
+            2027
           ],
           "ellipse": {
             "center": [
-              260.20059410222325,
-              -40.12989227791823
+              260.23216791417576,
+              -40.12557267781222
             ],
-            "semi_major": 58.656477309173376,
-            "semi_minor": 57.04132265351115,
-            "phi": 1.3070711448407992
+            "semi_major": 58.70742477843116,
+            "semi_minor": 56.991354498648455,
+            "phi": 1.3128087472522414
           },
           "indent": false,
           "tangent_indexes": [
-            1751,
-            2052
+            1740,
+            2042
           ]
         },
         {
           "fit_indexes": [
-            2377,
-            129
+            2367,
+            118
           ],
           "ellipse": {
             "center": [
-              -44.69134778629674,
-              -268.1887319790112
+              -44.6967810129471,
+              -268.17386375566457
             ],
-            "semi_major": 57.40885290184294,
-            "semi_minor": 54.05647496598874,
-            "phi": 0.3324544345279107
+            "semi_major": 57.43236712132581,
+            "semi_minor": 54.024959507172,
+            "phi": 0.32568775337616906
           },
           "indent": false,
           "tangent_indexes": [
-            2361,
-            149
+            2351,
+            138
           ]
         }
       ],
@@ -92063,21 +92063,21 @@
           585
         ]
       },
-      "points": "eJyNVglyxSAI/UaR+9/qn6rTsAqo06IiaFyAp+bz/Hz7GIOKkqpScepcnjcxexNlZZHa4q3oKukQmkGmU7KlfOm0pZegchhF3lrPfTu3iqxc9nm1NVVll/tTVOvODmmUNX1WorwTOosy7h82Yz5j49LeVZhpiiFKUbIIJdFNcmdw8B4LX4phiV0MAGhW5hWAd1lzREHAYXccBigmLGZc9qtysjNJvTT0Q2/PbHWlMakpjpTQUyBbCV+oW+XtolrYw/D8WZo9io4sZIafiUSTMici4UpQBdj6cFU4J65kRAsxk4VTWdhOIE/GiUkE74VyBfoN5x6rfHZ7OKz11NZQ6nyU5Uz5uS2Ht3o3ElbxYO4uxYkucp5Nw4kagVVSNHGTUqiL/qdcB1/WCMjgzMCYBgzDRXGehr0F1jZ9g37xEzrMBH9ciBnep1dhm2n7GOCuBIJ7mF5PoDYQGlzkdssPUHp7wxss+vlRtMuUp2XSxWbdWHbyDAb+g93k2IphDbssUFZG2g9vt1cje9FFhL590s/DkrMus1Z/Hleuj1V4k5Jn1w2nxpVLTa+24qp47mzwihBohoWUoWAJKeVR/1u4+gXauiIV",
+      "points": "eJyNVguSgCAIzdC4/632VDub/OSj06ICaqHCI7vu3x/ovc8mJF0WVIAa3KvMKixQ2zDhpOkb0wJwJeogS9nSYUsvjcxHT3oZ3c9VrmLuYp3PRBk6znsHxa5OR4e0WaVcq8xaCY15HeuDTZlZbNTauwoxKT5EIUo5tBbrdcjbgndr/DYRzOEb3KgKMzGGTemER4HHIa/ttrLd8Pkop1koGqQB2MxCnt4PQuEsZuhDwC18S4hsOby1q2EvpsJjbjlTUTlVxOtBolc8z8ufScyFRtZGmcMlxAoVFNtIC81Ka8outC1sR5A3jEdiiC+UM9DvdsC5wTnmq6a+z1mX7QU8bFdyyvI2J2/bHaCMYBzCzVNYRo56tCbhRInAaiGaWLQQ6tQ/6NXIwQIGxbbGuHgUGIQMQWR2qXe3+2xav2RI8hNeDusMQma0iQVW56mP000aDHwRrI9XDKZOTb5t4QIKd6+7g7m/vxT1Y0pmiWQxn4d+9xiS8L/s+y3zk+9raHHuh7YL+ZCQ+qwOKI/Ax2u7p5brnD/H3kS+rNydFDy7vnABt6lkV/m805fDp5Mqw+RRmBhQ7I5ctef/FhJ/0YYiFQ==",
       "tabs": [
         {
           "fit_indexes": [
             402,
-            663
+            662
           ],
           "ellipse": {
             "center": [
-              -163.33241927550432,
-              -34.969547507302046
+              -163.20879753832367,
+              -35.00574764904701
             ],
-            "semi_major": 58.102311383523286,
-            "semi_minor": 56.29528835031073,
-            "phi": 1.0906932724081448
+            "semi_major": 58.10192202424921,
+            "semi_minor": 56.13271292126746,
+            "phi": 1.1197415987803367
           },
           "indent": true,
           "tangent_indexes": [
@@ -92088,16 +92088,16 @@
         {
           "fit_indexes": [
             1061,
-            1315
+            1321
           ],
           "ellipse": {
             "center": [
-              -53.50426668495491,
-              177.4145374573468
+              -53.39167098352504,
+              178.3659449522415
             ],
-            "semi_major": 59.43867260474027,
-            "semi_minor": 52.76558468475564,
-            "phi": 2.49332683565103
+            "semi_major": 59.57088930943667,
+            "semi_minor": 53.64062563987276,
+            "phi": 2.388022326453338
           },
           "indent": true,
           "tangent_indexes": [
@@ -92112,12 +92112,12 @@
           ],
           "ellipse": {
             "center": [
-              258.7141538339367,
-              22.259961102626512
+              258.7343904537421,
+              22.271824739607627
             ],
-            "semi_major": 59.211649531877654,
-            "semi_minor": 55.96221368509096,
-            "phi": 1.9044415534550625
+            "semi_major": 59.22164175673421,
+            "semi_minor": 55.95269144350939,
+            "phi": 1.8981862043069968
           },
           "indent": false,
           "tangent_indexes": [
@@ -92132,17 +92132,17 @@
           ],
           "ellipse": {
             "center": [
-              11.036540713864543,
-              -257.6486616904389
+              11.021038158999747,
+              -257.6562361174584
             ],
-            "semi_major": 58.80609464664737,
-            "semi_minor": 55.05666583870017,
-            "phi": 0.5400830499787137
+            "semi_major": 58.82567067533402,
+            "semi_minor": 55.062143207110125,
+            "phi": 0.5358052625301704
           },
           "indent": false,
           "tangent_indexes": [
             2341,
-            132
+            131
           ]
         }
       ],
@@ -92159,7 +92159,7 @@
           615
         ]
       },
-      "points": "eJx9VYmVxSAI9Lac7b+K7ei/HzkH4i4govFkCJafz28fowNbRbX1+Iho51Za7cJoHDnUWNojj6pHtyqq1keIipXDQVE/Ek0jlpWYOpee+YhWh4ZXXMLtBhWlyWUqHxH10AoSWA22aMTUqbQULc2KyLBA78lRk/luhtZor8k3+732cRaBIiBocRQKQoWdl77yGoCWIt+cJSYcRkOsY2hZzCpc3htCb8j81jEaWKqEC2nbWQ7CJ9PAzNcRVYp4qbhQEdpUHla199qsFiuzqd/0GcmKZspKdfs+8Ydo8DuIH/83W/2Do3FpWUecQbfeektXxS7Ct1kbO0qqc//tW5zue4ibxFlMjEeN/mqQPe5eAcUhYLgryLLJFnM71gWPcmX3SVmA/zqSabocNWMe0UwyJSmNiRlqWJLyzMRLHtpUNArNoYqh3QXtK1++v1wAQ3gDuJ2nSWysnEsnOCLn19y8tdWBnpMnmCLRs5aYpz0HlmL0VfO3zWo2MXHl3AWvC7wt/sAMRdIeGSONAfCdY6q4SjBZntnxr7uglE0PVA5Tj1TdYYb4JN+y95YF5oRI9Oh8fbpGsT+S4o8v3VohFg==",
+      "points": "eJx9VQmW5SAIdPc4ff9LzJHmdQQKSxIbEJFvVJYP6ef/v9paJWxYO2vOTMVyXIXTPpCFRQuKUnlosbwmsJwfEkg+Fh5M9ARFhqCdVPRoZRWsVp/wCoFGM7kCzpAB6Do6cJGxB4bQM4YyQggq6b5u38pRcrQyAY8Few9PPcX38mvVLr+3l8oDJX70GGDsICSOFCuDLkXJQujfZwS+bNTL5REaQA9Y5czylD3TkbMakS2efo5KmfMlFySjor4MeRmdYCwl81LaJMNgGs1pbM4xlQ1lLove+dqpTL6UY/Q8vSH+H+zF7MeXcNfed3yujJ1fiNUTVm6W3BC1ZkxWpGOibRc5KBLf4d6GtxJ5i/2lleNqpYe/YCfFHUHeARG+752Jn/LCmejN6o0BXBShb1qshzIiNaihnqA2Ndb1XZ3WEXrmGHYfspD9aenKqXuxhn84rQwuCF6Zk6zbVZIXI5bSP/a+ll9rOHCX5E7iJnKt1+Xu3cBLjHc1b20+U7Op37WLmou3lt1dWojjAWM3GpjmIUVcz+AO1BX+38QoRVE3oAShLMnh85Ke5rzhednPRDxNatRDYxLThD7ZfwFx7iEL",
       "tabs": [
         {
           "fit_indexes": [
@@ -92168,77 +92168,77 @@
           ],
           "ellipse": {
             "center": [
-              -88.28289191072064,
-              -140.93764139696756
+              -88.2921386618383,
+              -141.9337348766763
             ],
-            "semi_major": 56.97179480858614,
-            "semi_minor": 55.26027477966898,
-            "phi": 2.3312121915375577
+            "semi_major": 56.952229121554126,
+            "semi_minor": 55.326261050138946,
+            "phi": 2.330072786857242
           },
           "indent": true,
           "tangent_indexes": [
-            146,
+            147,
             413
           ]
         },
         {
           "fit_indexes": [
-            713,
-            958
+            712,
+            957
           ],
           "ellipse": {
             "center": [
-              -220.88035037731794,
-              142.79537858003914
+              -220.8610330087063,
+              141.77638172695083
             ],
-            "semi_major": 58.79154069183614,
-            "semi_minor": 55.01499966874245,
-            "phi": 2.990791459849685
+            "semi_major": 58.8056592218663,
+            "semi_minor": 55.01040656901243,
+            "phi": 2.9841246671423725
           },
           "indent": false,
           "tangent_indexes": [
-            696,
-            969
+            695,
+            970
           ]
         },
         {
           "fit_indexes": [
-            1296,
-            1538
+            1295,
+            1536
           ],
           "ellipse": {
             "center": [
-              178.7586873172411,
-              188.11333228855642
+              178.90711921501094,
+              187.3980585109979
             ],
-            "semi_major": 60.07959421718524,
-            "semi_minor": 54.41358358017865,
-            "phi": 2.7637643682728363
+            "semi_major": 60.150576817262724,
+            "semi_minor": 53.99405652248742,
+            "phi": 2.7586816117991853
           },
           "indent": false,
           "tangent_indexes": [
-            1275,
+            1274,
             1552
           ]
         },
         {
           "fit_indexes": [
-            1876,
-            2134
+            1875,
+            2113
           ],
           "ellipse": {
             "center": [
-              127.31408441715963,
-              -138.31000957082034
+              123.53522455575641,
+              -134.42593592766224
             ],
-            "semi_major": 65.29906359846899,
-            "semi_minor": 53.41335479105248,
-            "phi": 2.257952582830638
+            "semi_major": 57.082089495307685,
+            "semi_minor": 54.470467254589636,
+            "phi": 2.4777464748283635
           },
           "indent": true,
           "tangent_indexes": [
             1859,
-            2129
+            2123
           ]
         }
       ],
@@ -92255,7 +92255,7 @@
           630
         ]
       },
-      "points": "eJx9VYl1BSEI1FX5/ReYBlJEEnU4BtcXBFT2QA7h9/vnq7Xe2mK9BWLqSXysfZvfDYn+GPAsnIOgPrVuPucFZaGy+1BUtuABo/FsAlvQlG31CzcB4qhswmsYAymMTXuMTQ6ycZJktqWArojfgLkGV9yS++LgYQSZ8xyv5ZcyJxeEpJPQglU1SlWnqpNvbH2w19LjUw+pBV/XpXr8Fyp8Nu2xcII4CVgMXjDg6wJUplCNba01ppR5TpF6lnOVEs6SDmSJn3zut+mac3TLwPALvT6IiikN99np4hb5XXJ73radRpaLqKpUbX/Ieo/gcqjFJoHwLMcDoY0cX0j6nL5Pf1TuistH8yQHmEJ7FA/PTsrwSHXy7eFPI9KiWv0Q+VhmpNBKR2ILwGXWjU0DQ2tLjwqirFslOWZ7AyT43v+qiqA535VinmQMk0rwcptjzcLi8fmYfXIYkutoehiGHnb/J74tb69AbzcPo1ibq8hTyU1mHg0qUuW8DFyaAlWFaxsfDbUInWXI4DMioh5hhHx4T5odZDRtKGgn1k06t2KUeBveIm33KltWqbwJegc84ybeBDPKa0OiW7OMaRK65B/dUCLw",
+      "points": "eJx1VYdhxCAMNE3sP+AvkCGSWP0or2bAFDXQ38/vp7XeGovekvTTl+GtHd11bo5YW6EyvZhQmAwFHiYTdzQywVBVAMrGJgSashzPJNxCO7C6pxkLulA2GMKCQziAhF6mVSgLdCVZbnv1OCE1aei+VDyNAHPqNm2dtG0RLtgn5SD7zEOkVEuJtnXgF4qjCYGuB0Ukq8TVgs1kMIVfOV8QQcGkIpGFSJmQwDtM2WvalgHFhZxa8rMkXiRfZp6nXMF8q55vmXN1869fpmu6wSVToVvY7dGo+KHpPtAQbkp4Em7WZteXDgzxkjS+gvURwUe9Ow8g/NL2g6BD2wpalsP62/84+NE4e5Q10B5eNWZ9OyI7PV0LNNC3mz+dIY/s1FBiVcuNJGiR5mp+mMglvc+G8FCM96P7A9Lz07u/JqPniL0z+jzZm+S7+kF+aZarMsMOMOgBD/t9un2zjYNPbqyGsiphSOqKAON9wa37ZfjWvE3Rc/sIF/Nz7a4KT21ucvMAvZHewnxfQh7BHuRBFpoWaiLQZdBAHTWiUX005CNK0ltARvN6goXZKkq+SIBRIb1nk5ZimXXQK+Ct/LnGB9HRgSE6OrCWhRbJf94NIvU=",
       "tabs": [
         {
           "fit_indexes": [
@@ -92264,77 +92264,77 @@
           ],
           "ellipse": {
             "center": [
-              -116.5732231686731,
-              -122.9458727299717
+              -116.58772389437631,
+              -122.95401769279498
             ],
-            "semi_major": 59.93719361817327,
-            "semi_minor": 56.86900842012451,
-            "phi": 3.1020981035454867
+            "semi_major": 59.96030965405079,
+            "semi_minor": 56.85210834650062,
+            "phi": 3.0989900987443537
           },
           "indent": true,
           "tangent_indexes": [
-            121,
+            120,
             388
           ]
         },
         {
           "fit_indexes": [
             688,
-            930
+            929
           ],
           "ellipse": {
             "center": [
-              -152.47689794353133,
-              119.64519523531365
+              -152.25447412320455,
+              119.52447227087741
             ],
-            "semi_major": 59.27554958204223,
-            "semi_minor": 53.167742180938774,
-            "phi": 2.81985188401829
+            "semi_major": 58.990649639380706,
+            "semi_minor": 53.21232805978864,
+            "phi": 2.834363194541707
           },
           "indent": true,
           "tangent_indexes": [
-            675,
-            944
+            674,
+            943
           ]
         },
         {
           "fit_indexes": [
-            1266,
-            1509
+            1265,
+            1508
           ],
           "ellipse": {
             "center": [
-              195.52337284188835,
-              170.81806889160788
+              195.52641785378717,
+              170.80341838614717
             ],
-            "semi_major": 58.58827049670425,
-            "semi_minor": 55.69619685424244,
-            "phi": 2.5738474386150427
+            "semi_major": 58.6004842554123,
+            "semi_minor": 55.69491849612066,
+            "phi": 2.569788790654177
           },
           "indent": false,
           "tangent_indexes": [
-            1255,
-            1526
+            1249,
+            1525
           ]
         },
         {
           "fit_indexes": [
-            1838,
-            2105
+            1837,
+            2079
           ],
           "ellipse": {
             "center": [
-              145.43415553405896,
-              -198.08034235882263
+              151.35210898966878,
+              -201.45510103577536
             ],
-            "semi_major": 64.24892765274953,
-            "semi_minor": 54.74528442708328,
-            "phi": 2.5400503961764107
+            "semi_major": 56.7875601154712,
+            "semi_minor": 54.67803044486705,
+            "phi": 1.4664685495856669
           },
           "indent": false,
           "tangent_indexes": [
-            1830,
-            2098
+            1829,
+            2097
           ]
         }
       ],
@@ -92351,26 +92351,26 @@
           625
         ]
       },
-      "points": "eJyNVYd1xSAMpAi8wN9/rIyTF8SpGjuJJM40U9Qon++vTtQ7ga2mHT23uHrOsebZfY7uGpfWuQgr1Q11yS6LCqAAhLWiH8wSws+bZT2s3QW2GIsIgCh8/eimI9rUaaAyWBgYxxiARVNxi8Dm6W3A8D/3Qrq27ERZzXbAF2qvjbc+WbfFofa8Detva7a2egOrw4Q+5BOiYbqUZb5FVxHjtWBDQOhtZmu4AQroWgy8mMpcgMIM0EruMSouWA7Cy/o+JXpgcL2ginRRk3Z3SSNzSwkLs/ERZuqDIarcH5qElKsWW+FAHlQVsYP4aRpIAXbFYuw+GuGvGWGc2a1zSUUav9H8R/2JbKdoVDepmjJdx7V099nEnqJazQrQBJVc0z2z6EFwunTzebmDupsaiwhwGpnIJZZFJJNMTSZkPDRNeTeyjWUqTU2yMHbhHXOQRG2myxxw3vcczerQ79pWcmTImCmBjnnLqLnxNPw26dbxOM+VC4IyyfM0UjTpE3cEZHjqHl8dsljXJ6brmpmGPThqO8oPzXGT6ZLM66Q+Jb4XwsdsYhazTzRZyKbim3E3PZ/53EjuR+6Q2TfJH8UgcQp08QP2NiFn",
+      "points": "eJyNVQuWxCAIs/56gbn/sfY4+1YhQLR23oJGqo6OEjB9fn9KraVUVbes4/D97PPPZ/dzVKxZc5kVanIJXFpEkkJSgJphjc6CZKmiWE/XLgAprigAlUpt/HW/oyoymibGxNakDm1NYUg37ArSinbrkkaq/1IXw9q203rN/gdfJL/Y731YN/NYPm80709uVr3E4La7MF+LSQqHFPF3GnInOC9f1/qrrTcZL5IyweVGGTol9QFapyqYsfa4pCiiKLsEB5l6dBVxTC5ejZIuTkuEhbOQucdxylEVbsoIKed67KsBZVGlsePRZcHE8ZTS0vsCX2es41PDOTcMfHyT/g/7JL4T+3TzKEjk/5gyyIOypD5FgI9t3Eg7NZNx6jbYT97v4Gew1BUFMLNI11RCGUZySLdcUl0nsK2NpSrNQVgMILtYoMRV820uh2GI+PkyZTX4WsaWSJEAHDHyZ1sS6OPjNPw2aes4zvMkDdHLRLEUbVHJWdPikV6646MToV5oKX9qQvRlkDcCvqvLO3M4RBQ4VjHEOLUlQ/aJ+9IbHqZkCm7GbsxLIh1ZQciVmzXexOpDyxS9jz+3lyFe",
       "tabs": [
         {
           "fit_indexes": [
-            153,
+            152,
             391
           ],
           "ellipse": {
             "center": [
-              -97.34129225978525,
-              -130.28214093708763
+              -97.46849772583656,
+              -130.51370120458887
             ],
-            "semi_major": 57.48018036950368,
-            "semi_minor": 55.718073886061276,
-            "phi": 2.4315412693619054
+            "semi_major": 57.43644564425016,
+            "semi_minor": 56.0698257069429,
+            "phi": 2.3613920072137624
           },
           "indent": true,
           "tangent_indexes": [
             141,
-            407
+            408
           ]
         },
         {
@@ -92380,57 +92380,57 @@
           ],
           "ellipse": {
             "center": [
-              -154.38561546746686,
-              107.66308293601051
+              -154.3813545696123,
+              107.67000079545231
             ],
-            "semi_major": 60.27645240420493,
-            "semi_minor": 52.62681042113794,
-            "phi": 2.122538726421635
+            "semi_major": 60.255624970282334,
+            "semi_minor": 52.6344343658537,
+            "phi": 2.124733074301859
           },
           "indent": true,
           "tangent_indexes": [
             714,
-            986
+            987
           ]
         },
         {
           "fit_indexes": [
-            1293,
-            1540
+            1292,
+            1539
           ],
           "ellipse": {
             "center": [
-              189.85504969326178,
-              181.4250887319017
+              189.86863467656755,
+              181.43044050654737
             ],
-            "semi_major": 58.787372178000105,
-            "semi_minor": 56.86108361158302,
-            "phi": 2.2482392406612286
+            "semi_major": 58.80055959492948,
+            "semi_minor": 56.84075941743287,
+            "phi": 2.250666768154738
           },
           "indent": false,
           "tangent_indexes": [
-            1279,
+            1278,
             1555
           ]
         },
         {
           "fit_indexes": [
-            1872,
-            2116
+            1871,
+            2115
           ],
           "ellipse": {
             "center": [
-              111.16352489249833,
-              -144.45337188141636
+              111.17018404394904,
+              -144.4584485454038
             ],
-            "semi_major": 58.585325608898536,
-            "semi_minor": 55.87430568673889,
-            "phi": 2.111500063890575
+            "semi_major": 58.561840707010504,
+            "semi_minor": 55.875052882007054,
+            "phi": 2.1097740360113812
           },
           "indent": true,
           "tangent_indexes": [
             1861,
-            2128
+            2127
           ]
         }
       ],
@@ -92447,7 +92447,7 @@
           565
         ]
       },
-      "points": "eJx9VguChCAIzcy8/3HmEHul3Q35PrABBGTU+GXz9/n96deCrsjM4GRUxgOg8UBiLMLHAj7vwfWgvh4sflyXOOYwjKko/Iuh7ghmUcgNDRFidbMb8ccNz1ti5kC3fIQMtQUH0SFE8IhJcvJYxGiKqU68B2AduZBI4WztjAgEtWvnBjRNVEwmBansJSxWt1sJYtFAiSts26XnCZ7cRtapMcXgLYbQkrm9TGDX26Kd0lPTgzOU8VBDLZ4VbUYLFjXPduayJmi1M7QnvCO4HyBC6+WeJ5v3BiDeDSy0zaXX+cnsyPIEO/0IQUG/CwbG437YTfQg0RrEx5JLDKKIWZHFssWBTubzpz42vJshpaC1o4g33fa2ZGp1zesGuzOm+32PWQIaIJIV7GMvc5bGZtPY7KjAhZqcYE4yV9RfkXyTBdaqSYVt5HoR3VxCapLb+oSbxfplmldqdivEJ2wQCVzMDPf3Wffht1q42lzo7RmuTzlUnkWwPMDiBW8naDMYJy6AaVmXU1Nmpg1Tyc2+D1WMIWwMObGN3P/0dkr5FsVvUve/CV8TmyI17tOQ4twudJDdOsP65DKBX79RPorxn8wD/0GbJGs=",
+      "points": "eJx9VouBwyAIDUHj/uN0iFvp7sJH5KMFBGLUCLxq/z6/P9iYcLIoo1t4KmmBQFoU4WKkibrnei/zh5A/rPtoTTe2qJuapugvHXVGXZC2MUMMsWLRztm8jK/yxOyDuWANmC6SS4XoNYPskMYibI65S2SOJ+DGTDLpBrghlm/Jqt+qYKSZOK3p7XAkwGqqXHlf27GXGgfHXjvCNtdTvgVGhlSf4rBdCBZSNxwewrjToI2DMXFpM5RxrtdwNXVFG74nFnUkd98dZ0RAZGTAlREheAgRGpYxP2x+N4H82SBmwnxhfYEdFPJu0ye8G4uIfdXzqofkZRJupDtbNp3Ec3Z0sE4xohWHrG+f3fzWIHlwFXPybS6kLqhjjhPmmTFW8E8fJZ59jP2Ll2xeoG8m9c2MSlInZs0uV3NWvZxlEBTUrssBaWJIMfJIBR0bVgwuljbrts4Yn6pOotREGe+PMwwNnULvLvGXo66n3yLiHbj89rDbETwfzogjginjcmrKk3ndXEoBWqjr/G6YYsf0Brfq6Dp7WiVcRb5Jbu1fQv+W2BSp6fXoUpzhQgvZoaNY0S+KiZdfL3eiuy+J/gEzuSRs",
       "tabs": [
         {
           "fit_indexes": [
@@ -92456,12 +92456,12 @@
           ],
           "ellipse": {
             "center": [
-              -169.23045891623858,
-              1.5658868275565028
+              -169.2230768042627,
+              1.5891965648901167
             ],
-            "semi_major": 62.482820590784556,
-            "semi_minor": 56.71117203889395,
-            "phi": 2.7916433078521017
+            "semi_major": 62.476281147521284,
+            "semi_minor": 56.7311614631233,
+            "phi": 2.7941746220389434
           },
           "indent": true,
           "tangent_indexes": [
@@ -92476,12 +92476,12 @@
           ],
           "ellipse": {
             "center": [
-              -7.533608712255018,
-              269.8919704950419
+              -7.531101764651547,
+              269.9019812713654
             ],
-            "semi_major": 57.45784640993627,
-            "semi_minor": 54.648078078319365,
-            "phi": 2.250490047282318
+            "semi_major": 57.46282178811064,
+            "semi_minor": 54.657929699563766,
+            "phi": 2.248289289723818
           },
           "indent": false,
           "tangent_indexes": [
@@ -92491,41 +92491,41 @@
         },
         {
           "fit_indexes": [
-            1714,
+            1709,
             1975
           ],
           "ellipse": {
             "center": [
-              258.27944704352973,
-              -36.851611255551845
+              257.3687926721869,
+              -36.56507331127767
             ],
-            "semi_major": 58.78329568342597,
-            "semi_minor": 54.611028908052,
-            "phi": 1.9586864283407766
+            "semi_major": 59.285072338510474,
+            "semi_minor": 55.16707521532837,
+            "phi": 2.1118196953224073
           },
           "indent": false,
           "tangent_indexes": [
-            1695,
-            1991
+            1694,
+            1990
           ]
         },
         {
           "fit_indexes": [
-            2355,
-            116
+            2354,
+            117
           ],
           "ellipse": {
             "center": [
-              -51.32151564802266,
-              -251.52003641910224
+              -51.355979236561524,
+              -251.3330047081345
             ],
-            "semi_major": 59.75503104288651,
-            "semi_minor": 55.13798449485921,
-            "phi": 0.640313286703181
+            "semi_major": 59.75700300829353,
+            "semi_minor": 55.31882185889441,
+            "phi": 0.6628709842317099
           },
           "indent": false,
           "tangent_indexes": [
-            2347,
+            2346,
             132
           ]
         }
@@ -92543,7 +92543,7 @@
           575
         ]
       },
-      "points": "eJylVlt2xSAIjCGGxdz9766npyqvAZP2o4BojGIUBnN8vr/oWkSmaLLQKTxoKaM2xTnUqtqZWWUVmey2zDKpmuJ0Ecmn6Kf5NwL1vd2t2VWUne7B/R5aiignfmkb2ejeRSZdq+iCQITfTHHCZOd8RYMu7N9H0j52MxLrJdP4nC0TZb+e1EpHJjIvPg2yvmpi2FzlYUbzYLIy40foGDLIFR+ieFXARZRt6HEc0IDH5mXxFKWzNYxd3fLjDmogSxxbIJ8axgIoCWU9+OSYt4iODp3kk8XsGQAlcB4h7OJoYScFlpvUfiytPoXpx+XSwh4ite/pnKe5hi5jdyXneMivseQHa+1zXwbsHclwxCM2vZLwlHIzj3yy1MorjBlliSamDjU+KouK7GV5io2ZRbGubKhAzCSBnSMZNgQah0LyNIRIng+QoCMrMGqTovJLAckwqehPsM1n7LuxA4f3kCtCb+8jTcj03Z01Urixj4fjXOduLnov7u7oyzdRr43k6moKbySo6uvHZu3syHa3+dV2WWU3i/8qeHYz5X14f6fLEFJd3NEdbulAQjqifFcHiBhrviskbsAD+KxGfYOq1SaMgBykEBfns6yJ/vB/DZAE5X7fCPL1Z5EHdIc8JgKf1PNx/kL/GvDX5B/NECPk",
+      "points": "eJyFVglyxSAIjSHqYXr/23U6VdkeaP4HRNSICZu5fv5+6VlAymgiw804YDGFMskQOx8aCq3Gm00XcVOa5zk8RPwq8mr2jgB1l6uKVUhQoTG1QasxM+gvskK1nnVNeFaTAwEI35m8kY9wGuZ1iT4tbkooHOQCjKNmouRYKnGcgMyLh6d0KqsYOlc77CgSTB4iM34YrkEDjPVLWJ8EmEhQiMEEH5rewjhJ4C4FY1c++fgF4dshmjmQbwljTigOZTE8OOM9on1GNtlmVnt7ghI4jzDt9APM1PeelhvlJWwlj1z18bjE7jQsPpPtPNUV9GA3V/YLYiEv99eJvMf3Hh447tgF6ONmDU9urfdRTwabPNQWLkSCTNrjUJCZVy+tU0vrPKML63KyZgXmTKBoAAXJj9EVzg9OSc5Pq/M5SbY0oZNI3vm2eQgkv+BV8KWyV7mLJj9M+tQ2jYVC5E3/Fiu96IZg0GV5ddJ7k/Xqvk93Uc1CcHZWFe6k1jZN30VkgHq72eX2wA23Kpn9LFh9U2ZzWrb8LqJU2vCWrvs9rebc7JCu6I69JJgkW2+WEpIQHh8p7EsI/iTCExAwkuTsfEvvYOLHPkEpZDN3luetQcoH2f46Uq2o0Z4f4NsDcb3S+9oB/gEhuiPr",
       "tabs": [
         {
           "fit_indexes": [
@@ -92552,12 +92552,12 @@
           ],
           "ellipse": {
             "center": [
-              -18.09643008154106,
-              -170.5368860732718
+              -18.10880052626819,
+              -170.5502058970117
             ],
-            "semi_major": 58.649719982781036,
-            "semi_minor": 55.00976818998102,
-            "phi": 0.6291721696604196
+            "semi_major": 58.643238043040135,
+            "semi_minor": 55.00496451376278,
+            "phi": 0.6344433509669338
           },
           "indent": true,
           "tangent_indexes": [
@@ -92572,12 +92572,12 @@
           ],
           "ellipse": {
             "center": [
-              -185.64002548914678,
-              2.0435087835112116
+              -185.64044758475418,
+              2.0698186667043266
             ],
-            "semi_major": 61.026972242576775,
-            "semi_minor": 53.283998314880826,
-            "phi": 2.783427943381711
+            "semi_major": 61.025538811577476,
+            "semi_minor": 53.2934843557711,
+            "phi": 2.782329569554272
           },
           "indent": true,
           "tangent_indexes": [
@@ -92592,37 +92592,37 @@
           ],
           "ellipse": {
             "center": [
-              48.188379376182475,
-              161.20712321919208
+              48.19225420961724,
+              161.17963881766457
             ],
-            "semi_major": 57.89547939906034,
-            "semi_minor": 56.25023990731013,
-            "phi": 0.9341612101680565
+            "semi_major": 57.867379510000426,
+            "semi_minor": 56.25692693003141,
+            "phi": 0.9124433973493691
           },
           "indent": true,
           "tangent_indexes": [
-            1391,
-            1681
+            1389,
+            1683
           ]
         },
         {
           "fit_indexes": [
-            2098,
-            2359
+            2100,
+            2361
           ],
           "ellipse": {
             "center": [
-              167.1595519860133,
-              -75.63698504672085
+              167.17249206180767,
+              -75.63807316832818
             ],
-            "semi_major": 56.979970948603295,
-            "semi_minor": 54.541300365676925,
-            "phi": 2.2233032991354396
+            "semi_major": 56.988365339320765,
+            "semi_minor": 54.52438652044976,
+            "phi": 2.228449061048898
           },
           "indent": true,
           "tangent_indexes": [
-            2084,
-            2374
+            2086,
+            2376
           ]
         }
       ],
@@ -92639,7 +92639,7 @@
           630
         ]
       },
-      "points": "eJy9VVl2wCAINLj0ML3/WXqbvgZhYCRpP4uIW6LIjNo+v7/66H+LPGryS4e8DXoxtJZToe/OO6mmTNU7qaasO20TlWhl22S4Ud1Tue5sRR9T14QD8AaGtiPdfBcUAuPqxuUyvUxN2s7NTEmmGLZsv4olVUgXEXhRQ/xfMsRixMve7mDTLtK4EYY6IzYZlx0MyIeqJ5el6kaLRc1ds2+81lxtrpArM9YMCLgOrwAg/E9QCBhChwAq0AxXZt0o7R4EHME4MxKLbhdKJBupuO9XbuqkX1X7yYLhHS1miFmSoxyxZmF+kQbQXoZXKevQOf78qgHfB7yJLZwF7+RC4OSsSH5TKElnlGgJajo3G7x5bHQlHYO1RlXXlOmK+ywlLzOkSXdadtFtqVfhnieFDssRRfh/mtgZtZr98ec35ygNlkKtRcV3H9teuYVTVtlfeR3KD8c0L3OVCT3MO+9HAy/FlvN42sGk54CehTyudEfzRTA63wH27HV++BxVA5U9XLHvl5cQzHE15KfjTuAT/ATPCXLiehCauOuMmmCuLjqDto9oH1EfVAvOWsh/ANAnIHk=",
+      "points": "eJy9VVt2xSAINISYxXT/a+luehrlMYPm9rOIiJoYYQi0r5/vU8+/STZNPizI26YPOjWc5WtPn20w6Br8tMGg/rQpUskZ5kYaMo5ynj3k/GZcIG4TgsyROYip3gq7cDqMD2OjNnszsTTj2LZur4q1wUHn7LhOBeh/SMV8xN8dF/M7x/UbzBfIXEtiv0xnBN2DvTn1wS7G0Gk6NXvGteZsZyUd6PA/wChwNIdjDGEFQCFgEp6TAdoDXjPkI+p0mWf8aUacifigX2FxZSOW0EwguDjQmO0l84ovpO3xGg486NQJ1A2EiFqC9rLbl3Hdqvv7U+1OcO8KL+EbP5MHnhzhOKmK4Jk9JNe4vBGadoGMs90NHeFIcWth22dPupwjn4EUuezKvJg5DUvIlsiMIPpZihfdBhaLWeUvbHiwLS/u79BkGYZ0r5jxaXaHDZU6VQNL9brsv037h7OWAy84UIeSNcILBRcJ+zFLOeCiwAlAqIBEBuAcYGXv5MLnqMZ1is1R4vZKGC50NuSvjLEEn+AneCrIwBEB3TjLZkhdPdHLa725u7hdSVMu1aq/7iUgeA==",
       "tabs": [
         {
           "fit_indexes": [
@@ -92648,12 +92648,12 @@
           ],
           "ellipse": {
             "center": [
-              -173.69009985882792,
-              -182.15653927781955
+              -173.7022101337507,
+              -182.19825620480373
             ],
-            "semi_major": 58.4219867800793,
-            "semi_minor": 56.482941812697206,
-            "phi": 0.41877174482703206
+            "semi_major": 58.405146200818024,
+            "semi_minor": 56.52171127363979,
+            "phi": 0.42231697747151875
           },
           "indent": false,
           "tangent_indexes": [
@@ -92664,16 +92664,16 @@
         {
           "fit_indexes": [
             677,
-            924
+            923
           ],
           "ellipse": {
             "center": [
-              -155.8057707299606,
-              111.74754740120366
+              -155.64278381601198,
+              111.52380725598177
             ],
-            "semi_major": 58.640636422906866,
-            "semi_minor": 54.2299166904662,
-            "phi": 2.8187955146146453
+            "semi_major": 58.45764941090632,
+            "semi_minor": 54.09830498213147,
+            "phi": 2.8736302047429843
           },
           "indent": true,
           "tangent_indexes": [
@@ -92684,16 +92684,16 @@
         {
           "fit_indexes": [
             1247,
-            1493
+            1492
           ],
           "ellipse": {
             "center": [
-              185.18555973772956,
-              177.17380510722288
+              185.32475072847703,
+              177.40124057016348
             ],
-            "semi_major": 58.690601956729786,
-            "semi_minor": 58.16008351743009,
-            "phi": 2.473373037407132
+            "semi_major": 58.76966615834184,
+            "semi_minor": 57.74774370375317,
+            "phi": 2.5342614267381185
           },
           "indent": false,
           "tangent_indexes": [
@@ -92704,21 +92704,21 @@
         {
           "fit_indexes": [
             1844,
-            2107
+            2108
           ],
           "ellipse": {
             "center": [
-              100.26038318905032,
-              -142.31017828404552
+              100.2594197286601,
+              -142.29816728540854
             ],
-            "semi_major": 65.28059342906369,
-            "semi_minor": 52.87115730247614,
-            "phi": 1.8337183544503235
+            "semi_major": 65.23267583908131,
+            "semi_minor": 52.860526870109766,
+            "phi": 1.8331914062085306
           },
           "indent": true,
           "tangent_indexes": [
             1828,
-            2098
+            2099
           ]
         }
       ],
@@ -92735,86 +92735,86 @@
           505
         ]
       },
-      "points": "eJydVVl6xCAITkKMN5v7H6bPbcO+SKbzFRGXEFT4lZ/X9xcAHMfNB2TuBqW7amSd7vfefp2iyiLQjkwFaWPebqaqNL3OOpJBnDXaVexckIUOqry+MFWVC4E3ehJQgQ4HpROZymnVabgcieNIG9EWG8CMCxAdEANUPfsJQXNctbN/bvBBM0+j02cMXwheGFpUfdhFucY7ytXmNgOaOjzcuzMU+N6hRDn0K7AXFxiWGGOCNyVaWmFe0b4ehnhuhec0QQ3ShQWZaV5DesOrdqVTZxKRMSpEtpzv0HcebtsWzraXATdptlHLNpKp9Gldo1qOsqovNu8zsQvZiTM6YnXNAz1/+Yex94ojNBTIYXQix5dGnyJ/mORFkdaGSTM8V1KQhS5kEbL+ArUGVXqQaUwAE5ARlBlpm4twIzrAZQQkCCWQ+m2admt4/RDxmXw9mvi0R+ppvB3qJEWspAHNBBzLOxqWGjxHjCVr5Jm2PzSaNQll5bTeg6LpebIKKesEzVeYrMDyFNSHMiXiwvYwl1QFIq1wFj41DWsWhrAbc+OZtx/PHN1YAS9wb1/L9GrYw2kcugFQ8eYyh6tb/Jod/DdB/gUe/v8FSOAkQA==",
+      "points": "eJyVVtFihSAIvabmV++r974tQPCAdLtDxDRDhSP0+/XzXZsn6vf2TLUe9Ug464THMOPm5U3ncb0pgAoxF6KX8OtirkpjCmOtw97iqFFRUaQQTzq4yvqTuarcqK5GT1LFRFepXIUaMZdWzW1GfcnuGHvamLfrFMS0ANO1ZPDRf6kmx1U95XOFNzP9MBl9oPuC39RxY+ums4O/Ue46PZXJE3ETDYaCtfcavHyACMDeTVCmEIwVYSWGosI8oj1sXUGP+JeBYYIbopMKMRE1XR65nVUf50Mc8SQaSfGQNWgpNHdBu67DrLOV0JGDu9Fk2qZj02bzwpSoGaXrJl/TodR+4zRDnv7xZuCDN/SyZxPefvJmYoeGHdmNGjFGGoxHUmdE0VCl3RYjl4UkEqxZiVc8tXg0Yc3PMYwZX4wxgNlA4CeXGQHnEeAg5EC6bpOtoRjHDTlj98RB6aFy6m+7OsguC3lA7S7OvNyBjtgzR5pL8K3JOQu/Aa1JLkrVrRwFWc39rTC4JGEd1WKoj5fFmju2yBxy1QrSmIab5WFMw7obMqPuE7cfDKTmkVu0Iz4Nly5sDI2dxsPha5jnRdhdwrvb8afh4eevtz/y4iRt",
       "tabs": [
         {
           "fit_indexes": [
-            198,
-            466
+            254,
+            522
           ],
           "ellipse": {
             "center": [
-              -163.78401552428102,
-              -32.78026162005603
+              -164.7713903426497,
+              -32.77905236840531
             ],
-            "semi_major": 57.74350685743592,
-            "semi_minor": 57.062525095055804,
-            "phi": 0.13309368215075323
+            "semi_major": 57.74056876633692,
+            "semi_minor": 57.06498483364443,
+            "phi": 0.13919972999987065
           },
           "indent": true,
           "tangent_indexes": [
-            185,
-            480
+            241,
+            536
           ]
         },
         {
           "fit_indexes": [
-            835,
-            1099
+            891,
+            1156
           ],
           "ellipse": {
             "center": [
-              -44.089655261391925,
-              253.43177526504394
+              -45.01638747056798,
+              253.278476900205
             ],
-            "semi_major": 57.505572558197365,
-            "semi_minor": 54.191276504859395,
-            "phi": 2.343532750311658
+            "semi_major": 57.70840158024641,
+            "semi_minor": 54.181678382987094,
+            "phi": 2.3255095566519466
           },
           "indent": false,
           "tangent_indexes": [
-            821,
-            1108
+            877,
+            1165
           ]
         },
         {
           "fit_indexes": [
-            1557,
-            1811
+            1613,
+            1867
           ],
           "ellipse": {
             "center": [
-              173.2331269300832,
-              -7.383304410775583
+              172.20875679686674,
+              -7.393875618064587
             ],
-            "semi_major": 57.00694485271583,
-            "semi_minor": 55.40371314022716,
-            "phi": 1.127295561856994
+            "semi_major": 57.023051135900694,
+            "semi_minor": 55.39061586534228,
+            "phi": 1.1405211555662342
           },
           "indent": true,
           "tangent_indexes": [
-            1542,
-            1836
+            1598,
+            1894
           ]
         },
         {
           "fit_indexes": [
-            2211,
-            2469
+            2268,
+            2526
           ],
           "ellipse": {
             "center": [
-              -21.610602122352894,
-              -188.02747598157023
+              -22.62424372078924,
+              -188.0322963176236
             ],
-            "semi_major": 56.954159301236174,
-            "semi_minor": 54.54272576408678,
-            "phi": 0.7059315063399236
+            "semi_major": 56.93067402506343,
+            "semi_minor": 54.56065842006601,
+            "phi": 0.7060591138085294
           },
           "indent": true,
           "tangent_indexes": [
-            2196,
-            2492
+            2253,
+            2549
           ]
         }
       ],
@@ -92831,7 +92831,7 @@
           630
         ]
       },
-      "points": "eJx9VQmWwBAMFeuB5v7HmOvMG7J+tM2O0kiC9PP3W+rEwlxCWxMtNK/W+3ffXbWoA94oOboVEdqkNmVrzAs680JVvbcT+ROZsCbzOioYCqgSbBS6uKFUxOPJOU+5hPABNNEUEYk1cdGENHUSI5lITGS9iQcMeCYvZn8oShZCjaU4CR7XD9y3qA4nMi/RAbSfrLvljh/eE4RJo1hsG+b95TkaD9lQhISUvCVGfxw5yO5gcu89FUSaDFNKKkCPiUssYp7QmRcKOQoNHerDQKbrYgD+c3WKwtVnyI9j1psfR567HkYkKLph1mMkQFRIaeyggTDQ86sHuulJry7lAqjYiMvAbgRZYBHAMKEMpGJL09jzwbnY8wGZJ2cpmfOoUiY48vlukkotPEm0l5XW1hHeKLENEjp/fdDPjmv2Z19CI+GK1pihjNyZAqMduXpr3jP71+DLZKggu/mb3f123/srWPN9h1woF1Pe37LjySr+psTDVb1u8f3qXrHwgm3vWCgr6GYHJsoW8yqZ8aLd1PDKgXqAAxGnsPX4N/h5508201s7juEW/uoJ+AdoeiBd",
+      "points": "eJx9VYmVxSAI9Iha0PZfxrazb6MMMKj/A4JHNMhl+vn7rc+LdbXqUofc4+4x+vzd96mnQgEb1OLTQIb2Unt5a6tN6KtNhOi97bg+eYQtnAS2oJKo3pRcVuuAROPJirRSwCLkF1XkXAwnCSRhSVma5LM2WKBnyKn6zyqoJixmaVWY7XrBeEPom7Ir6Qpw/9Y7R6b4pn0mK1XcYaleXPs9Jip32BnYCASV0y/4sbvA3FCSaW+uyGJ/uCGZBCM5FqbxcmkLOlDIUGhgqQ+DeciQwxjs56Dsqt6h3NdKDk7dnHOduqyIUeS6uPhIhCyY0ogAQyggf5HODZm+cv4xqWXAZwhkK4hgKEMjAgtuYnfArZs/yPPZmoTMnqox47kIqACXrQgxCyvE1mZeDrGgbgilw9xf4XYgTcZe4hN18JpSXGDlOXba5qtPw2Pn18VP6xRBWvibln4t91RIrJhTFdnQvuG3bHuyqj0p/nA9FreX98uI8BAa0E0TxsN2d7knYApiWORQPGgGhixs3f+tBj192PUyvbUtDYP5LXuff4VlIGE=",
       "tabs": [
         {
           "fit_indexes": [
@@ -92840,12 +92840,12 @@
           ],
           "ellipse": {
             "center": [
-              -197.92230027822785,
-              -159.63660808531455
+              -197.98960869769354,
+              -159.70074746751857
             ],
-            "semi_major": 67.41070704460026,
-            "semi_minor": 57.303062115200646,
-            "phi": 0.8828656660741838
+            "semi_major": 67.29566639241514,
+            "semi_minor": 57.396157689089584,
+            "phi": 0.8865741782219803
           },
           "indent": false,
           "tangent_indexes": [
@@ -92855,17 +92855,17 @@
         },
         {
           "fit_indexes": [
-            669,
-            918
+            670,
+            919
           ],
           "ellipse": {
             "center": [
-              -189.68684243729024,
-              164.0854751826665
+              -189.60531683817635,
+              164.20497058548443
             ],
-            "semi_major": 58.34761113267142,
-            "semi_minor": 57.54192026817403,
-            "phi": 0.04361911253728046
+            "semi_major": 58.54147126464134,
+            "semi_minor": 57.301515420900756,
+            "phi": 0.05692355598274828
           },
           "indent": false,
           "tangent_indexes": [
@@ -92880,12 +92880,12 @@
           ],
           "ellipse": {
             "center": [
-              103.14431721597602,
-              153.57514278801276
+              103.14003042723901,
+              153.58788710766234
             ],
-            "semi_major": 59.25248385383592,
-            "semi_minor": 54.14649520008867,
-            "phi": 1.1504354564349077
+            "semi_major": 59.26552836622406,
+            "semi_minor": 54.13965690752279,
+            "phi": 1.151464803279042
           },
           "indent": true,
           "tangent_indexes": [
@@ -92900,12 +92900,12 @@
           ],
           "ellipse": {
             "center": [
-              120.58042188229598,
-              -128.21607871290095
+              120.56107745020667,
+              -128.2059863616604
             ],
-            "semi_major": 58.39288538040315,
-            "semi_minor": 55.27155766052392,
-            "phi": 1.7572069638454502
+            "semi_major": 58.387463818390806,
+            "semi_minor": 55.27130667041182,
+            "phi": 1.7521888571417428
           },
           "indent": true,
           "tangent_indexes": [
@@ -92927,7 +92927,7 @@
           560
         ]
       },
-      "points": "eJyNVQmSxCAI9Ir+Zv7/p/3D1o7QNGAyU8vR4hGDglpevz99jNFHb31L70OQlGv/pZGt4TIgCpfom7cozS1vhogqhJLWFQBfYQqdFLB/dNnvaMq61ZGuDMdHXIFvQksq3ERbq4oojCtVqNSDGmB/DiDp3MJHELiVXnyrpMHieK300cAc/SButjSYHF3vAPrePBVERxRPhthokfEEQgR04geqjtW1Zqu2sPQYGLBCERCjLOJSWUV4i+ibJnFahSWG6dc6mRJ+tpOinDnhe57idDNZeep+gg9Nuf7FVtme2z4ULi22nCaF5t6puYQ3rWuF04xzrLdBoBHQOvdh54WBa2ER8QcpAligLFhqMVZY1RkvjVmpj3FD4Hi4YhZ+SEuephbuB+Sdkzpi2+yi2VeYZjEZY1fqT8NzY85r2tMuV9ywlwHuaWs9e4PMVITK7YvYmMr4C7IFPYWd0UZIC9cGuenR4EkdznjB3tr0ASYS2B8m3ytL48ckHv5Gue0vlFH314kaXyOgvxGj+53vN6zShfd2RI/uGx/dP8Kdx9zGnkEPc+xl/gGrqyBW",
+      "points": "eJyNVYmRBCEI9EHN5vLP6XLY2gWbz/G2DrHFZxgE1PLz+u1E1Km3ztw7CRrl3n+JskTOBBYY3A4uzJsm86eApW4IbR4A4Cuo2EoB/KfNWuXXFAxiUQ2nuAN3QktVSpP6oSpQIaNUq0KlnrSnm4Co2Aoa9OIvOQikBpI3h5i6abEYXqvZqKCG/sEu6sZ0HMUt77XDfLO9JcODx2nnnsKRHSEiZIHYii9UDSuEejYwNQUHgUHZUAREKCsC8ypSmAFrRpB2WVt23V+LHhB+xklRninhwWlfROvcpm/wbSj3H4tDNrDl6odiW4sjp2hsIntqLilMayw9yUMP874MIlFAneTDbhcG7oVliD9IE0ADpcGClAzVuHu8kB71GrdwljXNciraQE1c9UBBH/KOm2UZ6G52jhloCekb0X6eT8vzYMjrEKo19XLFDTtGuGOnlXGd9TXeXDtgU5TH50NOT0QKu0VbXFF0h3p8zaH5ZMcBWx7cqAdd1XtigVZ4kdxX88xgS2Byjl3yF0pJb0IKV2h8jYD+RsQHwm/YTQPvLUV7no6P5uvoGbRLTO4BVuBtvgHCZiBe",
       "tabs": [
         {
           "fit_indexes": [
@@ -92936,12 +92936,12 @@
           ],
           "ellipse": {
             "center": [
-              -151.01719558850166,
-              -208.81916818224323
+              -151.0339832282187,
+              -208.81876818804713
             ],
-            "semi_major": 64.04953747126622,
-            "semi_minor": 52.38013779380894,
-            "phi": 1.5911491213535116
+            "semi_major": 64.02996640198333,
+            "semi_minor": 52.38282476329883,
+            "phi": 1.5917852025635404
           },
           "indent": false,
           "tangent_indexes": [
@@ -92956,12 +92956,12 @@
           ],
           "ellipse": {
             "center": [
-              -220.673992120033,
-              117.42093831746824
+              -220.67364576204537,
+              117.39810284539065
             ],
-            "semi_major": 58.35768109447899,
-            "semi_minor": 54.97336254093302,
-            "phi": 1.2563746762557308
+            "semi_major": 58.349031832326126,
+            "semi_minor": 54.96128106208336,
+            "phi": 1.2582216734157847
           },
           "indent": false,
           "tangent_indexes": [
@@ -92976,12 +92976,12 @@
           ],
           "ellipse": {
             "center": [
-              65.21653681005932,
-              179.5220995128719
+              65.21127847755444,
+              179.49428893096157
             ],
-            "semi_major": 65.92308081607099,
-            "semi_minor": 52.80366166860729,
-            "phi": 1.4182926244865606
+            "semi_major": 65.92469639307015,
+            "semi_minor": 52.786688796875595,
+            "phi": 1.4179559848961711
           },
           "indent": true,
           "tangent_indexes": [
@@ -92996,12 +92996,12 @@
           ],
           "ellipse": {
             "center": [
-              220.6509754421713,
-              -145.53365070272844
+              220.6670927539595,
+              -145.54732842797898
             ],
-            "semi_major": 58.723324905021656,
-            "semi_minor": 56.33787311735229,
-            "phi": 0.46047803318077773
+            "semi_major": 58.729697008127,
+            "semi_minor": 56.33556111364027,
+            "phi": 0.4566588783452806
           },
           "indent": false,
           "tangent_indexes": [
@@ -93023,7 +93023,7 @@
           600
         ]
       },
-      "points": "eJyNVVlyBSEI1HHU6+bu+U9FWRv0pYKgiLs0Wr5+vtsL1D4rwXAfdGpn032FlnQQ5Sb0LH4WI9WVdr6VzZypBMujGXdnOaixENOSnNEm3s26L9n5h/tY1C+VTrLyvnKnwUmYRPOoBYtke1Bn7jSvLmN74t1C+oNfOOwnwXY3a4Mq4h9jv3WwuD+gTyq9ErtedEjq9lK3rLR5kxSlTJKVz7mKKYVR8YJaqacMw4kqSeVM10MKSHQMAgorog/wpwgU0nu2hFC8wPESajKGPfWsgpbgxWJcqRzuuRquLrkp/5sn6VAJhmp+LOKdCVWrT+tlvvOO1jDDXLErWGYco6BgGBGNnYRzxHKgWsCOzhIsI70H+hzodDQzpc2BIpQFtozdsNuCVIsgmAGM6AXAKl4VrNfXM0Moxi4HQYnxOOGKbZe2cT8HBqLFamiZOZDPpjyVuYwuF97ePtALf6lgg2qy3pP6Og4G5+tuHEjqe/A830lEfqYI3xlv3K+ijHAhcwiGDyDbZXVX/Bw9iBav/k/8QXX7opp9U80KZ/1VQEnv4PHtdvxeL38r/q89nQuPlxvzjxz64twa7PEx/gUWriM3",
+      "points": "eJyNVVmSxCAINTHqdfvu8z81jWwPpLsGQQmuYW2v35/+APTPTBDUm07unKpv6IkHUuwCN7cA17tRTwwhd0pBcmvHy5kO6Ewb6crO3X7EQ6jvkpd/0Mcz+sCZ4cMgHIQGk5vgJu2RcRjQ0abByOfaNfomU6S2L/jAz1ZUzfNglhKJ2MfQtX4luU/HtYcwLi14aGr2dhG9GyGBDG9YgmsRyWDQfNizsly6Fs6T8+kyvg8huyX+SvLErj37n3pgN8WK+cSQ6IqFOxahJnssqPYNd46r67aHHdYpBaVFKuZ/54B+0rIgvZqbYwE2N5RZLVjOJc6vcFaxNs+F02kUmNQEc8BynFq8zsEUJDOlA80Getw+eTfCANGTxWvZdQ9dGFxNHJj9F52XHRZs4b5aJs+UmmOMSyC0GI4LVGyv9Lcbj3FooRpmjjg+p/JRZrKtXEi9Y6IVvrEgg88krRvbOm8G45+ZX20PlmedJM9PEANgRY27KtoMCllTfPhwZFPWcMaeP8yvp5U3Lk1S9qQEaoXqVqU0qWGN8vLfob5gGow5L1fXorRiec1FNv5enPz0fezRYI+5+A/3lSM0",
       "tabs": [
         {
           "fit_indexes": [
@@ -93032,12 +93032,12 @@
           ],
           "ellipse": {
             "center": [
-              -89.31502261756229,
-              -156.2966844764315
+              -89.3216511167983,
+              -156.29387947001894
             ],
-            "semi_major": 60.26454329694722,
-            "semi_minor": 55.89843740424563,
-            "phi": 0.63767060227595
+            "semi_major": 60.26146208647696,
+            "semi_minor": 55.90339917888408,
+            "phi": 0.6353997793041954
           },
           "indent": true,
           "tangent_indexes": [
@@ -93047,62 +93047,62 @@
         },
         {
           "fit_indexes": [
-            772,
+            769,
             1018
           ],
           "ellipse": {
             "center": [
-              -152.67152606747015,
-              47.39894209550457
+              -153.1512827507959,
+              47.43990302641888
             ],
-            "semi_major": 58.62597025652011,
-            "semi_minor": 55.28864497423464,
-            "phi": 3.058411356590309
+            "semi_major": 59.21678461667079,
+            "semi_minor": 55.207567761554714,
+            "phi": 3.064672537874344
           },
           "indent": true,
           "tangent_indexes": [
             753,
-            1032
+            1031
           ]
         },
         {
           "fit_indexes": [
-            1394,
-            1642
+            1393,
+            1641
           ],
           "ellipse": {
             "center": [
-              48.240755506528366,
-              179.38099036658366
+              48.233282228469825,
+              179.36031003160073
             ],
-            "semi_major": 58.76058892199829,
-            "semi_minor": 54.796029701665425,
-            "phi": 2.0623829623049685
+            "semi_major": 58.76394595479207,
+            "semi_minor": 54.773727361276556,
+            "phi": 2.0665840256946
           },
           "indent": true,
           "tangent_indexes": [
-            1378,
-            1658
+            1377,
+            1657
           ]
         },
         {
           "fit_indexes": [
-            1996,
-            2247
+            1995,
+            2241
           ],
           "ellipse": {
             "center": [
-              242.1973102257981,
-              -112.04616710680627
+              243.14608218430118,
+              -112.09285663857946
             ],
-            "semi_major": 58.56926342956596,
-            "semi_minor": 56.05578978167973,
-            "phi": 1.2891326571719994
+            "semi_major": 58.6793667178134,
+            "semi_minor": 54.93896522516147,
+            "phi": 1.3675916374518735
           },
           "indent": false,
           "tangent_indexes": [
-            1979,
-            2262
+            1978,
+            2261
           ]
         }
       ],
@@ -93119,25 +93119,25 @@
           575
         ]
       },
-      "points": "eJyVVltihDAIVDHx/h89Yq/R1gADA7of5RUS82RIdn+/fr7lfJKc4iXrg2+6zbHEzbFkkcDZjwMO8RLVSgc72muN32Me8ZlFVz1t/bU7lZEbtf1LHKeWzZfHx1qhyXR+kaOerZfpuFc67KXPY0y2F4/EQrQt2VySriXKV6gWExUY9PMxPlhpD7VlljSUAiHC1OAKpTAcyAqDzyA0I0AxEysFQLwjF8C5ICnFMyQypoOBre4tLXv1pelf3YGih6l9oz53hDfDBMikT7CxA5B7xxzKPQnwgLui3WDm4yzp17kQ526/5aBN1bmn7VVTN5lSFrVpGa3ldFFeojpH6ljsomrGWshoR9ikywXLYid8edJ8rlx+yBJ7fLu2Ck8EolWX85y/jSsYm+7RMuM1mDhsxGmOV5OV1tC6kv/SHBwAKJ2LTYRutV9mvPBC70SUpng2/CeL3gnMe/MSpsgASg5ixGNO5BJSAclACRFZUXMiNe9Z91ExWPkeYwVb023sasz5EtgABcd5APeKSPRXcw76yZfzpOAixo8GfrbbqKzISLdMUl79RLT80eD6p0X6z/gINfjPgJ4TuGP86uI1Kc+Jp68nsYsu/AfcBiP6",
+      "points": "eJyFVltiwyAMC+V1/48dcdfYFmNLtgnt/MIQKAEJ0t+vn+/anlJbtVJdQn3qLXd4iVm4VYVZsYY7CSq2PMsrJquXjsMPrd+0Gdfc4va2tXW8a/W3bqdyy+unh6wy3LO+Hms71pmVWCufx3h7yoLpFl1il5nLFFs66asYyC8L6GdjbLBIQZAZbKYdJSLkiAKrkhcapBoxFD9xlUYgq3Ftw/AMTiRpJCV+3hgDuBwMvGrJtMwcPTeyeDNgr9iOPLtj5zQtCzaao3cFxAJ0U4Gb3hABv7b0ioATbkM7I+0gxxWUx3FOErm7n3KKElZ1p+3M1HX1tXNVQ1ct5UCxVGz56O5d1EzDSjRbzRpWR0SXaYZ58Sbx8HjYy1SFz7DgCdh9vcexPttpknfvQC9oHLwNBhbLfRr9GLyyNWxdQ35ophKAJU31ll7DqcZRths+3hMs1Xn/4yNA6WY6SZLAAJIjKPZjgEqkAsgQCMErNXPC3c/ZnqOisAYzShujESOrDxtLUDKjw7MjIuEQDNmq8MknELxcudFx089VAmLatTH3JHyoH/5k/DsnPhX5S9GdAsoBQJ/3asM45fFxH9t1YvQliXVGiX/b5CP6",
       "tabs": [
         {
           "fit_indexes": [
             466,
-            719
+            725
           ],
           "ellipse": {
             "center": [
-              -157.10838452809043,
-              43.26692686262926
+              -158.6054359362972,
+              44.287152238522964
             ],
-            "semi_major": 58.87940862174678,
-            "semi_minor": 57.04141106768583,
-            "phi": 2.404029889576418
+            "semi_major": 61.38602726434263,
+            "semi_minor": 56.645224147022695,
+            "phi": 2.4772309453667463
           },
           "indent": true,
           "tangent_indexes": [
-            451,
+            445,
             729
           ]
         },
@@ -93148,12 +93148,12 @@
           ],
           "ellipse": {
             "center": [
-              70.6796751273406,
-              259.35246056007475
+              70.64388574021714,
+              259.3399367770672
             ],
-            "semi_major": 58.88285567236659,
-            "semi_minor": 54.01518886110664,
-            "phi": 2.0843370934148555
+            "semi_major": 58.87894358343089,
+            "semi_minor": 54.04112507809123,
+            "phi": 2.0812490631296
           },
           "indent": false,
           "tangent_indexes": [
@@ -93163,37 +93163,37 @@
         },
         {
           "fit_indexes": [
-            1687,
+            1684,
             1925
           ],
           "ellipse": {
             "center": [
-              160.15762137689305,
-              -71.39189542369294
+              160.76968206694775,
+              -71.44382984398156
             ],
-            "semi_major": 56.69239877526901,
-            "semi_minor": 54.1318197960959,
-            "phi": 1.1020175148547242
+            "semi_major": 56.72891793627317,
+            "semi_minor": 54.74200208951443,
+            "phi": 0.9485877454688677
           },
           "indent": true,
           "tangent_indexes": [
-            1671,
-            1940
+            1667,
+            1947
           ]
         },
         {
           "fit_indexes": [
-            2289,
-            180
+            2286,
+            158
           ],
           "ellipse": {
             "center": [
-              -121.82671476577141,
-              -223.58525294783226
+              -122.08550437312977,
+              -228.64730051719062
             ],
-            "semi_major": 62.27488726305539,
-            "semi_minor": 55.72723283011705,
-            "phi": 1.3092674158902016
+            "semi_major": 58.08188311452427,
+            "semi_minor": 54.52913364982917,
+            "phi": 0.39075761761750893
           },
           "indent": false,
           "tangent_indexes": [
@@ -93215,86 +93215,86 @@
           620
         ]
       },
-      "points": "eJyNVYthxCAIPUTj/lN1jG7SVvmD9lpEEJOIPIh+f359YO+obTNRY9FYtEUovRIEyQrChGlfgZel5cmb+O7UCw0TYTziw4vkIS6DvKjrk/Ct+b/pGFRT4BhHDouiwrxJZRHHuAclZACJ4LU5aZowTpWIpuoSxE4KwpoENix7INbSIILotfi12Hqg6WrKoLA/U6LVaFUwEpetlNQ1D7e4sI7KBBwvvLFodxqriyvBaegXoM0ibSzKXxL/MIwF1XJOrZqvRSnrgmZSmibRwNbIIOxdk+UZmy4W7ZGwdaFnM7XNSsN7ZOsslCZ3Xmuyw8nej8pRlaIQsC0mtePs8Vqy6iykcS4CmL5h3/1zqDqO09X6bepvqh9NlbJBw9RATbA6XjcgAqih0CH87bl8rHGJPKFAbKPzuu1Nw9SIagQxhEmkE9MPzHCVYO/l6ExncrpqeLkhRG50DxVfy7+BHMPSypjn0LnY778JJcZ6PBx7ClEDq7eFTeDleTXO14uHDGZFFB33gT1e3wZvN3jtNKiFkSCY80Cp1JIXj5XI6pZKchv3EC7cMXq5mA/6Ab1cIrg=",
+      "points": "eJyNVothxCAIPTTI/lN1jG7SNsofzfWIIpAE5UE0v98/X/26ul6zLWrMGrN2U5deCQLnAYLBRvfAbo1k6mv1QmgsyPh00+6osmLQmXfqb9XPzDGmprgxjByWRNXjUrUJw2BAixFTQAaQMPbNOdN8caaENR0OQYAagRVLHoh2jyBs0etur7tZj0TGSYTS/J7S8ra8gpFM2UpFHfNwiqtXqRhge+CNtlansTo7EuyyvgF6eaRt9fyReJF2bzmdPeSzPxSl+AXNpFyaRFuCRga+dtLEUZUnu+k122LehcZsk40xuxB6j806MyXid9kXhQkPlaNDikLAtphUj9btsaRVKyRZJtZ5NVoaGjZZIGEoYpKr9mT6n+pLFCCliKmBmmB1vE5ABFAhp0G/9vjRh4tLZHiB+ELpuOxJaAPGAZ2hMFzs3iLDdmn7ZThK+nWlrdP25HLcsBuc/pBJ5iqV6tBGhIeHFyuDdjE8m/XP3jHYcHDoW1wqxNPCDP1wvyr74wHEzXM1hQPvwp5OaznrGOEhCCd4HxAk2lAqtWTFY0Uyu2ZS8hrPWz5pNeFeAPkfQugPnrYitQ==",
       "tabs": [
         {
           "fit_indexes": [
-            341,
-            628
+            340,
+            627
           ],
           "ellipse": {
             "center": [
-              -253.97810889384587,
-              -31.650150254381884
+              -253.95070632990246,
+              -31.655414877154353
             ],
-            "semi_major": 62.84816203003677,
-            "semi_minor": 56.21992429260262,
-            "phi": 2.812639668248256
+            "semi_major": 62.869672199931436,
+            "semi_minor": 56.22972007132417,
+            "phi": 2.811561805857012
           },
           "indent": false,
           "tangent_indexes": [
-            345,
-            648
+            344,
+            647
           ]
         },
         {
           "fit_indexes": [
-            883,
-            1157
+            882,
+            1156
           ],
           "ellipse": {
             "center": [
-              -63.71285188090786,
-              262.774080609674
+              -63.71376802442535,
+              262.77301075371656
             ],
-            "semi_major": 65.91852066656226,
-            "semi_minor": 54.77827925997684,
-            "phi": 1.648172128435432
+            "semi_major": 65.88834476074867,
+            "semi_minor": 54.79445566581887,
+            "phi": 1.6474844230674004
           },
           "indent": false,
           "tangent_indexes": [
-            883,
-            1175
+            882,
+            1174
           ]
         },
         {
           "fit_indexes": [
-            1529,
-            1799
+            1528,
+            1798
           ],
           "ellipse": {
             "center": [
-              248.18529435295773,
-              15.249248738993627
+              248.15845699406856,
+              15.246879376045538
             ],
-            "semi_major": 59.717853175528184,
-            "semi_minor": 58.5728758681576,
-            "phi": 2.8530816251546236
+            "semi_major": 59.72309528115176,
+            "semi_minor": 58.583568547527996,
+            "phi": 2.872339662281608
           },
           "indent": false,
           "tangent_indexes": [
-            1516,
-            1817
+            1515,
+            1816
           ]
         },
         {
           "fit_indexes": [
-            2178,
+            2177,
             105
           ],
           "ellipse": {
             "center": [
-              -9.537016412533971,
-              -253.95954857267157
+              -9.54172414141487,
+              -253.9565464468705
             ],
-            "semi_major": 61.22454487517618,
-            "semi_minor": 55.73107256489416,
-            "phi": 0.9716799305933731
+            "semi_major": 61.24371061374051,
+            "semi_minor": 55.7395584067705,
+            "phi": 0.9769578181232158
           },
           "indent": false,
           "tangent_indexes": [
-            2168,
-            123
+            2170,
+            127
           ]
         }
       ],
@@ -93311,66 +93311,66 @@
           630
         ]
       },
-      "points": "eJyFVgl2xCAINS7xJL3/cXqbvsr+IZkWWcQhqIA67evne8w+Rh/MRhI9SVezknqf+u4Hx//E/8aYAKbgFBRYiosQ4D6N2WkJQSR6tdAf1h1+yO8hmY0m5gVkGNRkwcRsGyn2ZaMlCax8iNNruD6kUUcJL8ILpTLoZP2ziQ8Wf1f189quQ+1wYu1qhEwHttBmdrjBrVQZQTPetn5onlpz5zoRTyhCUVYCIOvLG1SmfPRu0hCzAJkfY9ZmzJXhNMCVTRLzWvAcfbUu66D3nqKnj6zTXe/5Izc6wdspTRZxlFnAT9UaDVF963DjsoCSuDedUGYCdvAVlx/UpXeE3RT5urArQw96wGZ6tIQJWtQi7DfqMVVkrcBae3HAnFzgKfOMW4E3yZOeqVjQxkPlpyodqjTwUMDI9KKKjvZoUb5RxUNKF+yE7KS8vQpAkHmgjjx+wGqQ+z2uf68BWHHEE/K8G4ScbeMOaxEJ2edWr1i88QytEKWcC6SNzaVtpjcJ7pqpb6hcVPIy9fx3AB4pZjOeXnFDHpc9vvXhvVdadmyidh6D7zYP23jXJSJz/QKIoCKA",
+      "points": "eJyFVQl2xSAINEaTk/z7H6e36WtAlhlMW2TTEBcEbJ/vr3OcXZtgin4G0qfaIQ379Ze+T/wH/jemBDAEtQkumIZTEOB6mrKnEYIgerWwD/PKeWTeh9ZqsrBugEE3qftV7sfoSZvbi0fhujY/vbprZPfl6rrgIXigNAYK9B/63SQGy3xHnee1HUrNsAkqPXAvupU93OEyqkygOW+3/egz+by6xmKHarn6IgTbHx3QmPGzd5eO7m6/7OFscIMAdu3MYOl5775IruvOC4zdhqyDoe2i0087hQ0bifPu5k5Gj6NkAZ+qNRpu/22q3nHjkJAMNX55ts7EaYVhLAqMejHMyouGpXrCrbQ1QoLmwUhnj4BsEe8RiBCCNfgyw1DsOSdszeIh3tZNtUwo3xakVeQVpRUNbB0wql/oc7Gn2e/iOfDp5dU1Lgiv7U0AguSBlxHW8P3QEh8lH4IAdmzl5ubwzFs2qwblCT2xYuoK8uClxyoaxTOBe2qda0xrg14lKzZehOxh6v429Xwn+P1YxWx4RfOKBTDr05uvrqlwDFa2oc0ih8pYZKqoY/4Axg4iig==",
       "tabs": [
         {
           "fit_indexes": [
-            693,
-            931
+            694,
+            932
           ],
           "ellipse": {
             "center": [
-              -147.23198225515097,
-              87.52844002500474
+              -147.2478227169587,
+              87.54732929490353
             ],
-            "semi_major": 59.35776050643062,
-            "semi_minor": 58.74848800415505,
-            "phi": 0.898670795352662
+            "semi_major": 59.347522597059,
+            "semi_minor": 58.77286827209634,
+            "phi": 0.8915515305429526
           },
           "indent": true,
           "tangent_indexes": [
-            675,
-            948
+            676,
+            949
           ]
         },
         {
           "fit_indexes": [
-            1271,
-            1506
+            1272,
+            1510
           ],
           "ellipse": {
             "center": [
-              86.59197384681457,
-              165.70834937686692
+              86.9471947318768,
+              166.01784975687787
             ],
-            "semi_major": 56.7599650312511,
-            "semi_minor": 54.002542497622166,
-            "phi": 1.8804056775940634
+            "semi_major": 56.77805360886576,
+            "semi_minor": 54.519363219293126,
+            "phi": 1.749228834011923
           },
           "indent": true,
           "tangent_indexes": [
-            1258,
-            1520
+            1259,
+            1523
           ]
         },
         {
           "fit_indexes": [
-            1848,
-            2135
+            1851,
+            2137
           ],
           "ellipse": {
             "center": [
-              187.7637788630651,
-              -160.36130929959722
+              187.7747127573854,
+              -160.35488021919014
             ],
-            "semi_major": 71.03153206962962,
-            "semi_minor": 58.60320134313006,
-            "phi": 2.3947988419910753
+            "semi_major": 70.98520263241905,
+            "semi_minor": 58.622683795925575,
+            "phi": 2.393970183854079
           },
           "indent": false,
           "tangent_indexes": [
-            1854,
-            2128
+            1857,
+            2137
           ]
         }
       ],
@@ -93387,7 +93387,7 @@
           580
         ]
       },
-      "points": "eJx9VYuVxCAI1DVKN9d/GVfRvQtfB2IWkQRjRGDE9vP3Oy6jEXKwHEN5fJitMZtQGv2DlLWYJF0as5EsL5bCuNIMOeNx94lj83rXZ/kxVJxd58yrrAVbGcN9SKyPopbBkfRR1xhpzvk91o/QdxV363dvnR+tSzNmsocQtUxF7yaEpRkrqR1pNcWOB3TIERMJj8R7j/QrAioAICkqpglj786YSiRE8eXGE3xfyfb8Mdfd7XCQo8MBGSkeHYKydYmfRFMCrEHuIap2GMxDL3Mh/ScQkIq7MS3jxawUL0zzVdlTSTtpkwWFmnQ2SAG1CkDYmoPPd20gRBSekVirzXBZwIi1B+CZjlhKYvfDpXnbOyyn6kl0PF5P5wlfeplCYMfHi5pnc8QxfVTzVUdpUs4r+XdLpr1qShelhLaWYLbT1Dpka+tRUx7gRI8UKuZMU3uOKmbbFfaTcw+oxtiUxoLZSki0XDwmlpBaUur9FBWJSVZXkzm6yw/L5kUL/aLk3WOwMpy+eh6rlW1bI6FFE+7Uw1341r9+/PZDuau9lKtYO3SYwlJhtGIR4iLGALqUf4c1NTNToWBmJ8dj7Vsk9nx6IhLmP/FnIFA=",
+      "points": "eJyFVQmahSAI1si4zbv/MeZE803si/UGUUMNWf5ofH5/4FQCH4FGAGE4iLUR6/BI83EVpKsqI1bPN/nlQsvH5dPdV15b57tcxKzn7Bur7dc33RSA8CGxTE1si1BlaDqgnNnOFcUeSonypDapD5rG5KZMpBMTjkpNnjowc1MWknvo2tlTbHjIhhtibPBZkn+k9AsCOgBSUmRYOihbN86pzKTaGcWnGiBR/Y/EFzoorpvb7iBFh0ICJR4zBSVkjh9HkwMsQRZO4Xb5YbEuvZxN6X8CAcpwN6JL+W5G8XTTehXiKEoXLaKTaXCnC9Gh1gGYbDPwWVcQhusJiRTKQ7G4VRuI1BUwJlBmeJZPrCRx2scleQsL21e1Ez5+XrvzmB9mP4Fxj200sR6miOf0Yc9XX8WFNa9o+5pMfdSUXiWhYxSYRbEYM2Ur5KhMHZw9ZGjODLnPUSUmodu4u+jyhlVbWtxoII7KofWjFI+VSshWU/p/xYoSE2u/lLtxWNm8wqsu5sf+lLjO13YwKQuVHIlw+f1f+Na/bn57of2rPWqnhm1pgnrgUoXRiuW4uHIhC+hifT3ptMzIXX6t2tHsTjDoPxamP9DuIEs=",
       "tabs": [
         {
           "fit_indexes": [
@@ -93396,32 +93396,32 @@
           ],
           "ellipse": {
             "center": [
-              -175.6681301640027,
-              -16.897013089389958
+              -175.67719955034497,
+              -16.897842189952627
             ],
-            "semi_major": 59.20717774524959,
-            "semi_minor": 52.571114223190435,
-            "phi": 2.402626269149982
+            "semi_major": 59.200886979742286,
+            "semi_minor": 52.56796227642995,
+            "phi": 2.402050467843298
           },
           "indent": true,
           "tangent_indexes": [
-            448,
-            734
+            444,
+            731
           ]
         },
         {
           "fit_indexes": [
-            1025,
+            1024,
             1297
           ],
           "ellipse": {
             "center": [
-              -60.68155981290313,
-              157.8318375855942
+              -60.74528655159015,
+              157.92875947719423
             ],
-            "semi_major": 60.75237121747483,
-            "semi_minor": 57.44061574395935,
-            "phi": 1.3657061126266006
+            "semi_major": 60.830544938477544,
+            "semi_minor": 57.508583052516,
+            "phi": 1.3967524637630155
           },
           "indent": true,
           "tangent_indexes": [
@@ -93436,12 +93436,12 @@
           ],
           "ellipse": {
             "center": [
-              245.24125652528883,
-              111.47194836785727
+              245.26632338729425,
+              111.50104066114909
             ],
-            "semi_major": 59.2448615190379,
-            "semi_minor": 56.72581732933721,
-            "phi": 0.2712296654669703
+            "semi_major": 59.247837498077544,
+            "semi_minor": 56.75896088741356,
+            "phi": 0.27128136358814253
           },
           "indent": false,
           "tangent_indexes": [
@@ -93451,22 +93451,22 @@
         },
         {
           "fit_indexes": [
-            2208,
-            103
+            2186,
+            106
           ],
           "ellipse": {
             "center": [
-              58.939864851145444,
-              -252.78666210762213
+              58.46090021006435,
+              -246.484645370061
             ],
-            "semi_major": 56.96335300834282,
-            "semi_minor": 54.68615844624654,
-            "phi": 0.004899089757048442
+            "semi_major": 62.85373738005597,
+            "semi_minor": 55.85457934683984,
+            "phi": 1.6102737495979258
           },
           "indent": false,
           "tangent_indexes": [
             2190,
-            121
+            124
           ]
         }
       ],
@@ -93483,7 +93483,7 @@
           570
         ]
       },
-      "points": "eJx9VluCwyAIVNF4v97/b++xuwnIY9AUBbEKRgexf5/fH+pEjdpNKrhlaRr56DbgSmD0cTKn6FmmB7PKWhWuWoTKU7k81enuzAI0oQnzynIg3oQas66mazdvgGjvyI54N8+RGvWnchHRRTgNYa4iBmtDtdCusqoK6r1TLETyEfpBiNyutB0GOo9T2nL2A4D6QlVgbQ5bLVEVUXPn0KvlbLJNAfcaMIJ3qa0Y4gvzBKeiqUdIjVx4JwWymVcQEr2thiiuHsJwDO80QZmx5XLTLa67XtfkworLRcNEaJXUaGrzOGQuzLruzF+3YfTGut1vBi92cFwn0NOoZYhwyO5njyfZqRzd9HPwQ5xBrFO+MrutOwgDcTZ2Eg0pg9mTgKUJI/qqxSRjacMSyVOZF631eGmOjRAfviMNjHVYXo2Byqo5cqqDIcl4CauQ6RNWy8/jdC0wE3xHdABMuB8z7vE0CEjixcIpc5uGAN8dhjQk/pzQQYweuwN+8Anj3ThhDypMGsmPfRRFC2tCGFLX943k+VmZE/4LBKqgvD608U3FV9Xf1U4a8ATfBPvVl7X7Q7qF/yXCgx+zI2B9ugR+Fw65It9rudvwsCeE4iWPiEeEN9wTQmMzeAkm++0fpw0kKA==",
+      "points": "eJx9VUtixSAIjOLnfr3/sudoG0FkAF9REKNiZEB/v36+qRFVqi+p4JYlgYK6TXEKhdnpA2UmmA7LCmtFuGgRelblsqrR25mPp+kam/dsA2JNqDLrbry3iC09Ue7Iifg0y6WH2qpcRDQRRl2Yq4jOWlcN2l12VUGtnS24JZKf0B/yyGWQa4aB7uMUjhwUD6jtWATWarCVB1URJXa8Yr3LkjQFh8tB/NEgqgK6Qh7QVDDVg1TJhHVCHJ/lxQkJ3lP1D8wFdsLPNJ0yseXy0hJjjjHmkHaIFHVTPwJaJZ0+d8P82lL7um9MtDuMN9bjJoQ9Wrd1zl0XzMNquyDAyWYnh5OcVFw3zQ8Deia2l0dkWxsM+LE5wtJIXUpnXrmPid/h9qB/Nbxjzq1x7pFdD+39eGuODYgPO9HUAJsqdj2M9AjnyCkGhmamr+6ij5gfa9u60DD4sr8hF7zn/eC/U8Hshyk3ZBHgpTOkhoaxCd8ztefPOHQzE7DPZq5/oYHC7wuuOA2EITV93khen31zupcGqDjl4zOLT6p/VO1ZbXQCnsK/4TG6D3uL/YbBv7Mu3JKIIVyvIQksFy53RcxryW33rl/jIWRvQDjFSkCopwUpmM4u8u0PoPYkKA==",
       "tabs": [
         {
           "fit_indexes": [
@@ -93492,12 +93492,12 @@
           ],
           "ellipse": {
             "center": [
-              -153.62864146597835,
-              -49.259281232904996
+              -153.63071692442466,
+              -48.245251245056025
             ],
-            "semi_major": 57.23520677980571,
-            "semi_minor": 54.17861250626201,
-            "phi": 1.2809824673297525
+            "semi_major": 57.222594730857736,
+            "semi_minor": 54.17027435072081,
+            "phi": 1.279934319449729
           },
           "indent": true,
           "tangent_indexes": [
@@ -93507,62 +93507,62 @@
         },
         {
           "fit_indexes": [
-            792,
-            1051
+            791,
+            1050
           ],
           "ellipse": {
             "center": [
-              -94.20603923465255,
-              260.8444231699463
+              -94.20302587789065,
+              261.83557620327554
             ],
-            "semi_major": 57.38596872968675,
-            "semi_minor": 54.33638606837024,
-            "phi": 2.7887145863456064
+            "semi_major": 57.36610884071839,
+            "semi_minor": 54.35721595519347,
+            "phi": 2.7881275346439454
           },
           "indent": false,
           "tangent_indexes": [
-            771,
-            1065
+            770,
+            1063
           ]
         },
         {
           "fit_indexes": [
-            1463,
+            1462,
             1716
           ],
           "ellipse": {
             "center": [
-              171.82631199742906,
-              35.785356242511334
+              172.0211588618265,
+              36.769708066584265
             ],
-            "semi_major": 59.45542905148375,
-            "semi_minor": 55.63707128198538,
-            "phi": 2.7360640165818406
+            "semi_major": 59.6845530450556,
+            "semi_minor": 55.61827155399134,
+            "phi": 2.751676640862482
           },
           "indent": true,
           "tangent_indexes": [
-            1443,
-            1730
+            1442,
+            1729
           ]
         },
         {
           "fit_indexes": [
-            2147,
-            2404
+            2146,
+            2403
           ],
           "ellipse": {
             "center": [
-              11.140326801715938,
-              -168.51575592947137
+              11.144416620737465,
+              -167.52320706998205
             ],
-            "semi_major": 59.19783123382118,
-            "semi_minor": 53.73354067116877,
-            "phi": 1.0928411797940498
+            "semi_major": 59.17980294154062,
+            "semi_minor": 53.7391841474457,
+            "phi": 1.0899359248733962
           },
           "indent": true,
           "tangent_indexes": [
-            2132,
-            2417
+            2131,
+            2416
           ]
         }
       ],
@@ -93579,21 +93579,21 @@
           610
         ]
       },
-      "points": "eJx1VQuCRREIJb/9b+vtY7YxM6JyincQrs+ljvr7+f2UWiZIBG2hNWHj8fFqxzV+Ck4rpH+ynysq55k4b9G4wbJx2kLRT9UborY9cyXZYu+3sksqTtaTOOxjE4mYyGTIW6zkBCOtPMtMImbhWmXGhvT2XFnJoFVIMqCsUogKoaqDygt8Jd99NSMjbm7wjeWEml0NnXCLrAqym2RpiH7xKA4vo5wrEamJljxayvYLsMs+SRZNgz1y8sXLJwbnwZnRNbFYkiEN66gcNrZmryzgLXnvJYQbkRdJrkHaOGpO55Ie9Gq+p34ZpfhLwlMA9VMeSwXDLte1Gj1+C2Oii46L7rVH3Tj0XhEmmpGCXSaaCPQs4n6q+RTzTadu5q3MYaG7WlvC9t8xoBqBJY4kwpMhLBS2OKCTER+UvXN52zqZEfVd2DMYRvvD/K7iMjW8h8sWMCpDPdj8aWHPm2jUTYDOKq9iuXoseGLDMWpz3dALnbju65TqNwvTQlLOQMDaIdDC1vaB6IKxQGwqBLGqYHhwEbeWomFQf3TQDpH9TTXA3kFYKM4s3ylSfLM4WFNYk6ZIwOhhIwOtDLvhG7VXWvGlojFfNtdHqg+7/gNiSySL",
+      "points": "eJx9VomBxCAITPDrv63t49q4O5VBBmMWEcFfmWD+fn4/KadOAiEqrBRXWD9WHpq/jUtiK83F5wZAeXBPg1WUoQxZNJWZJ1UqTVfSbkiYQuebvKWdbSeBdNsiEJ1uWXSrQFLWstM1ueeeIHoepcmbFVjoq+MHycwCdsKekkgSvurtyhPVSjRP6o6IJzbGiXE241CSQccQOoqf5IaSNNuKARpvTrGNOWMiv6V7LcF+UQm/kD/uK+Yoj9QG96RUB1flpkqFSYbJttp04GCQTqoL2B4UF36jQMctpvjZrnXGneShvHZ9aZVtSYlabzJ0tHkFbR2uWvEUWw3uovKg1xFb7euISkY1e/NLp6JiJooqK6CUzLEpR6t4wPJoNWOUzonpIc/UqGgbSgJIJk6aQlDBAunEQYYRRNHl6OsL0gbRV9AW7C9dvmFPR1cj1UMdty4PPTx6sgkjD6eidlx5LlUdkd2FsJdqWo492PreVPK5S6bmkwjJQEMvlr6B693yuIcQzJmeplVFAdWj6gqrOSV7BG0dpwBkPpU9sPEVrgvipdiH80C4onjzJlBzRUAbVYcUvtTtE61YlF/+cMP7TdPd0y/FPO8/RBIkjg==",
       "tabs": [
         {
           "fit_indexes": [
-            178,
-            418
+            180,
+            420
           ],
           "ellipse": {
             "center": [
-              -215.40005801740315,
-              -148.107423965352
+              -215.45648315086393,
+              -147.91384199255307
             ],
-            "semi_major": 59.01673860489355,
-            "semi_minor": 55.157197746494944,
-            "phi": 2.7418407333668604
+            "semi_major": 58.7476174244657,
+            "semi_minor": 55.50116930608889,
+            "phi": 2.7384973617119837
           },
           "indent": false,
           "tangent_indexes": [
@@ -93608,17 +93608,17 @@
           ],
           "ellipse": {
             "center": [
-              -177.4515579637029,
-              201.98965531406384
+              -177.4724042636214,
+              202.01883119147243
             ],
-            "semi_major": 61.215603486355754,
-            "semi_minor": 56.161500636099085,
-            "phi": 2.017239759076776
+            "semi_major": 61.16360607685914,
+            "semi_minor": 56.20501798834492,
+            "phi": 2.0132125339192726
           },
           "indent": false,
           "tangent_indexes": [
             653,
-            932
+            935
           ]
         },
         {
@@ -93628,37 +93628,37 @@
           ],
           "ellipse": {
             "center": [
-              147.74997479476693,
-              75.43926533933687
+              147.76888170499058,
+              75.45693346127217
             ],
-            "semi_major": 59.7529894594639,
-            "semi_minor": 56.43830647699674,
-            "phi": 0.9008875079702182
+            "semi_major": 59.77886954072967,
+            "semi_minor": 56.41945792142297,
+            "phi": 0.9007128716389338
           },
           "indent": true,
           "tangent_indexes": [
-            1316,
+            1313,
             1596
           ]
         },
         {
           "fit_indexes": [
-            1975,
-            2224
+            1978,
+            2223
           ],
           "ellipse": {
             "center": [
-              58.2023970606302,
-              -170.12670304977925
+              57.75251838850561,
+              -169.678681841259
             ],
-            "semi_major": 60.272950027077535,
-            "semi_minor": 54.25036563788487,
-            "phi": 1.2871152431925732
+            "semi_major": 60.31593438762442,
+            "semi_minor": 53.56215429281752,
+            "phi": 1.2185934831236838
           },
           "indent": true,
           "tangent_indexes": [
-            1966,
-            2240
+            1967,
+            2239
           ]
         }
       ],
@@ -93675,7 +93675,7 @@
           625
         ]
       },
-      "points": "eJyVVtl27SAIjeLwp/3/hz63PTJuNMm6FwEFxwBKfr9+vomoKnhja2cFPehRKvvstznvg0iIpCz48LbqJqUxAXRGqTYWyGQcgIJ0efJSSU5QFeVc+WuKUKlRF2mU6uilCBdkuKQsdJiJpYaS67mSubzIWtBAN/Lj3Xnp1blZfO67jaOH4LoNn+docyhhp9wK8xVTwii07DTLrdaCwTQUlSl053cEQwxshSlFVv/AJSR7T/Te3B3s7jTBHatfkv0rDsZIq+BjMi4XioDlyuNapsSNttBlvIruDkYteEo86CMU/NRj7qnFJm6J86br2NYjO3OOs57Zac+DDyF1ZMVL13936CElmiyQMI5ShEDAY9T7bTApW/DCF2ShBujUqzGMjZkvCNpqsb5/hqu6soVCjAzbCx0veW9Nn3l76Sm90q6LBjzuvK7DkAJHjFuKKPYGKffdd/zTuFzr5p8zbfkriYSqjnVHHQgpxUUT1JASQ0ijsN63Ml9IfpRszKlxezvgua6RE3dpS0T4UJHnfUn9Bi2y//4DEF9o7seSsOfY8PiQOJ0d7//uQ6jm4eIU9cPWdWg9G/+07unvIzCS8AerwySQ",
+      "points": "eJyVVttiwyAIDTHWP93/P+x5W+R6ICbtEOWiVQMI/f36+W6t7QrOFD7L7W4iJNqfoW7+tKjJoG3COR6THtIO7gCdUUgZArnbiNAO21O393PmwbtegHHerZWvIem0B2VCKjnHjWQUZNikTXQYaUiMdtczkd/yJnNDAz3Ir7d00wfefTu15G8W3OxyG24GFHbKXJiPTAmr0LLDLDc5htfE10TvDt2GVY8VDkOHIY03n7Bx9wbeG9XB7k4VKEg4N/wrDoZIYztlO2q4aug2e1kXoqvC/hC9jBvp6WBUSte0i2IkVyD81FMc6bfbQqDMUVWfxnId2xpcASTRkZ12v/gipImseJj694ReUqLJAkliCUIIbYKPgZK0JeaaZ2y7MeSF2Mt4wfMYaNNiqxV0IH1iZ9IFGUqGtkzOWk3zlukjQ7ucBcvrmve7g5+cbTwqfihdfvd+XaY6nHfK5auUswa6jrSjDoRU4oIFNZTEEFar8hl4OS2Nh1ZjLo2ePmrapj1qYpVKIcJEFXVfSr/BEdW//gGI7zf3Ywv07rFR46Pj+68+BDIWfoWof9m+DhjrC0cumWfhD9WAJJg=",
       "tabs": [
         {
           "fit_indexes": [
@@ -93684,12 +93684,12 @@
           ],
           "ellipse": {
             "center": [
-              -247.50702247194678,
-              -38.070622107413904
+              -247.51160119310592,
+              -38.08205105194596
             ],
-            "semi_major": 61.217067256599194,
-            "semi_minor": 57.2170864247486,
-            "phi": 0.2892408613101889
+            "semi_major": 61.218072510064246,
+            "semi_minor": 57.2183397894564,
+            "phi": 0.29301155775779275
           },
           "indent": false,
           "tangent_indexes": [
@@ -93704,32 +93704,32 @@
           ],
           "ellipse": {
             "center": [
-              -55.38846763838988,
-              187.1728133271503
+              -55.38377386498449,
+              187.1584413515977
             ],
-            "semi_major": 65.85070658807415,
-            "semi_minor": 53.80267376786881,
-            "phi": 2.1168500016706946
+            "semi_major": 65.83402335694895,
+            "semi_minor": 53.78203280101935,
+            "phi": 2.118512368363009
           },
           "indent": true,
           "tangent_indexes": [
-            779,
+            780,
             1079
           ]
         },
         {
           "fit_indexes": [
             1479,
-            1749
+            1750
           ],
           "ellipse": {
             "center": [
-              257.86384246831824,
-              6.308289042465607
+              257.7136892175666,
+              6.260256128152279
             ],
-            "semi_major": 59.245863889937816,
-            "semi_minor": 56.616997314875114,
-            "phi": 1.7065205218998039
+            "semi_major": 59.26957615093035,
+            "semi_minor": 56.742329406491585,
+            "phi": 1.6803640584964874
           },
           "indent": false,
           "tangent_indexes": [
@@ -93744,12 +93744,12 @@
           ],
           "ellipse": {
             "center": [
-              -18.149023373843658,
-              -179.87085669846604
+              -18.131082410848233,
+              -179.88354592271196
             ],
-            "semi_major": 64.69462883794458,
-            "semi_minor": 54.1983080286904,
-            "phi": 1.2321382879324898
+            "semi_major": 64.69688394344004,
+            "semi_minor": 54.17568417476914,
+            "phi": 1.2321178526635206
           },
           "indent": true,
           "tangent_indexes": [
@@ -93771,86 +93771,86 @@
           645
         ]
       },
-      "points": "eJyFVe16hiAILcW6/7t6f+2StsX3AdszBDIzFTjgz+f7a06aYzaiR8Y2EjRexv4YscmDWRWTaqbz4VNZ5PBmHJLKBFiaqiBZU5ps0mi6msam4pR25OIGUiFuxoWWcTRmkXysda06oHP87yBbXzec4UM/3shOP/fo42HOmKMPwtfN/vrtzTXlSO4u/419emJIre8KniH25ip/a52jjCVkEjdOt/HTmO/7epooaYVdgFn5L0CyWKwdO+XWHa0Fq91ww2uCdmywjbxpQN3SzwXSscQxk49TT9tZ80aO5laFP9WIkpg9P1+/nP37/g17ZU32qsbsthBcEECPShnDSRjrDDl2HQOtE6GvrcLgECkQAI8hmuVhuTBi4IAeFD2A7wnAOgzEDuOg6y5GI5bdDCUHeNIy0Q5XJmJNWpYI6tKiLFCp/LFCsuxZpeOlF2yJh4vogVNLlu12/kMx5ygLqxfMvjzj1lsxBYx2c2pZJ1ALHjChzqHyCq361Wr/bIXfkzevz9nqQrnWoE5YjRhYIfQSyyum32IQyn5rRVeDi2yhDkAZ2jKNeqwzVBA+Q3JmKgBVNkEidKs4MnyK8MVoEs7YX2Aa0S88cCON",
+      "points": "eJyNVVl2xSAIjYq6/129ry6pbZDpQnJOi4CaOIEX/Pl8f41Bo49CdEt/fHG6f1HPn17H+eijubBiEs3UmBuzqMuKsksoFeBTRDn1I7rBg4apoazKTzmU0REkQlyUE01lL8xHoppzzfxBhtlsJ11fNjRHGsM5az8MGX0km9DE8v/Ry6uWr+CdMgAWEsc2vFJtm4LaBZotTSuNuoBBJnBjtJXvwrz3ustRpyQ2AWZlU4DOYr627xRbV7QmrF5g6gV4lUg4eDVJgAW0hsdL9BGEoQMHEeDBJ6HXZecUN3ysDYaAMSkw26uN5c//eg02iD3Zq3JnW69gwQUGwzcchHcdV45NwwBU0CnjfDfHQIWAuyxhWzyqsdCtH78SgsF0bfjiG2HstHYyGrFsZijpj9OaXE0VaXBm4qS0SNLSSUye0iJBhbJqukTa01S3puyg+044XNwXODVF2dPOP8jGXAAajfljIRyQcofk0CsMN6PNnGN/moFrmWQuE2pF0707aUzI/VriBdW3M57PUfJCetYgT/j7OyI5yCMWT8zzHfOrFKtWPFv+gi27YOe1VBmsxO0WRxGrmQDOgYeYswCpB05I9OJQd2rgFzBcx7w0rUv0C36WI5U=",
       "tabs": [
         {
           "fit_indexes": [
-            143,
-            391
+            144,
+            392
           ],
           "ellipse": {
             "center": [
-              -129.09652155630891,
-              -104.88854920122287
+              -129.07523070815154,
+              -104.88893598771422
             ],
-            "semi_major": 58.39983233682939,
-            "semi_minor": 57.32193435218556,
-            "phi": 1.2910629647219862
+            "semi_major": 58.373626010468946,
+            "semi_minor": 57.3504244075109,
+            "phi": 1.3113491579244592
           },
           "indent": true,
           "tangent_indexes": [
-            130,
-            408
+            131,
+            409
           ]
         },
         {
           "fit_indexes": [
-            736,
-            1005
+            737,
+            1006
           ],
           "ellipse": {
             "center": [
-              -121.60775113600015,
-              149.67050579320647
+              -121.60915479373259,
+              149.67948986363058
             ],
-            "semi_major": 67.18040448224997,
-            "semi_minor": 54.61504025990995,
-            "phi": 2.5077137082438843
+            "semi_major": 67.17438122165848,
+            "semi_minor": 54.62323098259334,
+            "phi": 2.5076966722295837
           },
           "indent": true,
           "tangent_indexes": [
-            736,
-            1018
+            737,
+            1019
           ]
         },
         {
           "fit_indexes": [
-            1366,
-            1621
+            1367,
+            1622
           ],
           "ellipse": {
             "center": [
-              236.1689206323591,
-              110.72996552125927
+              236.16803413547842,
+              110.7116198971112
             ],
-            "semi_major": 58.47931507736205,
-            "semi_minor": 57.9413978100194,
-            "phi": 2.4396813975277967
+            "semi_major": 58.46515879677828,
+            "semi_minor": 57.950594348559655,
+            "phi": 2.4826317551891792
           },
           "indent": false,
           "tangent_indexes": [
-            1350,
-            1633
+            1351,
+            1636
           ]
         },
         {
           "fit_indexes": [
-            1962,
+            1963,
             2198
           ],
           "ellipse": {
             "center": [
-              65.0244535680915,
-              -160.73860256858742
+              64.9840858498928,
+              -160.3681224814398
             ],
-            "semi_major": 58.40318827435134,
-            "semi_minor": 52.65729612864355,
-            "phi": 1.2864913146116908
+            "semi_major": 58.07098987214478,
+            "semi_minor": 52.60034443514883,
+            "phi": 1.2558639929559035
           },
           "indent": true,
           "tangent_indexes": [
-            1940,
-            2213
+            1941,
+            2215
           ]
         }
       ],
@@ -93867,86 +93867,86 @@
           575
         ]
       },
-      "points": "eJyNVlt6riAMBBHcYfe/ij72q7nP4G/PCSGRuyRjYvv6+R7nTSXOekIJo5+nve6yb7HtR2rApKHF1RjjED6EVfQja5ci7KK3/okOrYcJW2VbII2sVpT9cHkNeNNBNxrPq3FrnqWn8BQOWsbrlss5K4jUPlWLsNZp+8ZZk96obFnloarhDzi+rXQtvhFLpTV76Wqgv7aHf6zk5bRPf/YDJygEEHdxcQkLXVavy/iFmoumSoszUW9xgqJvR+BRACwMBgjZGoRDh6HwCAgOclQIroxJdr2Tbx/fk1OZngoJ0NiBEtfRFwcP/9kuf3Z1X3oEVD3u/W0bJ0WzWvq5oaPJw+7dcCm7r6sZKaj0UgzMI42VZLsHUgNRSVdjuDaEbVtab7kAuneH9rgwZcFjZgTJqFOBCMLSOWFgzQg5GYyE/By2pdnPZXxqWcOwNNjyw7qwgSse+/wpcQMxB8VNiqCLbgdh9a21LeH2h5H3yfEyFPDdT6bUpwvsC5GrPS7O9w8YuyikXw6WVQUcGhlnLsAJqEo7qREy05Jb5rotzWvOqDRSIWlEoCuy8foZKPJc5wdu1qQcuugegV3KrtAPAJ/YN2cePeb5C0nfInw=",
+      "points": "eJyFVVuS4CAIRA3miHP/S+zn1kSejSY1io2oQQOI9PP/37hWGQEpFoTZvbN9tms5VLxKKbiSIdXYGKMv6osEWo/WemsCTaFReys9yb4yFVhGNK1Ctvk6BpwUD1t/PU2QErvI2vjiRV6m0nxwGjkz1C4w9rpIGqte34yLB9KWWQ+WgnXqChdyYTgnrQmeMfe8jWbnXHwK79rbOQZk3raAIAqim8jwafet9FHIgIRJNcLSyJTLVmcERnB6qCp4JJZfxTi0MFw0xMyXcHCUQ201MKvrh+vqqtp262HnMF/WAsDt3h2I38WPeq3sLzn9uZy4LB9uKX6j+22ctvnCyioKPxM6Gl0sbiVMJ+i+5mkp/diSafNs1cNYAmRR6jGU8ZTlphqvhHFLU9qDQj78jIhsoEzTB0cOibyTqQgS08UwMdmTjuUk1bZ2mbrfcVcM/bZFc9uWSaJ6vW68qx96TgTNqGCdD1JnApdUuomf0vZJlV9mvhfDcaJNc5Qwd12Ga1oWzXgKsMwAQ9/DJerMPTlM9W6xfHmCY8ywvm/x3G0vPT4yRiMTUy3XgOenvK323GWQojXx9LP+B76ljB0bxwjHMWbY/Bc61SJs",
       "tabs": [
         {
           "fit_indexes": [
-            198,
-            449
+            177,
+            450
           ],
           "ellipse": {
             "center": [
-              -98.16907037888002,
-              -146.53952607234632
+              -99.89339171890437,
+              -152.6844392428478
             ],
-            "semi_major": 59.9490639399572,
-            "semi_minor": 53.62493075847039,
-            "phi": 0.29094138654470325
+            "semi_major": 64.3003281109234,
+            "semi_minor": 56.36316700125663,
+            "phi": 0.9866075103366121
           },
           "indent": true,
           "tangent_indexes": [
-            181,
-            461
+            182,
+            467
           ]
         },
         {
           "fit_indexes": [
-            768,
-            1008
+            769,
+            1009
           ],
           "ellipse": {
             "center": [
-              -158.67072610713052,
-              47.62282859011469
+              -158.69037542197842,
+              47.6368716517687
             ],
-            "semi_major": 57.57489352049895,
-            "semi_minor": 56.86673948858816,
-            "phi": 0.12430492233051495
+            "semi_major": 57.58760473998398,
+            "semi_minor": 56.85003859357717,
+            "phi": 0.11140884482765111
           },
           "indent": true,
           "tangent_indexes": [
-            752,
-            1024
+            753,
+            1025
           ]
         },
         {
           "fit_indexes": [
-            1343,
-            1606
+            1321,
+            1590
           ],
           "ellipse": {
             "center": [
-              88.59998723893342,
-              244.89792776660187
+              85.14767489836606,
+              244.83426595510662
             ],
-            "semi_major": 63.96124192423764,
-            "semi_minor": 53.78631868808103,
-            "phi": 1.5797738022056695
+            "semi_major": 64.5071382772709,
+            "semi_minor": 55.07769636321878,
+            "phi": 1.0221133337534787
           },
           "indent": false,
           "tangent_indexes": [
-            1323,
-            1601
+            1324,
+            1604
           ]
         },
         {
           "fit_indexes": [
-            1968,
-            2235
+            1972,
+            2236
           ],
           "ellipse": {
             "center": [
-              216.07370698126633,
-              -141.62584747299388
+              216.95385421767796,
+              -141.73740503243266
             ],
-            "semi_major": 62.76740584635097,
-            "semi_minor": 57.306809630997805,
-            "phi": 3.077466373187062
+            "semi_major": 61.68071787191097,
+            "semi_minor": 57.41231882990415,
+            "phi": 3.094073869240144
           },
           "indent": false,
           "tangent_indexes": [
-            1953,
-            2232
+            1956,
+            2236
           ]
         }
       ],
@@ -93963,7 +93963,7 @@
           590
         ]
       },
-      "points": "eJyFVgl2xSAIlBjkGr3/OXquvn7ZHNS+goALcRvUtK+f7/6e1Ivddffkqh/0qDxKbpwoxXNbSgHqJtqld/6hVyVmsaasxCZmgl/ml0vZOFuZtRS11lE2h7+O/AQ/YVP9k++lIRd326oPzzSpNRVNjWQaaUFSVC0VIldkTCpkgzzBAAHBZA40ewEnjKNUQFoolbhihAvSDSPAAL7DaPQ4fAIcmNUtFPue62cLlnZ77Wxv/GMQ0L34qXXACZFqSyEriCW/N5/flV7Tw2MDSJrM9JHx0WOyqWFqDD60mlKxkZhYdxKUI82I1XSLY8mJlXDGZZBviAf242oP64LKitydzyObJ3UR+V1mIzWDDnY39pWq2g/ltYAVZCunuz9t3rWCVkaaYyADsARUZaDZ6wWbZByliz7tOYjcHY8PoV/JRQhEUgmiskkY+HloamX6IFB4h0pesB6kGbpONhs/JrCFSsdBmYpNRTaLmtX0zuTPkF19cP+Vt7mDbC94Pop5qbK9d2yD+Mjnqa0Q3HCqdRe/W2HtyXxny9O9Zt+5X9dY9dn8tw9meJnyK8D7viRWZdGFIwgjFld+rKtzBQV0iHAPBtyd6u/HmrfpX42GIl0=",
+      "points": "eJx1Vol1wCAIjTHIGt1/js7V1yjXRwwC4k0AMdfP329/KvRU77wrKusV7on3BOEOzUmlDZ0A+iIta+8JzyLTIlReQEHk5SF6KLWl+CjhBNKNKE1+cZ3sCplqgi73+0vOk4x6tdU0UZs44boWLbwaz4ovA04stxI0ZU3K3Hftfi/SAi5ooEz4AqWeSR2/OSm8lOOKwF2AJx9ZQxHjVKhrHN7mnEDXGu27f0jtOI9WAeR98OMQ4L0Oq8MbeuoKhkXdqHLbJx3XYU/M0NgA4IsnvjRePmYRtugFGlBTyJSHE+hy2Y4N/KQZsQtPccyuWApn/Awzh8b1rWwP6+SVviUYSDV+T/G21oS2UE6yOxXWBSWvs6HbZwM7mnx5O89vp+npROtgcQEPcCWPLHq19zMO8SitA691PYTPE8vCrK1FJARSiqFkI7xNcWda7owE66bDFMqeXzVGPXIVRJt8SxwIuN8ZEmaiN5e48Jmor9BDOW3mp7kDbYk2lllOJXnuSA7Rk+udzS44+olr49C1xYQbZT6z+HJv37O3Kq9LvuegQFGnPwHa7ZLym0cfFPYgtFgMeUTmHFbhhujuQeB3Bfj7SM4X/g9jSCJW",
       "tabs": [
         {
           "fit_indexes": [
@@ -93972,12 +93972,12 @@
           ],
           "ellipse": {
             "center": [
-              -155.742443107137,
-              -51.354167190408745
+              -155.75057764375643,
+              -51.34701650370081
             ],
-            "semi_major": 57.340633196703116,
-            "semi_minor": 54.646120852484174,
-            "phi": 1.6749547659019386
+            "semi_major": 57.353208951127,
+            "semi_minor": 54.60816797499867,
+            "phi": 1.6751655912152905
           },
           "indent": true,
           "tangent_indexes": [
@@ -93987,17 +93987,17 @@
         },
         {
           "fit_indexes": [
-            1075,
+            1074,
             1328
           ],
           "ellipse": {
             "center": [
-              -62.203744381779586,
-              177.8959490078232
+              -62.27580326845544,
+              178.01776777650187
             ],
-            "semi_major": 58.18120458014851,
-            "semi_minor": 52.817894679847974,
-            "phi": 2.6342936514930937
+            "semi_major": 58.29037362507369,
+            "semi_minor": 52.84267602182648,
+            "phi": 2.612417766308522
           },
           "indent": true,
           "tangent_indexes": [
@@ -94007,41 +94007,41 @@
         },
         {
           "fit_indexes": [
-            1752,
-            2025
+            1751,
+            2024
           ],
           "ellipse": {
             "center": [
-              262.23497784569514,
-              18.269537107024792
+              262.239020417787,
+              18.267828684277607
             ],
-            "semi_major": 60.989280957423674,
-            "semi_minor": 56.80205420990283,
-            "phi": 0.12871322810861152
+            "semi_major": 60.99059860970474,
+            "semi_minor": 56.78522781339715,
+            "phi": 0.13084401279777794
           },
           "indent": false,
           "tangent_indexes": [
-            1742,
-            2048
+            1741,
+            2047
           ]
         },
         {
           "fit_indexes": [
-            2351,
+            2350,
             161
           ],
           "ellipse": {
             "center": [
-              13.929622287065323,
-              -257.8312762944212
+              13.91607292345414,
+              -257.8321295832853
             ],
-            "semi_major": 71.03168092196657,
-            "semi_minor": 59.74167184211652,
-            "phi": 2.948918811730646
+            "semi_major": 71.03578882993021,
+            "semi_minor": 59.74570569044347,
+            "phi": 2.9497572123065607
           },
           "indent": false,
           "tangent_indexes": [
-            2331,
+            2330,
             183
           ]
         }
@@ -94059,21 +94059,21 @@
           525
         ]
       },
-      "points": "eJyVVWG6BREI5aax/8XcVbw9ve+h0inmx6scNIlRKN/fH2pCBBh7QUftYnc26E33ijCEQEyzeMqkz2D6DJQiVBWWLBYZYAVUYuTiLsylel+y5iOntRyD8Kt5OxoH0GIygUUWPVKeR0RhVzdibPDi5xFP069OpbB3lPae2s42okZZmTvR9jS92rfwZYJHrQLuCKaqRuNkeB3mAz0rNBUmlcG1TCwqpXQt1uilT+xFWVTKBjpESJ2p94r0qWcCOkMW7vVbHtJKQMnAlIKwq3hSInFscFQ2BvudF3bUZEpdw3HUzjrF7IxqbqZIwgl+SQ4ccYR6LLAGi7Cd50wzKBDzgg0Pa7fYZhNr1lMfqO/ssF5N7rvLTLRBz+CFg/ojNVwIdkHc2UDvArw8+irKQJrnvUQW2KjLRvRf0/MUM3/nu+R5SG8lioVQ5zlHKSPEo5wrPXIhSMW3uResUc4qhmOf8vwFvoEq7du96dts18qQEYsVGIarXDsevBDLcOvf9P+2vLnPY7MFdjg0rv9wTITPWpqLwVnnNO7yLh5LBYs0PD2mbxu13+DDlPF70MFQXzQsEvzJK89+Ff8B+1wi/w==",
+      "points": "eJyVVQlyxSAIlU+I9z9MT9E7dWpkCQ9NpkVAQdwAtX39fPOhwImjBDo+NnZrg590G4OkD0Wg62e58ILPKPwZXEmBjE2cRVFrCpm8++NMh/ocPqPNPnGuxzfM7TiDo1Z3HALMKKFcOGnAqXSeisZSvYLkhsyilcxpbR1j4WQOn7pnD+aDqxKFF3kdkeR1Lgya+59SO/UQGldDkKjq7qzQVJjQRqF28WbYWjeyxuBdyUpvLdpu4EMUqOmUZJjgc9OdkzkPPQvjUJ6IbAk40w9TMHn1vjw1EQUbsirhlvq9s6sWy8d+Vi8vzicMKz03dyGnOu1rZEHgNB2M3a90BSTFvL02qC091qRVD+B6ComSreWQ45VoA85RJh/QT63vB8FIHoozreHt6JOsJLA87w2LsuDgrJL4jVLy57zXVNc8x/xWYCTOOnyMc1R1Rr3QTS90jpFty7eb6oxrheGIWw492NezNvstd+Gj0ZNofrfAwGsv5eHf/weCcjH/h6W82K49uLsYK6Vnt+b2cMsK9gFKH7zXcX/YYDYsByx/6ZOj4g9+MBUwKQeSXh0ypTSf/vIST/HxC/t1Iv8=",
       "tabs": [
         {
           "fit_indexes": [
             206,
-            469
+            468
           ],
           "ellipse": {
             "center": [
-              -32.570405979010836,
-              -190.78257156122393
+              -32.48323464906102,
+              -190.6234935722893
             ],
-            "semi_major": 62.36648894726921,
-            "semi_minor": 54.78110318065544,
-            "phi": 0.6739036849229851
+            "semi_major": 62.13505535246519,
+            "semi_minor": 54.76868842903027,
+            "phi": 0.6674624234512354
           },
           "indent": true,
           "tangent_indexes": [
@@ -94088,12 +94088,12 @@
           ],
           "ellipse": {
             "center": [
-              -150.75499011216303,
-              2.0996839764830377
+              -150.70444541321453,
+              2.066818226965032
             ],
-            "semi_major": 59.851925550139875,
-            "semi_minor": 55.787302067414224,
-            "phi": 0.2385483851310668
+            "semi_major": 59.823034058172716,
+            "semi_minor": 55.7755880528273,
+            "phi": 0.2496065857102101
           },
           "indent": true,
           "tangent_indexes": [
@@ -94108,12 +94108,12 @@
           ],
           "ellipse": {
             "center": [
-              12.205204236367239,
-              192.80021688739782
+              12.196646415922663,
+              192.8184029425939
             ],
-            "semi_major": 58.67263639565696,
-            "semi_minor": 53.55744361566166,
-            "phi": 2.4220663888541036
+            "semi_major": 58.67274355568165,
+            "semi_minor": 53.5574661786598,
+            "phi": 2.4209357489914534
           },
           "indent": true,
           "tangent_indexes": [
@@ -94125,17 +94125,17 @@
       "edges": [
         {
           "fit_indexes": [
-            1927,
+            1925,
             2432
           ],
           "line": {
             "pt0": [
-              265.95897325058786,
-              196.1165758814772
+              266.18058866548415,
+              198.0329564841214
             ],
             "pt1": [
-              194.59043470839651,
-              -309.11657588147716
+              194.64619356107835,
+              -309.0329564841214
             ]
           }
         }
