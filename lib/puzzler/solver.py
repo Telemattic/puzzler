@@ -414,6 +414,7 @@ class PuzzleSolver:
         self.expected = expected
         self.tab_pairs = tab_pairs
         self.last_refine = None
+        self.pocket_cache = collections.OrderedDict()
 
     def solve(self):
         if self.raft:
@@ -620,11 +621,38 @@ class PuzzleSolver:
 
         return fits
 
-    @functools.lru_cache(maxsize=128)
+    def make_key_for_pocket(self, pocket):
+        keys = []
+        for p in pocket.pieces:
+            c = self.raft.coords[p]
+            a = c.angle
+            x, y = tuple(c.xy)
+            keys.append((p, float(a), float(x), float(y)))
+        return (pocket.tab_a, pocket.tab_b, tuple(sorted(keys)))
+
     def score_pocket(self, pocket):
 
-        pocket_raft = self.raft
-        pf = puzzler.pocket.PocketFitter(self.raftinator, pocket_raft, pocket, 1)
+        cache = self.pocket_cache
+
+        key = self.make_key_for_pocket(pocket)
+        if key in cache:
+            # cache hit: move the entry to the end to mark it as
+            # most-recently-used
+            cache.move_to_end(key)
+            return cache[key]
+
+        result = self.score_pocket_impl(pocket)
+
+        cache[key] = result
+        if len(cache) > 128:
+            # pop the first item, aka the LRU
+            cache.popitem(last=False)
+
+        return result
+
+    def score_pocket_impl(self, pocket):
+
+        pf = puzzler.pocket.PocketFitter(self.raftinator, self.raft, pocket, num_refine=1)
 
         fits = []
 

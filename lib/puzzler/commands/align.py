@@ -696,6 +696,13 @@ class AlignTk:
 
         s = self.var_show_raft_alignment.get()
 
+        s2 = s.removeprefix("Raft\n").rstrip()
+
+        if s2 != s:
+            print(f"Cleaning paste from Tableau, {s=} {s2=}")
+            self.var_show_raft_alignment.set(s2)
+            s = s2
+
         pieces = dict([(i.piece.label, i.piece) for i in self.pieces])
 
         def print_coords(raft):

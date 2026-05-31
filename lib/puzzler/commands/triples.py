@@ -1,4 +1,5 @@
 import collections
+import copy
 import csv
 import decimal
 import itertools
@@ -18,7 +19,9 @@ def try_triples(quad, *, pieces, num_refine=1, tab_pairs=None, early_exit=False)
     raftinator = puzzler.raft.Raftinator(pieces)
     
     def remove_piece_from_raft(raft, label):
-        coords = raft.coords.copy()
+        # make a deep copy so that coords in the cloned raft are
+        # distinct objects from the original raft coordinates
+        coords = copy.deepcopy(raft.coords)
         coords.pop(label)
         new_raft = puzzler.raft.Raft(coords, None)
         return raftinator.refine_alignment_within_raft(new_raft)

@@ -1,5 +1,6 @@
 import puzzler
 import collections
+import copy
 import functools
 import itertools
 import operator
@@ -63,7 +64,7 @@ class RaftFactory:
 
     def merge_rafts(self, dst_raft: Raft, src_raft: Raft, src_raft_coord: Coord) -> Raft:
 
-        coords = dst_raft.coords | self.transform_coords(src_raft_coord, src_raft.coords)
+        coords = copy.deepcopy(dst_raft.coords) | self.transform_coords(src_raft_coord, src_raft.coords)
         return Raft(coords, dst_raft.size)
 
 AxisFeatures = List[Features]

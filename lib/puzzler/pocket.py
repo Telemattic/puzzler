@@ -299,6 +299,12 @@ class PocketFinder:
 
 class PocketFitter:
 
+    # min_tabs_error   -- error if just matched by tabs with no other constraints on the pocket
+    # pocket_error     -- error fitting to the as-is pocket
+    # min_pocket_error -- error if the pocket is refined w/ the piece in place
+    # raft_error       -- error if fit to the as-is overall raft (of which the pocket is a subset)
+    # min_raft_error   -- error if the raft is globally optimized for the fit of this piece
+
     class FitException(Exception):
         pass
 
@@ -309,8 +315,7 @@ class PocketFitter:
         self.pocket = pocket
 
         pocket_coords = {i: dst_raft.coords[i].copy() for i in pocket.pieces}
-        pocket_raft = puzzler.raft.Raft(pocket_coords, None)
-        self.dst_raft = self.raftinator.refine_alignment_within_raft(pocket_raft)
+        self.dst_raft = puzzler.raft.Raft(pocket_coords, None)
 
         self.tab_matcher = PocketTabMatcher(self.pieces, pocket)
 
