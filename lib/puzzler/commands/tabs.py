@@ -39,9 +39,6 @@ def iterate_over_tabs(pieces):
             else:
                 outdents.append(f)
 
-    #print(f"outdents={','.join(str(i) for i in outdents)}")
-    #print(f"indents={','.join(str(i) for i in indents)}")
-
     # keep the batchsize larger to keep the grain from getting too
     # small, but don't let it get too large and blow out caching
     bs = 16
@@ -49,10 +46,28 @@ def iterate_over_tabs(pieces):
     while bs * bs < n and bs < 64:
         bs += 1
 
-    #print(f"batchsize={bs}")
-
     return list(itertools.product(itertools.batched(outdents, bs), itertools.batched(indents, bs)))
-    
+
+def format_run(a, b):
+    return str(a) if a == b else f"{a}-{b}"
+
+def format_indices(indices):
+
+    assert np.all(indices % 10 == 0)
+
+    runs = []
+
+    i = 0
+    n = len(indices)
+    while i < n:
+        j = i+1
+        while j < n and indices[j] == indices[j-1]+10:
+            j += 1
+        runs.append(format_run(indices[i],indices[j-1]))
+        i = j
+
+    return ','.join(runs)
+        
 class TabsComputer:
 
     def __init__(self, pieces, refine):
@@ -99,6 +114,7 @@ class TabsComputer:
             fit_error = puzzler.raft.FitError(seam.error, len(seam.src.indices))
             retval['sse'] = fit_error.sse
             retval['n'] = fit_error.n
+            retval['indices'] = format_indices(seam.src.indices)
         except Exception as x:
             print(f"error processing {desc},", x)
 
@@ -141,7 +157,7 @@ def tabs_main(args):
     print(f"{len(puzzle.pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
     with open(args.output, 'w', newline='') as f:
-        field_names = 'dst_label dst_tab_no src_label src_tab_no raft sse n mse rank'.split()
+        field_names = 'dst_label dst_tab_no src_label src_tab_no raft sse n mse rank indices'.split()
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
