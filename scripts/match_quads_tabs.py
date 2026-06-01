@@ -8,7 +8,6 @@ import argparse
 import collections
 import csv
 import networkx as nx
-#from networkx.algorithms import bipartite
 import puzzler
 
 def load_quads(input_csv_path):
@@ -103,6 +102,27 @@ def match_nx(puzzle, quads):
         a, b = s.split(':')
         return a, int(b)
 
+    def output_dotty(path, g, m):
+
+        nodes_to_remove = set()
+        for a, b in g.edges:
+            if len(g.edges(a))==1 and len(g.edges(b))==1:
+                nodes_to_remove.add(a)
+                nodes_to_remove.add(b)
+        g.remove_nodes_from(nodes_to_remove)
+
+        with open(path, 'w',) as f:
+
+            print("graph G {", file=f)
+            for n in sorted(g.nodes):
+                color = 'red' if n in top_nodes else 'green'
+                print(f"  \"{n}\" [color={color}]", file=f)
+
+            for a, b in g.edges:
+                style = 'solid' if m.get(a,'') == b else 'dashed'
+                print(f"  \"{a}\" -- \"{b}\" [style={style}]", file=f)
+            print("}", file=f)
+
     G = nx.Graph()
     
     for piece in puzzle.pieces:
@@ -130,30 +150,13 @@ def match_nx(puzzle, quads):
 
     m = nx.bipartite.maximum_matching(G, top_nodes)
     unmatched = G.nodes - set(m.keys())
-    print("unmatched:", ','.join(sorted(unmatched)))
+    if len(unmatched):
+        print("unmatched:", ','.join(sorted(unmatched)))
+    else:
+        print("unmatched: None!")
 
-    def is_special(n):
-        return len(G.edges(n)) == 1
-
-    nodes_to_remove = set()
-    for a, b in G.edges:
-        if is_special(a) and is_special(b):
-            nodes_to_remove.add(a)
-            nodes_to_remove.add(b)
-    print(f"before: {len(nodes_to_remove)=} {len(G.nodes)=} {len(G.edges)=}")
-    G.remove_nodes_from(nodes_to_remove)
-    print(f"after: {len(G.nodes)=} {len(G.edges)=}")
-
-    with open('dotty.dot', 'w',) as f:
-
-        print("graph G {", file=f)
-        for n in sorted(G.nodes):
-            color = 'red' if n in top_nodes else 'green'
-            print(f"  \"{n}\" [color={color}]", file=f)
-            
-        for a, b in G.edges:
-            print(f"  \"{a}\" -- \"{b}\"", file=f)
-        print("}", file=f)
+    if False:
+        output_dotty('dotty.dot', G, m)
 
     return m
 
