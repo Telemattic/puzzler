@@ -38,6 +38,29 @@ def load_expected(path):
 
     return good_matches
 
+def load_quads(path):
+    with open(path, 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        quads = [row for row in reader if int(row['rank']) == 1]
+
+    # we simply processed them and assigned quad_no in the order
+    # they were found in the file
+    oldmap = dict()
+    for i, row in enumerate(quads):
+        r = int(row['row_no'])
+        c = int(row['col_no'])
+        oldmap[(r,c)] = 4*i
+ 
+    # make the new numbering deterministic, using the (row_no,
+    # col_no) tuple to order the quads
+    remap = dict()
+    for i, (rc, old_quad_no) in enumerate(sorted(oldmap.items())):
+        new_quad_no = i*4
+        for j in range(4):
+            remap[old_quad_no+j] = new_quad_no+j
+
+    return remap
+
 def parse_feature(f):
     m = re.match("([A-Z]+[0-9]+):([0-9])", f)
     assert m
@@ -50,7 +73,7 @@ def parse_raft(raft):
         retval.append((parse_feature(a), parse_feature(b)))
     return retval
 
-def repair_row(row, tabpairs, expected):
+def repair_row(row, tabpairs, expected, quads):
 
     def compute_lower_bound_mse(raft, fit_piece):
         sse = 0.
@@ -76,10 +99,13 @@ def repair_row(row, tabpairs, expected):
         
     if expected:
         row['correct_fit'] = 1 if is_correct_fit(row['raft']) else 0
+
+    if quads:
+        row['quad_no'] = quads[int(row['quad_no'])]
         
     return row
 
-def repair_triples(ipath, opath, tabpairs, expected):
+def repair_triples(ipath, opath, tabpairs, expected, quads):
 
     with open(ipath, 'r', newline='') as ifile:
         with open(opath, 'w', newline='') as ofile:
@@ -94,15 +120,16 @@ def repair_triples(ipath, opath, tabpairs, expected):
             writer.writeheader()
 
             for row in reader:
-                writer.writerow(repair_row(row, tabpairs, expected))
+                writer.writerow(repair_row(row, tabpairs, expected, quads))
     
 def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', help='input csv file of triples', required=True)
     parser.add_argument('-o', '--output', help='output csv file of "repaired" triples', required=True)
-    parser.add_argument('-t', '--tabpairs', help='input csv file of tabpairs')
-    parser.add_argument('-e', '--expected', help='input csv of good tab matches')
+    parser.add_argument('-t', '--tabpairs', help='input csv file of tabpairs, updates lower_bound_mse')
+    parser.add_argument('-e', '--expected', help='input csv of good tab matches, updates correct_fit')
+    parser.add_argument('-q', '--quads', help='input csv of quads used for original triples execution, updates quad_no')
 
     args = parser.parse_args()
 
@@ -114,7 +141,11 @@ def main():
     if args.expected:
         expected = load_expected(args.expected)
 
-    repair_triples(args.input, args.output, tabpairs, expected)
+    quads = None
+    if args.quads:
+        quads = load_quads(args.quads)
+
+    repair_triples(args.input, args.output, tabpairs, expected, quads)
      
 if __name__ == '__main__':
     main()
