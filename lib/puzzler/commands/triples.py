@@ -116,6 +116,22 @@ def triples_work(quad):
 
     return try_triples(quad, **TRIPLES_KWARGS)
 
+def read_quads(path):
+
+    quads = []
+    with open(path, 'r', newline='') as ifile:
+        reader = csv.DictReader(ifile)
+        quads = [row for row in reader if int(row['rank']) == 1]
+
+    # put the quads in a deterministic order
+    quads.sort(key=operator.itemgetter('row_no','col_no'))
+
+    for i, row in enumerate(quads):
+        # 4x because we'll do 4 separately ranked experiments per quad.  Gross.
+        row['quad_no'] = 4 * i
+
+    return quads
+
 def triples_main(args):
 
     puzzle = puzzler.file.load(args.puzzle)
@@ -124,14 +140,7 @@ def triples_main(args):
     
     assert len(pieces) == 1026
 
-    quads = []
-    with open(args.quads, 'r', newline='') as ifile:
-        reader = csv.DictReader(ifile)
-        for row in reader:
-            if int(row['rank']) == 1:
-                # 4x because we'll really do 4 separately ranked experiments per quad.  Gross.
-                row['quad_no'] = 4 * len(quads)
-                quads.append(row)
+    quads = read_quads(args.quads)
 
     with open(args.output, 'w', newline='') as ofile:
         fieldnames = 'quad_no ul_piece ur_piece ll_piece lr_piece drop_piece fit_piece raft mse seam_mse lower_bound_mse rank'
