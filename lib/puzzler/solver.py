@@ -4,6 +4,7 @@ import copy
 import csv
 from datetime import datetime
 import functools
+import heapq
 import itertools
 import json
 import math
@@ -15,6 +16,7 @@ import re
 import scipy
 import time
 from dataclasses import dataclass
+from typing import NamedTuple
 
 def pairwise_circular(iterable):
     # https://stackoverflow.com/questions/36917042/pairwise-circular-python-for-loop
@@ -415,6 +417,7 @@ class PuzzleSolver:
         self.tab_pairs = tab_pairs
         self.last_refine = None
         self.pocket_cache = collections.OrderedDict()
+        self.pocket_nscore = 2
 
     def solve(self):
         if self.raft:
@@ -501,15 +504,21 @@ class PuzzleSolver:
         # only works if you're doing the work to find the second-best
         # fit, and instead we're trying to score as few pieces as
         # possible
-        fits.sort(key=operator.itemgetter(1))
+        if False and self.tab_pairs:
+            fits.sort(key=operator.itemgetter(1))
+        else:
+            fits.sort(key=operator.itemgetter(0))
 
         for i, f in enumerate(fits[:20]):
-            r, mse, src_label, feature_pairs = f
+            r, (mse, src_label, feature_pairs, _) = f
             dst = ','.join(str(i[0]) for i in feature_pairs)
             src = ','.join(str(i[1]) for i in feature_pairs)
             print(f"{i:2d}: {src_label:4s} {mse=:5.1f} {src=} {dst=} {r=:.3f}")
 
-        _, _, src_label, feature_pairs = fits[0]
+        fit = fits[0][1]
+
+        src_label = fit.src_label
+        feature_pairs = fit.feature_pairs
 
         status = self.is_good_match(feature_pairs)
         if status is None or status:
@@ -604,18 +613,16 @@ class PuzzleSolver:
             v = self.score_pocket(pocket)
             # caching means we have to filter out any fits that are
             # invalid
-            v = [i for i in v if i[1] not in raft.coords]
-            
-            if len(v) > 1:
-                if v[1][0] != 0.:
-                    r = v[0][0] / v[1][0]
-                else:
-                    r = float('nan')
-                fits.append((r, *v[0]))
-            elif v:
-                fits.append((1., *v[0]))
+            v = [i for i in v if i.src_label not in raft.coords]
+            if not v:
+                continue
 
-            s = [f"{i[1]}:{i[0]:.1f}" for i in v[:3]]
+            r = float('+inf')
+            if len(v) > 1 and v[1].mse != 0.:
+                r = v[0].mse / v[1].mse
+            fits.append((r, v[0]))
+
+            s = [f"{i.src_label}:{i.mse:.1f}" for i in v[:3]]
 
             print(f"{pocket!s}: " + ', '.join(s))
 
@@ -639,7 +646,11 @@ class PuzzleSolver:
             # cache hit: move the entry to the end to mark it as
             # most-recently-used
             cache.move_to_end(key)
-            return cache[key]
+            result = cache[key]
+            # only return this cached result if all the returned fits
+            # are still available to be fit
+            if all(i.src_label not in self.raft.coords for i in result):
+                return result
 
         result = self.score_pocket_impl(pocket)
 
@@ -650,32 +661,62 @@ class PuzzleSolver:
 
         return result
 
+    class PocketScore(NamedTuple):
+        mse: float
+        src_label: str
+        feature_pairs: puzzler.raft.FeaturePairs
+        tab_error: float
+
     def score_pocket_impl(self, pocket):
 
-        pf = puzzler.pocket.PocketFitter(self.raftinator, self.raft, pocket, num_refine=1)
+        pf = puzzler.pocket.PocketFitter(
+            self.raftinator, self.raft, pocket, num_refine=1, tab_pairs=self.tab_pairs)
 
-        fits = []
+        def measure_fit(i):
+            mse, tab_error = pf.measure_fit(i.src_label, i.feature_pairs)
+            return PuzzleSolver.PocketScore(mse, i.src_label, i.feature_pairs, tab_error)
 
-        candidates = set(self.pieces.keys()) - set(self.raft.coords.keys())
+        def get_max_tab_error(scores):
+            return max(i.tab_error.mse for i in scores)
+
+        def heapify_max(scores):
+            # heapq.heapify_max requires 3.14
+            scores.sort(reverse=True)
+            return get_max_tab_error(scores)
+
+        def heapreplace_max(scores, m):
+            # heapq.heapreplace_max requires 3.14
+            scores[0] = m
+            scores.sort(reverse=True)
+            return get_max_tab_error(scores)
+
+        free_pieces = set(self.pieces.keys()) - set(self.raft.coords.keys())
+        candidates = pf.candidate_matches(free_pieces)
+
+        scores = [measure_fit(i) for i in candidates[:self.pocket_nscore]]
         
-        compute_seam_fit_error = self.tab_pairs is not None
-        min_seam_error = 10000.
+        if len(candidates) > self.pocket_nscore:
+
+            # we want a max heap so the top of the heap will be the
+            # element with the worst score so far (highest MSE) and
+            # thus the one that we'd like to replace should we find
+            # anything better
+            max_tab_error = heapify_max(scores)
         
-        for match in pf.candidate_matches(candidates, self.tab_pairs):
+            for i in candidates[self.pocket_nscore:]:
 
-            if compute_seam_fit_error and match.min_seam_error > min_seam_error:
-                break;
-                
-            mse, seam_fit_error = pf.measure_fit(match.src_label, match.feature_pairs, compute_seam_fit_error)
-            if compute_seam_fit_error:
-                if seam_fit_error.mse is None:
-                    print(f"score_pocket: {self.raftinator.format_feature_pairs(match.feature_pairs)}, {seam_fit_error=}")
-                elif min_seam_error > seam_fit_error.mse:
-                    min_seam_error = seam_fit_error.mse
-                
-            fits.append((mse, match.src_label, match.feature_pairs))
+                # if the never-to-be-achieved min_tab_error for this
+                # candidate is worse than the actual tab_error for the
+                # worst candidate found so far then we're done
+                # searching, as we "know" we'll be worse than it
+                if i.min_tab_error > max_tab_error:
+                    break
 
-        return sorted(fits, key=operator.itemgetter(0))
+                m = measure_fit(i)
+                if m.mse < scores[0].mse:
+                    max_tab_error = heapreplace_max(scores, m)
+
+        return sorted(scores)
 
     def save_tab_matches(self, path):
 

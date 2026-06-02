@@ -52,13 +52,13 @@ def try_triples(quad, *, pieces, num_refine=1, tab_pairs=None, early_exit=False)
 
         retval = []
 
-        pf = puzzler.pocket.PocketFitter(raftinator, triple_raft, pocket, num_refine)
+        pf = puzzler.pocket.PocketFitter(raftinator, triple_raft, pocket, num_refine, tab_pairs)
 
         candidates = set(pieces.keys()) - set(triple_raft.coords.keys())
 
         min_seam_error = 10000.
 
-        for match in pf.candidate_matches(candidates, tab_pairs):
+        for match in pf.candidate_matches(candidates):
 
             if early_exit and match.min_seam_error is not None and match.min_seam_error > min_seam_error:
                 break

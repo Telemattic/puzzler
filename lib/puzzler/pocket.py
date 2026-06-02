@@ -116,7 +116,7 @@ class PocketTabMatcher:
     class Match(NamedTuple):
         src_label: str
         feature_pairs: puzzler.raft.FeaturePairs
-        min_seam_error: Optional[float]
+        min_tab_error: float
 
     def __init__(self, pieces, pocket):
         self.pieces = pieces
@@ -148,8 +148,8 @@ class PocketTabMatcher:
 
             feature_pairs = PocketTabMatcher.make_feature_pairs(self.dst_tab_pair, src_tab_pair)
             if len(feature_pairs):
-                mse = lower_bound_error(feature_pairs) if tab_pairs else None
-                retval.append(PocketTabMatcher.Match(src_label, feature_pairs, mse))
+                min_tab_error = lower_bound_error(feature_pairs) if tab_pairs else float('NaN')
+                retval.append(PocketTabMatcher.Match(src_label, feature_pairs, min_tab_error))
                 
         return retval
         
@@ -163,7 +163,7 @@ class PocketTabMatcher:
                 print(x)
 
         if tab_pairs:
-            retval.sort(key=operator.attrgetter('min_seam_error'))
+            retval.sort(key=operator.attrgetter('min_tab_error'))
         
         return retval
 
@@ -299,30 +299,32 @@ class PocketFinder:
 
 class PocketFitter:
 
-    # min_tabs_error   -- error if just matched by tabs with no other constraints on the pocket
-    # pocket_error     -- error fitting to the as-is pocket
-    # min_pocket_error -- error if the pocket is refined w/ the piece in place
+    # min_tab_error    -- error if just matched by tabs with no other constraints on the pocket
+    # tab_error        -- tab_error fitting to the as-is pocket
+    # pocket_error     -- total error fitting to the as-is pocket
+    # min_pocket_error -- total error if the pocket is refined w/ the piece in place
     # raft_error       -- error if fit to the as-is overall raft (of which the pocket is a subset)
     # min_raft_error   -- error if the raft is globally optimized for the fit of this piece
 
     class FitException(Exception):
         pass
 
-    def __init__(self, raftinator, dst_raft, pocket, num_refine):
+    def __init__(self, raftinator, dst_raft, pocket, num_refine, tab_pairs):
         self.raftinator = raftinator
         self.pieces = raftinator.pieces
         self.num_refine = num_refine
         self.pocket = pocket
+        self.tab_pairs = tab_pairs
 
         pocket_coords = {i: dst_raft.coords[i].copy() for i in pocket.pieces}
         self.dst_raft = puzzler.raft.Raft(pocket_coords, None)
 
         self.tab_matcher = PocketTabMatcher(self.pieces, pocket)
 
-    def candidate_matches(self, candidates, tab_pairs=None):
-        return self.tab_matcher.candidate_matches(candidates, tab_pairs)
+    def candidate_matches(self, candidates):
+        return self.tab_matcher.candidate_matches(candidates, self.tab_pairs)
 
-    def measure_fit(self, src_label, feature_pairs, compute_seam_fit_error=False):
+    def measure_fit(self, src_label, feature_pairs):
 
         r = self.raftinator
 
@@ -337,13 +339,13 @@ class PocketFitter:
             print(f"PocketFitter.measure_fit: {r.format_feature_pairs(feature_pairs)} has no seams for alignment!", x)
             return (float("+inf"), puzzler.raft.FitError(0.,0.))
 
-        if compute_seam_fit_error:
+        if self.tab_pairs:
             seams = r.seamstress.seams_between_rafts(self.dst_raft, src_raft, src_coord)
 
             good_dsts = {i[0] for i in self.tab_matcher.dst_tab_pair if i is not None}
-            seam_fe = r.seamstress.fit_error_for_seams([s for s in seams if s.dst.piece in good_dsts])
+            tab_error = r.seamstress.fit_error_for_seams([s for s in seams if s.dst.piece in good_dsts])
         else:
-            seam_fe = None
+            tab_error = float('NaN')
 
         raft = r.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
 
@@ -353,8 +355,7 @@ class PocketFitter:
             seams = r.get_seams_for_raft(raft)
             
         mse = r.get_total_error_for_raft_and_seams(raft, seams)
-
         if mse is None:
             mse = float("+inf")
         
-        return (mse, seam_fe)
+        return (mse, tab_error)
