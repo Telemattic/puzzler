@@ -527,14 +527,29 @@ class PuzzleSolver:
             status = ' <BAD MATCH>'
         print(f"Placing {src_label}: {self.raftinator.format_feature_pairs(feature_pairs)}{status}")
 
+        r = self.raftinator
+
         dst_raft = self.raft
-        src_raft = self.raftinator.factory.make_raft_for_piece(src_label)
+        src_raft = r.factory.make_raft_for_piece(src_label)
         
         assert src_label not in dst_raft.coords
 
-        new_raft = self.raftinator.align_and_merge_rafts_with_feature_pairs(
-            dst_raft, src_raft, feature_pairs)
+        if False:
+            new_raft = r.align_and_merge_rafts_with_feature_pairs(
+                dst_raft, src_raft, feature_pairs)
+        else:
+            src_coord = r.aligner.rough_align(dst_raft, src_raft, feature_pairs)
+            
+            new_raft = r.factory.merge_rafts(dst_raft, src_raft, src_coord)
 
+            seams = r.seamstress.trim_seams(
+                r.seamstress.seams_between_rafts(dst_raft, src_raft, src_coord))
+            seam_error = r.raft_error.seam_error_for_raft(seams)
+
+            overlap_error = r.raft_error.overlap_error_for_raft(new_raft, {src_label})
+
+            print(f"solve_field: {src_label} error after placement: seams={seam_error.mse} overlap={overlap_error.mse}")
+        
         assert src_label in new_raft.coords
 
         self.update_raft(new_raft)
@@ -651,6 +666,7 @@ class PuzzleSolver:
             # are still available to be fit
             if all(i.src_label not in self.raft.coords for i in result):
                 return result
+            print("score_pocket: cache entry invalidated, recomputing")
 
         result = self.score_pocket_impl(pocket)
 
@@ -677,7 +693,7 @@ class PuzzleSolver:
             return PuzzleSolver.PocketScore(mse, i.src_label, i.feature_pairs, tab_error)
 
         def get_max_tab_error(scores):
-            return max(i.tab_error.mse for i in scores)
+            return max(i.tab_error.mse or 0. for i in scores)
 
         def heapify_max(scores):
             # heapq.heapify_max requires 3.14
@@ -694,6 +710,7 @@ class PuzzleSolver:
         candidates = pf.candidate_matches(free_pieces)
 
         scores = [measure_fit(i) for i in candidates[:self.pocket_nscore]]
+        count = len(scores)
         
         if len(candidates) > self.pocket_nscore:
 
@@ -715,6 +732,10 @@ class PuzzleSolver:
                 m = measure_fit(i)
                 if m.mse < scores[0].mse:
                     max_tab_error = heapreplace_max(scores, m)
+
+                count += 1
+
+        print(f"score_pocket_impl: measured {count} of {len(candidates)} candidates")
 
         return sorted(scores)
 
@@ -785,12 +806,7 @@ def from_json(pieces, s):
 
     assert set(pieces.keys()) == set(o['pieces'])
 
-    raft = parse_raft(o['raft'])
-
-    solver = PuzzleSolver(pieces)
-    solver.raft = raft
-
-    return solver
+    return parse_raft(o['raft'])
 
 def save_json(path, solver):
 

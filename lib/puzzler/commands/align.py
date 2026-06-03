@@ -536,7 +536,7 @@ class AlignTk:
                 r.coords[p.piece.label] = p.coords = Coord(c.angle, c.xy)
 
     def load_solver(self, path):
-        self.solver = puzzler.solver.load_json(path, self.solver.pieces)
+        self.solver.raft = puzzler.solver.load_json(path, self.solver.pieces)
         self.update_coords()
 
         self.scenegraph = None
