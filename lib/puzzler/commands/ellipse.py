@@ -373,13 +373,16 @@ class TabComputer:
                     closest_idx = i % n
                     closest_dot = dot
 
+            # print(f"closest_point_to_axis: {axis=} vec={make_unit_vector(closest_idx)} {closest_dot=} {closest_idx=}")
             return closest_idx
 
         avg = make_unit_vector(b) + make_unit_vector(a)
-        avg = avg / np.linalg.norm(avg)
 
-        aa = closest_point_to_axis(avg, range(a+20, a-150, -1))
-        bb = closest_point_to_axis(avg, range(b-20, b+150, 1))
+        avg = avg / np.linalg.norm(avg)
+        # print(f"find_tangent_points: {tab=} {avg=}")
+
+        aa = closest_point_to_axis(avg, range(a+20, a-100, -1))
+        bb = closest_point_to_axis(avg, range(b-20, b+100, 1))
         
         # print(f"  {aa=} {bb=}")
 
