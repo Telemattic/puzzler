@@ -345,7 +345,7 @@ class PocketFitter:
             good_dsts = {i[0] for i in self.tab_matcher.dst_tab_pair if i is not None}
             tab_error = r.seamstress.fit_error_for_seams([s for s in seams if s.dst.piece in good_dsts])
         else:
-            tab_error = float('NaN')
+            tab_error = puzzler.raft.FitError(0.,0.)
 
         raft = r.factory.merge_rafts(self.dst_raft, src_raft, src_coord)
 
