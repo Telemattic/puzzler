@@ -39,6 +39,12 @@ def try_triples(quad, *, pieces, num_refine=1, tab_pairs=None, early_exit=False)
         triple_raft = remove_piece_from_raft(good_raft, drop_label)
 
         pockets = puzzler.pocket.PocketFinder(pieces, triple_raft).find_pockets_on_frontiers()
+        if len(pockets) != 1:
+            print(f"{quad_no=}: dropped {drop_quadrant}={drop_label} and found {len(pockets)} pockets")
+            print(f"  quad_raft={quad['raft']}")
+            print(f"  {pockets=}")
+            quad_no += 1
+            continue
         assert len(pockets) == 1
 
         pocket = pockets.pop()
@@ -63,7 +69,7 @@ def try_triples(quad, *, pieces, num_refine=1, tab_pairs=None, early_exit=False)
             if early_exit and match.min_seam_error is not None and match.min_seam_error > min_seam_error:
                 break
 
-            mse, seam_fit_error = pf.measure_fit(match.src_label, match.feature_pairs, compute_seam_fit_error=True)
+            mse, seam_fit_error = pf.measure_fit(match.src_label, match.feature_pairs)
             if min_seam_error > seam_fit_error.mse:
                 min_seam_error = seam_fit_error.mse
 
@@ -80,7 +86,7 @@ def try_triples(quad, *, pieces, num_refine=1, tab_pairs=None, early_exit=False)
                    'raft': desc,
                    'mse': mse,
                    'seam_mse': seam_fit_error.mse,
-                   'lower_bound_mse': match.min_seam_error,
+                   'lower_bound_mse': match.min_tab_error,
                    'rank': None}
 
             retval.append(row)
@@ -118,7 +124,6 @@ def triples_work(quad):
 
 def read_quads(path):
 
-    quads = []
     with open(path, 'r', newline='') as ifile:
         reader = csv.DictReader(ifile)
         quads = [row for row in reader if int(row['rank']) == 1]
