@@ -43,14 +43,14 @@ def write_tabs(path, tabs):
                              'src_piece':src_piece,
                              'src_tab_no':src_tab_no})
 
+def parse_raft(s):
+    return [tuple(f.split('=')) for f in s.split(',')]
+
+def parse_tab(s):
+    a, b = s.split(':')
+    return a, int(b)
+
 def match_it(puzzle, quads):
-
-    def parse_raft(s):
-        return [tuple(f.split('=')) for f in s.split(',')]
-
-    def parse_tab(s):
-        a, b = s.split(':')
-        return a, int(b)
 
     all_tabs = set()
     for quad in quads:
@@ -93,19 +93,12 @@ def match_it(puzzle, quads):
 
     return retval
 
-def match_nx(puzzle, quads):
-
-    def parse_raft(s):
-        return [tuple(f.split('=')) for f in s.split(',')]
-
-    def parse_tab(s):
-        a, b = s.split(':')
-        return a, int(b)
+def match_nx(puzzle, quads, dottypath):
 
     def output_dotty(path, g, m):
 
         nodes_to_remove = set()
-        for a, b in g.edges:
+        for a, b, d in g.edges(data=True):
             if len(g.edges(a))==1 and len(g.edges(b))==1:
                 nodes_to_remove.add(a)
                 nodes_to_remove.add(b)
@@ -118,9 +111,10 @@ def match_nx(puzzle, quads):
                 color = 'red' if n in top_nodes else 'green'
                 print(f"  \"{n}\" [color={color}]", file=f)
 
-            for a, b in g.edges:
+            for a, b, d in g.edges(data=True):
                 style = 'solid' if m.get(a,'') == b else 'dashed'
-                print(f"  \"{a}\" -- \"{b}\" [style={style}]", file=f)
+                label = f"W={d['weight']}"
+                print(f"  \"{a}\" -- \"{b}\" [style={style} label=\"{label}\"]", file=f)
             print("}", file=f)
 
     G = nx.Graph()
@@ -130,13 +124,19 @@ def match_nx(puzzle, quads):
             node = f"{piece.label}:{tab_no}"
             G.add_node(node, bipartite=int(tab.indent))
 
+    edge_weights = collections.defaultdict(int)
     for quad in quads:
         
         if quad['rank'] != 1:
             continue
 
-        for dst, src in parse_raft(quad['raft']):
-            G.add_edge(src, dst)
+        for a, b in parse_raft(quad['raft']):
+            if a > b:
+                a, b = b, a
+            edge_weights[a,b] += 1
+
+    for (a, b), weight in edge_weights.items():
+        G.add_edge(a, b, weight=weight)
 
     # remove orphan nodes (tabs that were never matched)
     nodes_to_remove = set()
@@ -144,7 +144,9 @@ def match_nx(puzzle, quads):
         if len(G.edges(n)) == 0:
             nodes_to_remove.add(n)
 
-    G.remove_nodes_from(nodes_to_remove)
+    if nodes_to_remove:
+        print("orphaned tabs:", nodes_to_remove)
+        G.remove_nodes_from(nodes_to_remove)
     
     top_nodes = {n for n, d in G.nodes(data=True) if d["bipartite"] == 0}
 
@@ -155,10 +157,28 @@ def match_nx(puzzle, quads):
     else:
         print("unmatched: None!")
 
-    if False:
-        output_dotty('dotty.dot', G, m)
+    if dottypath:
+        output_dotty(dottypath, G, m)
 
     return m
+
+def validate_quads_against_tabs(quads, tabs):
+
+    def is_good(raft):
+        return all(tabs.get(a,'') == b for a, b in parse_raft(raft))
+
+    for q in quads:
+        raft = q['raft']
+        rank = q['rank']
+        if is_good(raft):
+            if rank != 1:
+                print(f"{raft=} is good, but is ranked {rank}")
+        else:
+            if rank == 1:
+                print(f"{raft=} is bad, but is ranked {rank}")
+                for a, b in parse_raft(raft):
+                    if tabs.get(a,'*') != b:
+                        print(f"  raft says {a}={b}, but actually {a}={tabs.get(a,'?')} and {b}={tabs.get(b,'?')}")
 
 def main():
 
@@ -169,13 +189,16 @@ def main():
                         help='input CSV of quads data')
     parser.add_argument('-o', '--output', required=True,
                         help='output CSV of tab correspondence')
+    parser.add_argument('-d', '--dotty',
+                        help="output dotty graph of non-trivial nodes in the matching graph")
 
     args = parser.parse_args()
 
     puzzle = puzzler.file.load(args.puzzle)
     quads = load_quads(args.quads)
-    tabs = match_nx(puzzle, quads)
+    tabs = match_nx(puzzle, quads, args.dotty)
     write_tabs(args.output, tabs)
+    validate_quads_against_tabs(quads, tabs)
 
 if __name__ == '__main__':
     main()
