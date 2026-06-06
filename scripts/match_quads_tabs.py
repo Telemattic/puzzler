@@ -145,7 +145,7 @@ def match_nx(puzzle, quads, dottypath):
             nodes_to_remove.add(n)
 
     if nodes_to_remove:
-        print("orphaned tabs:", nodes_to_remove)
+        print("orphaned tabs:", sorted(nodes_to_remove))
         G.remove_nodes_from(nodes_to_remove)
     
     top_nodes = {n for n, d in G.nodes(data=True) if d["bipartite"] == 0}
