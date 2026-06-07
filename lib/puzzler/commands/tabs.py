@@ -94,7 +94,7 @@ class TabsComputer:
 
         retval = {'dst_label':dst.piece, 'dst_tab_no':dst.index,
                   'src_label':src.piece, 'src_tab_no':src.index,
-                  'raft':desc, 'sse':None, 'n':None}
+                  'raft':desc, 'sse':1e8, 'n':64}
         try:
             r = self.raftinator
 
@@ -106,15 +106,15 @@ class TabsComputer:
             for i in range(self.refine):
                 seam = r.seamstress.seam_between_pieces(
                     dst.piece, raft.coords[dst.piece], src.piece, raft.coords[src.piece])
+                if seam is None:
+                    break
                 raft = r.refine_alignment_within_raft(raft, seams=[seam], fixed=dst.piece)
 
             seam = r.seamstress.seam_between_pieces(
                 dst.piece, raft.coords[dst.piece], src.piece, raft.coords[src.piece])
-
-            fit_error = puzzler.raft.FitError(seam.error, len(seam.src.indices))
-            retval['sse'] = fit_error.sse
-            retval['n'] = fit_error.n
-            retval['indices'] = format_indices(seam.src.indices)
+            if seam:
+                retval['sse'] = seam.error
+                retval['n'] = len(seam.src.indices)
         except Exception as x:
             print(f"error processing {desc},", x)
 
@@ -143,7 +143,7 @@ def tabs_main(args):
 
     # HACK
     if False:
-        puzzle.pieces = [i for i in puzzle.pieces if i.label in ('B4', 'A5', 'O20')]
+        puzzle.pieces = [i for i in puzzle.pieces if i.label in ('G22', 'M30', 'Y30', 'R5', 'R10')]
                 
     num_indents = 0
     num_outdents = 0
@@ -157,7 +157,7 @@ def tabs_main(args):
     print(f"{len(puzzle.pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
     with open(args.output, 'w', newline='') as f:
-        field_names = 'dst_label dst_tab_no src_label src_tab_no raft sse n mse rank indices'.split()
+        field_names = 'dst_label dst_tab_no src_label src_tab_no raft sse n mse rank'.split()
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 
