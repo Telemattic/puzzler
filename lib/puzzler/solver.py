@@ -17,6 +17,9 @@ import scipy
 import time
 from dataclasses import dataclass
 from typing import NamedTuple
+import logging
+
+logger = logging.getLogger('puzzler')
 
 def pairwise_circular(iterable):
     # https://stackoverflow.com/questions/36917042/pairwise-circular-python-for-loop
@@ -51,16 +54,16 @@ class BorderSolver:
                 v1 = puzzler.math.unit_vector(l1.pts[1] - l1.pts[0])
                 cross = np.cross(v0, v1)
                 with np.printoptions(precision=3):
-                    print(f"CORNER: {p.label} {v0=} {v1=} {cross=}")
+                    logger.info(f"CORNER: {p.label} {v0=} {v1=} {cross=}")
                 if np.abs(cross) < 0.9:
-                    print(f"HACK: piece {p.label} has {n} edges, but doesn't look like a corner, only keeping longest edge")
+                    logger.info(f"HACK: piece {p.label} has {n} edges, but doesn't look like a corner, only keeping longest edge")
                     len0 = np.linalg.norm(l0.pts[1] - l0.pts[0])
                     len1 = np.linalg.norm(l1.pts[1] - l1.pts[0])
                     p.edges.pop(1 if len0 > len1 else 0)
                     n = 1
                 elif cross > 0:
                     # are the edges in the right order?
-                    print(f"CORNER: edges of corner {p.label} in wrong order, reversing them")
+                    logger.info(f"CORNER: edges of corner {p.label} in wrong order, reversing them")
                     p.edges = [p.edges[1], p.edges[0]]
 
             (pred, succ) = self.compute_edge_info(p)
@@ -129,7 +132,7 @@ class BorderSolver:
         max_mse = 100090. if len(self.corners) + len(self.edges) < 50 else 20.
         num_extra_edges = 10
 
-        print(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
+        logger.info(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
         
         rescore = dict()
         for dst, sources in scores.items():
@@ -161,6 +164,8 @@ class BorderSolver:
                     # error) are kept as backups
                     extra_edges.append((mse, src, dst))
 
+        output_dotty('temp/edgesolve.dot', G)
+
         # find the longest cycle(s), given just the initial rank 1 edges
         l_max = 0
         longest_cycles = []
@@ -171,7 +176,7 @@ class BorderSolver:
 
             cost = nx.path_weight(G, cycle + [cycle[0]], 'mse')
             s = ' '.join(cycle)
-            print(f"Found cycle len={l}, {cost=:.3f}, path={s}")
+            logger.info(f"Found cycle len={l}, {cost=:.3f}, path={s}")
 
             if l > l_max:
                 l_max = l
@@ -186,7 +191,7 @@ class BorderSolver:
         extra_edges.sort()
 
         # num_extra_edges = len(extra_edges)
-        print(f"HACK: setting {num_extra_edges=}")
+        logger.info(f"HACK: setting {num_extra_edges=}")
 
         for i in range(num_extra_edges):
 
@@ -210,7 +215,7 @@ class BorderSolver:
 
                 cost = nx.path_weight(G, cycle + [cycle[0]], 'mse')
                 s = ' '.join(cycle)
-                print(f"Found cycle len={l}, {cost=:.3f}, path={s}")
+                logger.info(f"Found cycle len={l}, {cost=:.3f}, path={s}")
 
                 if l > l_max:
                     l_max = l
@@ -228,12 +233,15 @@ class BorderSolver:
         retval = retval[::-1]
 
         # rotate the cycle to start with a deterministic corner
-        if i := retval.index(min(self.corners)):
-            retval = retval[i:] + retval[:i]
+        try:
+            if i := retval.index(min(self.corners)):
+                retval = retval[i:] + retval[:i]
+        except ValueError:
+            pass
 
         n = len(retval)
         k = len(self.corners) + len(self.edges) - len(retval)
-        print(f"Found edge solution of length {n}, which omits {k} edge pieces")
+        logger.info(f"Found edge solution of length {n}, which omits {k} edge pieces")
 
         axis_no = 3
         axes = [0] * 4
@@ -243,11 +251,11 @@ class BorderSolver:
             axes[axis_no] += 1
 
         # rotate to an assumed landscape orientation
-        print(f"pieces on each axis: {axes}")
+        logger.info(f"pieces on each axis: {axes}")
         
         w, h = axes[:2]
         if w * 1.1 < h:
-            print("rotating to landscape orientation")
+            logger.info("rotating to landscape orientation")
             retval = retval[w:] + retval[:w]
 
         return retval[::-1]
@@ -289,6 +297,14 @@ class BorderSolver:
             tab_pred = i
 
         return (edge_pred, tab_pred), (edge_succ, tab_succ)
+
+def output_dotty(path, G):
+
+    with open(path, 'w') as f:
+        print("digraph G {", file=f)
+        for a, b in G.edges:
+            print(f"  {a} -> {b}", file=f)
+        print("}", file=f)
 
 class EdgeScorer:
 
@@ -418,6 +434,7 @@ class PuzzleSolver:
         self.last_refine = None
         self.pocket_cache = collections.OrderedDict()
         self.pocket_nscore = 2
+        self.history = []
 
     def solve(self):
         if self.raft:
@@ -461,7 +478,7 @@ class PuzzleSolver:
         
         if self.dirname:
             path = self.next_path('border_match_scores_' + ts, 'tab')
-            print(f"Saving border score data to {path}")
+            logger.info(f"Saving border score data to {path}")
             self.save_border_scores(path, scores)
 
         border = bs.link_pieces(scores)
@@ -469,11 +486,10 @@ class PuzzleSolver:
         self.raft = bs.init_placement(border)
 
         width, height = self.raft.size
-        print(f"puzzle_size: {width=:.1f} {height=:.1f}")
+        logger.info(f"puzzle_size: {width=:.1f} {height=:.1f}")
 
         if self.dirname:
-            self.save_tab_matches(self.next_path('matches_' + ts, 'csv'))
-            save_json(self.next_path('solver_' + ts, 'json'), self)
+            self.save_json(self.next_path('solver_' + ts, 'json'))
 
     def next_path(self, fname, ext):
 
@@ -487,17 +503,17 @@ class PuzzleSolver:
     def solve_field(self):
 
         if self.raft is None:
-            return False
+            return 0
 
         if len(self.pieces) <= len(self.raft.coords):
-            return False
+            return 0
 
         self.distance_query_cache.purge()
 
         fits = self.score_pockets()
 
         if not fits:
-            return False
+            return 0
 
         # rank the fits by MSE, previously they were ranked by how
         # good they were compared to the second best fit, but that
@@ -509,23 +525,27 @@ class PuzzleSolver:
         else:
             fits.sort(key=operator.itemgetter(0))
 
+        # HACK: first by MSE/25 rounded down (so lower error is
+        # strongly preferred) and then by ratio. Might be better to
+        # reject high MSE fits altogether?
+        fits.sort(key=lambda x: (x[1][0]//25, x[0]))
+
         for i, f in enumerate(fits[:20]):
             r, (mse, src_label, feature_pairs, _) = f
             dst = ','.join(str(i[0]) for i in feature_pairs)
             src = ','.join(str(i[1]) for i in feature_pairs)
-            print(f"{i:2d}: {src_label:4s} {mse=:5.1f} {src=} {dst=} {r=:.3f}")
+            logger.info(f"{i:2d}: {src_label:4s} {mse=:5.1f} {src=} {dst=} {r=:.3f}")
 
         fit = fits[0][1]
 
         src_label = fit.src_label
         feature_pairs = fit.feature_pairs
 
-        status = self.is_good_match(feature_pairs)
-        if status is None or status:
-            status = ''
+        is_good_fit = self.expected is None or self.is_good_match(feature_pairs)
+        if is_good_fit:
+            logger.info(f"Placing {src_label}: {self.raftinator.format_feature_pairs(feature_pairs)}")
         else:
-            status = ' <BAD MATCH>'
-        print(f"Placing {src_label}: {self.raftinator.format_feature_pairs(feature_pairs)}{status}")
+            logger.warn(f"Placing {src_label}: {self.raftinator.format_feature_pairs(feature_pairs)} <BAD MATCH>")
 
         r = self.raftinator
 
@@ -539,6 +559,8 @@ class PuzzleSolver:
                 dst_raft, src_raft, feature_pairs)
         else:
             src_coord = r.aligner.rough_align(dst_raft, src_raft, feature_pairs)
+
+            src_coord = r.aligner.refine_alignment_between_rafts(dst_raft, src_raft, src_coord)
             
             new_raft = r.factory.merge_rafts(dst_raft, src_raft, src_coord)
 
@@ -548,7 +570,10 @@ class PuzzleSolver:
 
             overlap_error = r.raft_error.overlap_error_for_raft(new_raft, {src_label})
 
-            print(f"solve_field: {src_label} error after placement: seams={seam_error.mse} overlap={overlap_error.mse}")
+            seam_error_mse = seam_error.mse or 0.
+            overlap_error_mse = overlap_error.mse or 0.
+            logger.info(f"solve_field: {src_label} error after placement: seams={seam_error_mse:.1f} overlap={overlap_error_mse:.1f}")
+            self.history.append(('fit_pocket', src_label, r.format_feature_pairs(feature_pairs)))
         
         assert src_label in new_raft.coords
 
@@ -557,7 +582,7 @@ class PuzzleSolver:
         if len(new_raft.coords) % 20 == 0:
             self.refine()
 
-        return status == ''
+        return 1 if is_good_fit else -1
 
     def is_good_match(self, feature_pairs):
         if self.expected is None:
@@ -576,18 +601,14 @@ class PuzzleSolver:
             for p, c1 in self.last_refine.coords.items():
                 c2 = self.raft.coords.get(p)
                 if c2 is None:
-                    # print(f"refine: not a superset, {p} from last refine is missing")
                     not_a_superset = True
                 elif c2.angle != c1.angle or np.any(c2.xy != c1.xy):
-                    # print(f"refine: coordinate of {p} has changed, adding to delta")
                     delta.add(p)
         else:
             not_a_superset = True
 
         if not_a_superset:
             delta = set(self.raft.coords.keys())
-
-        # print(f"refine: delta=({','.join(delta)})")
 
         new_raft = self.raft
 
@@ -605,6 +626,8 @@ class PuzzleSolver:
 
         self.last_refine = copy.deepcopy(refined_raft)
 
+        self.history.append(('refine',))
+        
         self.update_raft(refined_raft)
 
     def update_raft(self, raft):
@@ -613,8 +636,7 @@ class PuzzleSolver:
 
         if self.dirname:
             ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-            self.save_tab_matches(self.next_path('matches_' + ts, 'csv'))
-            save_json(self.next_path('solver_' + ts, 'json'), self)
+            self.save_json(self.next_path('solver_' + ts, 'json'))
 
     def score_pockets(self):
 
@@ -639,7 +661,7 @@ class PuzzleSolver:
 
             s = [f"{i.src_label}:{i.mse:.1f}" for i in v[:3]]
 
-            print(f"{pocket!s}: " + ', '.join(s))
+            logger.info(f"{pocket!s}: " + ', '.join(s))
 
         return fits
 
@@ -666,7 +688,7 @@ class PuzzleSolver:
             # are still available to be fit
             if all(i.src_label not in self.raft.coords for i in result):
                 return result
-            print("score_pocket: cache entry invalidated, recomputing")
+            logger.debug("score_pocket: cache entry invalidated, recomputing")
 
         result = self.score_pocket_impl(pocket)
 
@@ -735,12 +757,11 @@ class PuzzleSolver:
 
                 count += 1
 
-        print(f"score_pocket_impl: measured {count} of {len(candidates)} candidates")
+        logger.debug(f"score_pocket_impl: measured {count} of {len(candidates)} candidates")
 
         return sorted(scores)
 
-    def save_tab_matches(self, path):
-
+    def compute_tab_matches(self):
         tab_xy = []
         radii = []
         labels = []
@@ -751,7 +772,7 @@ class PuzzleSolver:
             labels += [(p.label, i) for i in range(len(p.tabs))]
             tab_xy += [xy for xy in v.xform.apply_v2(centers)]
 
-        rows = []
+        retval = []
 
         kdtree = scipy.spatial.KDTree(tab_xy)
         neighbor_dist, neighbor_index = kdtree.query(tab_xy, 2)
@@ -764,16 +785,32 @@ class PuzzleSolver:
                 distance = neighbor_dist[i][j]
                 if distance > radii[i]:
                     continue
-                # print(f"{labels[i]} - {labels[k]} # {distance=:.1f}")
-                rows.append({'dst_piece':dst[0], 'dst_tab_no':dst[1], 'src_piece':src[0], 'src_tab_no':src[1], 'distance':distance})
+                retval.append(f"{dst[0]}:{dst[1]}={src[0]}:{src[1]}")
 
-        with open(path, 'w', newline='') as f:
-            field_names = 'dst_piece dst_tab_no src_piece src_tab_no'.split()
-            # ignore: don't complain that 'distance' isn't being output
-            writer = csv.DictWriter(f, field_names, extrasaction='ignore')
-            writer.writeheader()
-            writer.writerows(rows)
-                
+        return retval
+
+    def compute_detailed_error(self):
+        r = self.raftinator
+        seams = r.get_seams_for_raft(self.raft)
+        overlaps = r.raft_error.detailed_overlap_error_for_raft(self.raft)
+
+        error = collections.defaultdict(lambda: puzzler.raft.FitError(0.,0))
+        for s in seams:
+            error[s.dst.piece] += puzzler.raft.FitError(s.error, len(s.src.indices))
+
+        for dst, srcs in overlaps.items():
+            error[dst] += sum(srcs.values(), puzzler.raft.FitError(0.,0))
+
+        return error
+
+    def save_json(self, path):
+        error = self.compute_detailed_error()
+        matches = self.compute_tab_matches()
+        path = path.replace('\\','/')
+        logger.info(f"save_json: {path=}")
+        with open(path, 'w') as f:
+            f.write(to_json(self, error, matches, self.history))
+
 def load_json(path, pieces):
 
     with open(path, 'r') as f:
@@ -808,12 +845,14 @@ def from_json(pieces, s):
 
     return parse_raft(o['raft'])
 
-def save_json(path, solver):
+class MyJSONEncoder(json.JSONEncoder):
+    
+    def default(self, obj):
+        if isinstance(obj, puzzler.raft.FitError):
+            return {'sse':obj.sse, 'n':obj.n}
+        return super().default(obj)
 
-    with open(path, 'w') as f:
-        f.write(to_json(solver))
-
-def to_json(solver):
+def to_json(solver, error=None, matches=None, history=None):
 
     def format_pieces(pieces):
         return sorted(pieces.keys())
@@ -836,5 +875,11 @@ def to_json(solver):
     o = dict()
     o['pieces'] = format_pieces(solver.pieces)
     o['raft'] = format_raft(solver.raft)
+    if error is not None:
+        o['error'] = error
+    if matches is not None:
+        o['matches'] = matches
+    if history is not None:
+        o['history'] = history
 
-    return json.JSONEncoder(indent=0).encode(o)
+    return MyJSONEncoder(indent=0).encode(o)
