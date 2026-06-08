@@ -5,6 +5,9 @@ import numpy as np
 import operator
 import scipy.spatial
 from typing import NamedTuple, Optional, Set
+import logging
+
+logger = logging.getLogger('puzzler')
 
 Feature = puzzler.raft.Feature
 
@@ -103,7 +106,7 @@ def find_unmatched_tabs(pieces, coords):
         for n in overlaps(tab_coords[i], 0): #t.ellipse.semi_major):
             if n == f.piece:
                 continue
-            print(f"Ignoring unmatched tab {f!s} because it overlaps {n}")
+            logger.warn(f"Ignoring unmatched tab {f!s} because it overlaps {n}")
             is_unmatched = False
 
         if is_unmatched:
@@ -160,7 +163,7 @@ class PocketTabMatcher:
             try:
                 retval += self.candidate_matches_for_piece(src_label, tab_pairs)
             except PocketFitter.FitException as x:
-                print(x)
+                logger.warn(x)
 
         if tab_pairs:
             retval.sort(key=operator.attrgetter('min_tab_error'))
@@ -260,13 +263,14 @@ class PocketFinder:
 
     def find_pockets_on_frontiers(self, frontiers = None):
 
+        unmatched_tabs = find_unmatched_tabs(self.pieces, self.raft.coords)
         pockets = []
-        for tab in find_unmatched_tabs(self.pieces, self.raft.coords):
-            pockets += self.get_pockets_for_tab(tab)
+        for tab in unmatched_tabs:
+            pockets += self.get_pockets_for_tab(tab, unmatched_tabs)
 
         return set(pockets)
 
-    def get_pockets_for_tab(self, tab):
+    def get_pockets_for_tab(self, tab, unmatched_tabs):
 
         helper = self.helper
 
@@ -281,14 +285,20 @@ class PocketFinder:
                 tabl = helper.find_tab_in_direction(nll, -vl)
                 if tabl is not None:
                     tabl = Feature(nll, 'tab', tabl)
-                pockets.append(Pocket(tabl, tab, frozenset([tab.piece, nl, nll])))
+                if tabl and tabl not in unmatched_tabs:
+                    logger.warn(f"get_pockets_for_tab: {tabl!s} {tab!s}, bonk bonk")
+                else:
+                    pockets.append(Pocket(tabl, tab, frozenset([tab.piece, nl, nll])))
             
         if nr := helper.get_neighbor(tab.piece, vr):
             if nrr := helper.get_neighbor(nr, vt):
                 tabr = helper.find_tab_in_direction(nrr, -vr)
                 if tabr is not None:
                     tabr = Feature(nrr, 'tab', tabr)
-                pockets.append(Pocket(tab, tabr, frozenset([tab.piece, nr, nrr])))
+                if tabr and tabr not in unmatched_tabs:
+                    logger.warn(f"get_pockets_for_tab: {tab!s} {tabr!s}, bonk bonk")
+                else:
+                    pockets.append(Pocket(tab, tabr, frozenset([tab.piece, nr, nrr])))
 
         return pockets
 
@@ -336,7 +346,7 @@ class PocketFitter:
             src_coord = r.aligner.refine_alignment_between_rafts(
                 self.dst_raft, src_raft, src_coord)
         except puzzler.raft.RaftAligner.AlignException as x:
-            print(f"PocketFitter.measure_fit: {r.format_feature_pairs(feature_pairs)} has no seams for alignment!", x)
+            logger.warn(f"PocketFitter.measure_fit: {r.format_feature_pairs(feature_pairs)} has no seams for alignment!", x)
             return (float("+inf"), puzzler.raft.FitError(0.,0.))
 
         if self.tab_pairs:
