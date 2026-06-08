@@ -4,6 +4,9 @@ import mmap
 import puzzler
 import re
 import struct
+import logging
+
+logger = logging.getLogger('puzzler')
 
 Feature = puzzler.raft.Feature
 FitError = puzzler.raft.FitError
@@ -75,11 +78,15 @@ class TabPairsCSV:
         with open(path, 'r', newline='') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
-                src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
-                err_sse = float(row['sse'])
-                err_n = int(row['n'])
-                data[(dst_tab,src_tab)] = FitError(err_sse, err_n)
+                try:
+                    dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
+                    src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
+                    err_sse = float(row['sse'])
+                    err_n = int(row['n'])
+                    data[(dst_tab,src_tab)] = FitError(err_sse, err_n)
+                except Exception as x:
+                    logger.error(f"TabPairsCSV: error processing line {reader.line_num} from {path}")
+                    raise
         return data
 
 def load_tab_pairs(path):
@@ -126,11 +133,14 @@ def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs
         with open(csv_ipath, 'r', newline='') as ifile:
             reader = csv.DictReader(ifile)
             for row in reader:
-                dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
-                src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
-                err_sse = float(row['sse'])
-                err_n = int(row['n'])
-
+                try:
+                    dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
+                    src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
+                    err_sse = float(row['sse'])
+                    err_n = int(row['n'])
+                except Exception as x:
+                    logger.error(f"write_tab_pairs_csv_to_mmap: error processing line {reader.line_num} from {csv_ipath}")
+                    raise
                 o = offset_computer(dst_tab, src_tab)
                 struct.pack_into('=fH', mm, o, err_sse, err_n)
 
