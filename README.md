@@ -58,9 +58,10 @@ Profiling:
 
 Processing pipeline:
 
-  app.yy -p name.json init
-  app.py -p name.json scan add  (repeat as necessary)
-  app.py -p name.json points update
-  app.py -p name.json lint update
-  app.py -p name.json features update
-  app.py -p name.json tabs -o tabs_name.json -n 28  # compute error for all possible tab pairs, and do it in parallel
+  app.yy -p NAME.json init
+  app.py -p NAME.json scan add  (repeat as necessary)
+  app.py -p NAME.json points update
+  app.py -p NAME.json lint update
+  app.py -p NAME.json features update
+  app.py -p NAME.json tabs -o tabs_NAME.csv -n 28  # compute error for all possible tab pairs, and do it in parallel
+  scripts/tabpairs_csv_to_mmap.py -p NAME.json -i tabs_NAME.csv -o tabs_NAME.mmap
