@@ -2,6 +2,9 @@ import argparse
 import ctypes
 import os
 import sys
+import logging
+
+logger = logging.getLogger('puzzler')
 
 def set_process_dpi_awareness():
 
@@ -11,6 +14,14 @@ def set_process_dpi_awareness():
         err = ctypes.windll.shcore.SetProcessDpiAwareness(2)
         
 def main():
+
+    logging.basicConfig(filename='log.txt', level=logging.DEBUG, format='%(asctime)s %(message)s')
+    logger.addHandler(logging.StreamHandler())
+    
+    for i in ('matplotlib', 'OpenGL'):
+        logging.getLogger(i).setLevel(logging.WARNING)
+
+    logger.info('Started')
 
     if sys.platform == 'win32':
         set_process_dpi_awareness()
@@ -40,6 +51,8 @@ def main():
 
     args = parser.parse_args()
     args.func(args)
+
+    logger.info('Finished')
 
     exit(0)
 
