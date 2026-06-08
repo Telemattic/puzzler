@@ -491,7 +491,7 @@ class AlignTk:
         self.render()
 
         if self.var_solve_continuous.get():
-            if can_continue:
+            if (can_continue > 0) or (can_continue < 0 and self.var_solve_ignore_errors.get()):
                 self.parent.after_idle(self.do_tab_alignment)
             else:
                 self.var_solve_continuous.set(0)
@@ -627,9 +627,13 @@ class AlignTk:
         b5 = ttk.Checkbutton(self.controls, text="Continuous", variable=self.var_solve_continuous)
         b5.grid(column=6, row=0, sticky=W)
 
+        self.var_solve_ignore_errors = IntVar(value=0)
+        b5 = ttk.Checkbutton(self.controls, text="Ignore Errors", variable=self.var_solve_ignore_errors)
+        b5.grid(column=7, row=0, sticky=W)
+
         self.var_label = StringVar(value="x,y")
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=80)
-        l1.grid(column=7, row=0, sticky=E)
+        l1.grid(column=8, row=0, sticky=E)
 
         cf2 = ttk.Frame(self.frame)
         cf2.grid(row=2, sticky=(W,E))
