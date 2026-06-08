@@ -14,3 +14,4 @@ from . import segment
 from . import worker
 from . import psolve
 from . import tabpairs
+from . import score
