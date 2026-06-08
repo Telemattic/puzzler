@@ -995,15 +995,25 @@ class RaftError:
             n += len(s.src.indices)
         return FitError(sse, n)
 
-    def overlap_error_for_raft(self, raft: Raft) -> FitError:
+    def overlap_error_for_raft(self, raft: Raft, check_sources: Optional[Set[str]] = None) -> FitError:
+
+        fit_error = FitError(0.,0)
+        for d in self.detailed_overlap_error_for_raft(raft, check_sources).values():
+            fit_error += sum(d.values(), start=FitError(0.,0))
+        return fit_error
+        
+    def detailed_overlap_error_for_raft(self, raft: Raft, check_sources: Optional[Set[str]] = None) -> Mapping[Feature,Mapping[Feature,FitError]]:
         
         overlaps = puzzler.solver.OverlappingPieces(self.pieces, raft.coords)
 
-        sse = 0.
-        num_points = 0
+        if check_sources is None:
+            check_sources = raft.coords.keys()
+
+        retval = collections.defaultdict(dict)
         
-        for src_label, src_coord in raft.coords.items():
-            
+        for src_label in check_sources:
+
+            src_coord = raft.coords[src_label]
             src_piece = self.pieces[src_label]
             src_center = src_coord.xy
             src_radius = src_piece.radius
@@ -1028,7 +1038,6 @@ class RaftError:
 
                 ii = np.nonzero(distance < -self.close_cutoff)[0]
                 if len(ii):
-                    sse += np.sum(np.square(distance[ii]))
-                    num_points += len(ii)
+                    retval[dst_label][src_label] = FitError(np.sum(np.square(distance[ii])), len(ii))
 
-        return FitError(sse, num_points)
+        return retval
