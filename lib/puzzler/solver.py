@@ -129,7 +129,6 @@ class BorderSolver:
     
     def link_pieces(self, scores):
 
-        max_mse = 100090. if len(self.corners) + len(self.edges) < 50 else 20.
         num_extra_edges = 10
 
         logger.info(f"link_pieces: corners={self.corners}, no. edges={len(self.edges)}")
@@ -148,24 +147,48 @@ class BorderSolver:
             f.write(json.dumps(o, indent=4))
                 
         G = nx.DiGraph()
-        extra_edges = []
-        
+
+        # every node gets its favorite predecessor
         for dst in self.corners + self.edges:
-            for rank, score in enumerate(rescore[dst], start=1):
+            # the rescores are sorted by MSE, so the first entry is
+            # rank 1
+            mse, _, _, src = rescore[dst][0]
+            G.add_edge(src, dst, mse=mse)
+
+        heads = set()
+        tails = set()
+        for n in G.nodes:
+            if G.in_degree(n) == 0:
+                # no predecessors, therefore this piece is the head of
+                # a chain
+                heads.add(n)
+            if G.out_degree(n) == 0:
+                # no successors, therefore the tail of a chain
+                tails.add(n)
+            elif G.out_degree(n) > 1:
+                # this node has multiple successors, but in a simple
+                # cycle only one of those successors will actually be
+                # the successor of this node, therefore the others
+                # will be heads of their own chains
+                heads.update(G.successors(n))
+
+        logger.info(f"edge pieces with no predecessors: {','.join(sorted(heads))}")
+        logger.info(f"edge pieces with no successors: {','.join(sorted(tails))}")
+        
+        extra_edges = []
+
+        for dst in self.corners + self.edges:
+            if dst not in heads:
+                continue
+            # the rank 1 predecessors have already been added, so
+            # start from rank 2
+            for score in rescore[dst][1:]:
                 mse, _, _, src = score
-                if mse > max_mse:
-                    # really high error is assumed to be a mislabeled edge
-                    pass
-                elif rank == 1:
-                    # every node gets its favorite predecessor
-                    G.add_edge(src, dst, mse=mse)
-                else:
-                    # the remaining predecessors (with tolerable
-                    # error) are kept as backups
+                if src in tails:
                     extra_edges.append((mse, src, dst))
-
-        output_dotty('temp/edgesolve.dot', G)
-
+                    
+        output_dotty('temp/edgesolve0.dot', G)
+        
         # find the longest cycle(s), given just the initial rank 1 edges
         l_max = 0
         longest_cycles = []
@@ -190,7 +213,8 @@ class BorderSolver:
         # solution) but what else can we do?
         extra_edges.sort()
 
-        # num_extra_edges = len(extra_edges)
+        if len(extra_edges) < num_extra_edges:
+            num_extra_edges = len(extra_edges)
         logger.info(f"HACK: setting {num_extra_edges=}")
 
         for i in range(num_extra_edges):
@@ -200,6 +224,7 @@ class BorderSolver:
                 # not necessarily the single maximal length cycle with the
                 # lowest cost, N.B. that's an instance of the TSP so we
                 # shouldn't get too fixated on it
+                logger.info(f"stop searching after adding {i} extra edges, found a cycle that uses all edge pieces")
                 break
 
             mse, src, dst = extra_edges[i]
@@ -222,6 +247,8 @@ class BorderSolver:
                     longest_cycles = [(cost, cycle)]
                 else:
                     longest_cycles.append((cost, cycle))
+
+        output_dotty('temp/edgesolve1.dot', G)
 
         # put them in order of ascending cost
         longest_cycles.sort()
