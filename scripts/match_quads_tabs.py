@@ -117,6 +117,23 @@ def match_nx(puzzle, quads, dottypath):
                 print(f"  \"{a}\" -- \"{b}\" [style={style} label=\"{label}\"]", file=f)
             print("}", file=f)
 
+    def output_dotty2(path, old_graph):
+
+        relabels = {}
+        for n in old_graph.nodes:
+            relabels[n] = n.split(':')[0]
+
+        new_graph = nx.Graph()
+        for a, b in old_graph.edges():
+            new_graph.add_edge(relabels[a], relabels[b])
+            
+        with open(path, 'w',) as f:
+
+            print("graph G {", file=f)
+            for a, b in new_graph.edges:
+                print(f"  \"{a}\" -- \"{b}\"", file=f)
+            print("}", file=f)
+
     G = nx.Graph()
     
     for piece in puzzle.pieces:
@@ -130,7 +147,7 @@ def match_nx(puzzle, quads, dottypath):
         if quad['rank'] != 1:
             continue
 
-        for a, b in parse_raft(quad['raft']):
+        for a, b in parse_raft(quad['actual_matches']):
             if a > b:
                 a, b = b, a
             edge_weights[a,b] += 1
@@ -158,7 +175,7 @@ def match_nx(puzzle, quads, dottypath):
         print("unmatched: None!")
 
     if dottypath:
-        output_dotty(dottypath, G, m)
+        output_dotty2(dottypath, G)
 
     return m
 
@@ -168,7 +185,7 @@ def validate_quads_against_tabs(quads, tabs):
         return all(tabs.get(a,'') == b for a, b in parse_raft(raft))
 
     for q in quads:
-        raft = q['raft']
+        raft = q['actual_matches']
         rank = q['rank']
         if is_good(raft):
             if rank != 1:
