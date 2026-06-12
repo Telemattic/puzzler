@@ -15,3 +15,4 @@ from . import worker
 from . import psolve
 from . import tabpairs
 from . import score
+from . import frontier
