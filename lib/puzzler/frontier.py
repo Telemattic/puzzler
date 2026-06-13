@@ -3,6 +3,7 @@ import itertools
 import numpy as np
 import operator
 import puzzler
+from typing import NamedTuple
 
 import json
 
@@ -184,7 +185,7 @@ class BoundaryComputer:
         
             def range_length(r):
                 a, b = r
-                return len(puzzler.commands.align.RingRange(a, b+1, n))
+                return len(RingRange(a, b+1, n))
 
             ranges = []
             for dst_label, src_ranges in src_adjacency_list.items():
@@ -259,47 +260,81 @@ class BoundaryComputer:
 
         return retval, fullpaths
 
+class RingRange:
+
+    def __init__(self, a, b, n):
+        self.a = a
+        self.b = b
+        self.n = n
+
+    def __iter__(self):
+        a, b = self.a, self.b
+        return itertools.chain(range(a, self.n), range(0, b)) if a >= b else range(a, b)
+
+    def __contains__(self, i):
+        a, b = self.a, self.b
+        return (a <= i < self.n or 0 <= i < b) if a >= b else (a <= i < b)
+
+    def __len__(self):
+        a, b = self.a, self.b
+        return (b - a) if b > a else (b + self.n - a)
+    
+Feature = puzzler.raft.Feature
+    
+class DetailedTab(NamedTuple):
+    piece: str
+    index: int
+    indent: bool
+    tab_xy: np.array
+    tab_uv: np.array
+
 class FrontierExplorer:
 
-    def __init__(self, pieces):
+    def __init__(self, pieces, coords):
         self.pieces = pieces
+        self.coords = coords
 
-    def find_tabs(self, frontier):
+    def get_detailed_tabs(self, frontier):
 
         retval = []
         
-        for l, (a, b) in frontier:
-            p = self.pieces[l]
-            rr = puzzler.commands.align.RingRange(a, b, len(p.points))
-            
-            included_tabs = [i for i, tab in enumerate(p.tabs) if all(j in rr for j in tab.tangent_indexes)]
-
-            def position_in_ring(i):
-                tab = p.tabs[i]
-                begin = tab.tangent_indexes[0]
-                if begin < rr.a:
-                    begin += rr.n
-                return begin
-
-            included_tabs.sort(key=position_in_ring)
-
-            retval += [(l, i) for i in included_tabs]
+        for piece_label, piece_range in frontier:
+            retval += self.get_detailed_tabs_for_range(piece_label, piece_range)
 
         return retval
 
-    def find_interesting_corners(self, frontier, coords):
+    def get_detailed_tabs_for_range(self, piece_label, piece_range):
+        
+        p = self.pieces[piece_label]
+        rr = RingRange(piece_range[0], piece_range[1], len(p.points))
 
-        tabs = self.find_tabs(frontier)
-        dirs = []
-        for tab in tabs:
-            p, v = self.get_tab_center_and_direction(tab)
-            t = coords[tab[0]].xform
-            dirs.append((t.apply_v2(p), t.apply_n2(v)))
-            
+        retval = []
+        for i, tab in enumerate(p.tabs):
+            if all(j in rr for j in tab.tangent_indexes):
+                tab_xy, tab_uv = self.get_tab_center_and_direction(Feature(piece_label,'tab',i))
+                xform = self.coords[piece_label].xform
+                tab_xy = xform.apply_v2(tab_xy)
+                tab_uv = xform.apply_n2(tab_uv)
+                retval.append(DetailedTab(piece_label, i, tab.indent, tab_xy, tab_uv))
+
+        def position_in_ring(x):
+            tab = p.tabs[x.index]
+            begin = tab.tangent_indexes[0]
+            if begin < rr.a:
+                begin += rr.n
+            return begin
+
+        return sorted(retval, key=position_in_ring)
+
+    def find_interesting_corners(self, frontier):
+
+        tabs = self.get_detailed_tabs(frontier)
+
         scores = []
-        for i, curr_dir in enumerate(dirs):
-            p1, v2 = dirs[i-1]
-            p3, v4 = curr_dir
+        for i, curr in enumerate(tabs):
+            prev = tabs[i-1]
+            p1, v2 = prev.tab_xy, prev.tab_uv
+            p3, v4 = curr.tab_xy, curr.tab_uv
             t = np.cross(p3 - p1, v4)
             u = np.cross(p3 - p1, v2)
             d = np.cross(v2, v4)
@@ -309,14 +344,14 @@ class FrontierExplorer:
             else:
                 t = 0.
                 u = 0.
-            scores.append((np.dot(v2, v4), t, u))
+            scores.append(((np.dot(v2, v4), t, u), prev, curr))
             
-        return [(scores[i], tabs[i-1], tabs[i]) for i in range(len(tabs))]
+        return scores
 
     def get_tab_center_and_direction(self, tab):
 
-        p = self.pieces[tab[0]]
-        t = p.tabs[tab[1]]
+        p = self.pieces[tab.piece]
+        t = p.tabs[tab.index]
         v = p.points[np.array(t.tangent_indexes)] - t.ellipse.center
         v = v / np.linalg.norm(v, axis=1)
         v = np.sum(v, axis=0)
@@ -327,7 +362,6 @@ class FrontierExplorer:
 
 def pockets_from_corners(corners, adjacency):
 
-    Feature = puzzler.raft.Feature
     Pocket = puzzler.pocket.Pocket
 
     good_corners = []
@@ -337,8 +371,8 @@ def pockets_from_corners(corners, adjacency):
 
     pockets = []
     for a, b in good_corners:
-        tabA = Feature(a[0], 'tab', a[1])
-        tabB = Feature(b[0], 'tab', b[1])
+        tabA = Feature(a.piece, 'tab', a.index)
+        tabB = Feature(b.piece, 'tab', b.index)
         common = set(adjacency[tabA.piece].keys()) & set(adjacency[tabB.piece].keys())
         common.discard('none')
         print(f"{tabA=!s} {tabB=!s} {common=}")
@@ -351,8 +385,8 @@ class FrontierJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
-        if isinstance(obj, puzzler.raft.Feature):
-            return str(obj)
+        if isinstance(obj, frozenset):
+            return list(obj)
         return super().default(obj)
 
 def frontier_experiment(pieces, raft, dqc):
@@ -371,10 +405,10 @@ def frontier_experiment(pieces, raft, dqc):
 
     o['frontiers'] = frontiers
 
-    fe = FrontierExplorer(pieces)
+    fe = FrontierExplorer(pieces, coords)
     corners = []
     for f in frontiers:
-        corners += fe.find_interesting_corners(f, coords)
+        corners += fe.find_interesting_corners(f)
 
     o['corners'] = corners
 

@@ -147,32 +147,7 @@ class MoveCamera(Draggable):
     def drag(self, xy):
         delta = (xy - self.origin) * np.array((-1, 1))
         self.camera.center = self.init_camera_center + delta
-
-class RingRange:
-
-    def __init__(self, a, b, n):
-        self.a = a
-        self.b = b
-        self.n = n
-
-    def __iter__(self):
-        a, b = self.a, self.b
-        return itertools.chain(range(a, self.n), range(0, b)) if a >= b else range(a, b)
-
-    def __contains__(self, i):
-        a, b = self.a, self.b
-        return (a <= i < self.n or 0 <= i < b) if a >= b else (a <= i < b)
-
-    def __len__(self):
-        a, b = self.a, self.b
-        return (b - a) if b > a else (b + self.n - a)
         
-def ring_slice(data, a, b):
-    return np.concatenate((data[a:], data[:b])) if a >= b else data[a:b]
-
-def ring_range(a, b, n):
-    return itertools.chain(range(a, n), range(0, b)) if a >= b else range(a, b)
-
 Coord = puzzler.align.Coord
 
 class Piece:
@@ -540,8 +515,9 @@ class AlignTk:
 
         try:
             s = self.solver
-            o = puzzler.frontier.frontier_experiment(s.pieces, s.raft, s.distance_query_cache)
-            f.pockets_from_frontier = o['pockets']
+            if s.raft:
+                o = puzzler.frontier.frontier_experiment(s.pieces, s.raft, s.distance_query_cache)
+                f.pockets_from_frontier = o['pockets']
         except Exception as x:
             print(x)
 

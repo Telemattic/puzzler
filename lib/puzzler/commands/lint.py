@@ -162,7 +162,7 @@ class Dingleberries:
         if len(cuts) == 0:
             return src_points
 
-        ring_slice = puzzler.commands.align.ring_slice
+        ring_slice = puzzler.align.ring_slice
 
         n = len(src_points)
 
@@ -341,7 +341,7 @@ class LintTk:
 
         ranges = to_ranges(candidates)
 
-        ring_slice = puzzler.commands.align.ring_slice
+        ring_slice = puzzler.align.ring_slice
 
         def fit_spline1(i, j):
             a, b, c, d = [poly[k % len(poly)] for k in (i-1, i, j, j+1)]
