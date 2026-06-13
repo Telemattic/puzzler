@@ -6,6 +6,7 @@ import operator
 import scipy.spatial
 from typing import NamedTuple, Optional, Set
 import logging
+import cv2 as cv
 
 logger = logging.getLogger('puzzler')
 
@@ -28,53 +29,58 @@ def axis_for_angle(phi):
 
     return d
 
-def tab_features_for_piece(piece, be_forgiving=True):
+def tab_features_for_piece(piece):
 
-    ref_angle = None
-    dirs = [None, None, None, None]
-    n_collisions = 4
+    def tab_orientation(i):
 
-    for tab_no, tab in enumerate(piece.tabs):
+        tab = piece.tabs[i]
+        xyc = tab.ellipse.center
+        xy0 = piece.points[tab.fit_indexes[0]]
+        xy1 = piece.points[tab.fit_indexes[1]]
 
-        x, y = tab.ellipse.center
-        angle = math.atan2(y, x)
+        norm = puzzler.math.unit_vector
 
-        if ref_angle is None:
-            ref_angle = angle
-            d = 0
+        o = norm(norm(xyc-xy0)+norm(xyc-xy1))
+        return -o if tab.indent else o
+
+    n = len(piece.tabs)
+    
+    def tab_feature(i):
+        return (piece.label, i, piece.tabs[i].indent) if i < n else None
+
+    orient = [tab_orientation(i) for i in range(n)]
+
+    s = set()
+    for i in range(n):
+        a = (i+1) % n
+        b = i
+        cp = np.cross(orient[a], orient[b])
+        if cp > .9:
+            s.add((a,b))
         else:
-            d = axis_for_angle(angle - ref_angle)
+            s.add((n,b))
 
-        if dirs[d] is not None:
+        a = i
+        b = (i-1) % n
+        cp = np.cross(orient[a], orient[b])
+        if cp > .9:
+            s.add((a,b))
+        else:
+            s.add((a,n))
 
-            # HACK, see piece L16 from 300.json
-            if be_forgiving and len(piece.tabs) == 4:
-                n_collisions += 1
-                continue
-
-            raise PocketFitter.FitException(f"{piece.label} has multiple tabs at {d=} and {len(piece.tabs)} total tabs")
-
-        dirs[d] = (piece.label, tab_no, tab.indent)
-
-    # HACK: if we couldn't figure out cardinal directions for a
-    # piece with 4 tabs just assign them sequentially *but* note
-    # that we actually walk the tabs in reverse order ordinarily
-    # because of the angle computation.  Blech.
-    if be_forgiving and n_collisions and len(piece.tabs) == 4:
-        for tab_no, tab in enumerate(piece.tabs):
-            i = (4 - tab_no) % 4
-            dirs[i] = (piece.label, tab_no, tab.indent)
-
-    retval = []
-    for i in range(4):
-        a = dirs[i-1]
-        b = dirs[i]
-        if a is not None or b is not None:
-            retval.append((a, b))
+    retval = [(tab_feature(a), tab_feature(b)) for a, b in sorted(s)]
 
     return retval
 
 def find_unmatched_tabs(pieces, coords):
+
+    def inverse_xform(coord):
+        return puzzler.render.Transform().rotate(-coord.angle).translate(-coord.xy)
+        
+    def really_overlaps(pt, neighbor):
+        pt = inverse_xform(coords[neighbor]).apply_v2(pt)
+        ret = cv.pointPolygonTest(pieces[neighbor].points, pt, False)
+        return ret >= 0
 
     tab_features = []
     tab_coords = []
@@ -85,7 +91,7 @@ def find_unmatched_tabs(pieces, coords):
             tab_coords.append(c.xform.apply_v2(tab.ellipse.center))
 
     covered = set()
-    
+
     kdtree = scipy.spatial.KDTree(np.vstack(tab_coords))
     for a, b in kdtree.query_pairs(100.):
         covered.add(a)
@@ -106,8 +112,9 @@ def find_unmatched_tabs(pieces, coords):
         for n in overlaps(tab_coords[i], 0): #t.ellipse.semi_major):
             if n == f.piece:
                 continue
-            logger.warn(f"Ignoring unmatched tab {f!s} because it overlaps {n}")
-            is_unmatched = False
+            if really_overlaps(tab_coords[i], n):
+                logger.warn(f"Ignoring unmatched tab {f!s} because it overlaps {n}")
+                is_unmatched = False
 
         if is_unmatched:
             unmatched.add(f)
@@ -223,12 +230,29 @@ class PocketFinder:
             self.helper = puzzler.raft.FeatureHelper(pieces, coords)
             self.overlaps = puzzler.solver.OverlappingPieces(pieces, coords)
 
-        def get_tab_unit_vector(self, f):
+        def get_tab_center(self, f):
+            return self.helper.get_tab_center(f)
+
+        def get_tab_unit_vectorX(self, f):
             p0 = self.coords[f.piece].xy
             p1 = self.helper.get_tab_center(f)
             return puzzler.math.unit_vector(p1 - p0)
 
-        def find_tab_in_direction(self, p, v0):
+        def get_tab_unit_vector(self, f):
+
+            piece = self.pieces[f.piece]
+            tab = piece.tabs[f.index]
+            xyc = tab.ellipse.center
+            xy0 = piece.points[tab.fit_indexes[0]]
+            xy1 = piece.points[tab.fit_indexes[1]]
+
+            norm = puzzler.math.unit_vector
+
+            v = norm(norm(xyc-xy0)+norm(xyc-xy1))
+            v = -v if tab.indent else v
+            return self.coords[f.piece].xform.apply_n2(v)
+        
+        def find_tab_in_direction_closest_to(self, p, v0, closest_to):
             tabs = self.pieces[p].tabs
             if len(tabs) == 0:
                 return None
@@ -236,25 +260,47 @@ class PocketFinder:
             tab_vecs = np.array([tab.ellipse.center for tab in tabs])
             tab_vecs = tab_vecs / np.linalg.norm(tab_vecs, axis=1, keepdims=True)
             tab_vecs = self.coords[p].xform.apply_n2(tab_vecs)
-            
+
             dp = np.sum(tab_vecs * v0, axis=1)
 
-            i = np.argmax(dp)
-            return int(i) if dp[i] > .7 else None
+            ii = np.flatnonzero(dp > .7)
+            if len(ii) == 0:
+                return None
+
+            if len(ii) == 1:
+                return int(ii[0])
+            
+            tab_vecs = np.array([tab.ellipse.center for tab in tabs])
+            tab_vecs = self.coords[p].xform.apply_v2(tab_vecs) - closest_to
+            dist = np.linalg.norm(tab_vecs * tab_vecs, axis=1, keepdims=True)
+            
+            # print(f"{ii=} {dist=}")
+            return int(np.argmin(dist))
 
         def get_neighbor(self, label, vec):
 
             coord = self.coords[label]
             piece = self.pieces[label]
+
+            nlabels = []
+            nvecs = []
             for neighbor in self.overlaps(coord.xy, piece.radius):
                 if neighbor == label:
                     continue
                 neighbor_coord = self.coords[neighbor]
                 nvec = puzzler.math.unit_vector(neighbor_coord.xy - coord.xy)
-                if np.sum(nvec * vec) > .95:
-                    return str(neighbor)
+                nlabels.append(neighbor)
+                nvecs.append(nvec)
 
-            return None
+            if len(nlabels) == 0:
+                return None
+
+            nvecs = np.array(nvecs)
+
+            dp = np.sum(nvecs*vec, axis=1, keepdims=True)
+            i = np.argmax(dp)
+            
+            return str(nlabels[i]) if dp[i] > .95 else None
 
     def __init__(self, pieces, raft):
         self.pieces = pieces
@@ -278,11 +324,13 @@ class PocketFinder:
         vl = np.array((vt[1], -vt[0]))
         vr = -vl
 
+        tab_center = helper.get_tab_center(tab)
+
         pockets = []
 
         if nl := helper.get_neighbor(tab.piece, vl):
             if nll := helper.get_neighbor(nl, vt):
-                tabl = helper.find_tab_in_direction(nll, -vl)
+                tabl = helper.find_tab_in_direction_closest_to(nll, -vl, tab_center)
                 if tabl is not None:
                     tabl = Feature(nll, 'tab', tabl)
                 if tabl and tabl not in unmatched_tabs:
@@ -292,7 +340,7 @@ class PocketFinder:
             
         if nr := helper.get_neighbor(tab.piece, vr):
             if nrr := helper.get_neighbor(nr, vt):
-                tabr = helper.find_tab_in_direction(nrr, -vr)
+                tabr = helper.find_tab_in_direction_closest_to(nrr, -vr, tab_center)
                 if tabr is not None:
                     tabr = Feature(nrr, 'tab', tabr)
                 if tabr and tabr not in unmatched_tabs:

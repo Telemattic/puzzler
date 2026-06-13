@@ -195,6 +195,8 @@ class PuzzleSGFactory:
         self.renderer = None
         self.font = None
         self.seams = []
+        self.pockets = set()
+        self.pockets_from_frontier = []
         self.props = {'tabs.render':False, 'edges.render':False, 'tabs.ellipse.fill':''}
 
         if PuzzleSGFactory.piece_factory is None:
@@ -210,10 +212,17 @@ class PuzzleSGFactory:
 
             color = colors[i%len(colors)]
             color = colors[hash(piece.piece.label)%len(colors)]
-            self.draw_piece(piece, color, f"piece_{i}")
+            self.draw_piece(piece, color, f"piece={piece.piece.label}")
 
         if self.selection is not None:
             self.draw_rotate_handles(self.selection)
+
+        width = 3 if self.pockets_from_frontier else 1
+        for p in self.pockets:
+            self.draw_pocket(p, 'red', width=width)
+
+        for p in self.pockets_from_frontier:
+            self.draw_pocket(p, 'cyan', width=1)
 
         sg = self.scenegraphbuilder.commit(None, None)
 
@@ -221,6 +230,43 @@ class PuzzleSGFactory:
         sg.root_node = lodf.visit_node(sg.root_node)
 
         return sg
+
+    def draw_pocket(self, pocket, color, width=1):
+
+        sgb = self.scenegraphbuilder
+
+        piece_dict = dict((i.piece.label, i) for i in self.pieces)
+
+        def get_tab_center_and_direction(piece, i):
+
+            tab = piece.tabs[i]
+            xyc = tab.ellipse.center
+            xy0 = piece.points[tab.fit_indexes[0]]
+            xy1 = piece.points[tab.fit_indexes[1]]
+
+            norm = puzzler.math.unit_vector
+
+            o = norm(norm(xyc-xy0)+norm(xyc-xy1))
+            d = -o if tab.indent else o
+            return (xyc, d)
+
+        def draw_pocket_tab(tab):
+            p = piece_dict[tab.piece]
+            with puzzler.sgbuilder.insert_sequence(sgb):
+                sgb.add_translate(p.coords.xy)
+                sgb.add_rotate(p.coords.angle)
+                p0, v = get_tab_center_and_direction(p.piece, tab.index)
+                p1 = p0 + v * 100
+                sgb.add_lines(np.array((p0, p1)), fill=color, width=width, arrow='last')
+        
+        v = [piece_dict[i].coords.xy for i in pocket.pieces]
+        sgb.add_points(v, radius=6, width=width, outline=color)
+
+        if pocket.tab_a:
+            draw_pocket_tab(pocket.tab_a)
+            
+        if pocket.tab_b:
+            draw_pocket_tab(pocket.tab_b)
 
     def draw_piece(self, p, color, tag):
 
@@ -299,7 +345,7 @@ class PuzzleSGFactory:
             x   = np.concatenate((r1 * cos, r2 * np.flip(cos)))
             y   = np.concatenate((r1 * sin, r2 * np.flip(sin)))
             points = np.vstack((x, y)).T
-            tags = ('rotate', f'piece_{piece_id}')
+            tags = ('rotate', f'piece={p.piece.label}')
 
             for i in range(4):
                 with puzzler.sgbuilder.insert_sequence(sgb):
@@ -336,26 +382,53 @@ class AlignTk:
     def device_to_user(self, xy):
         xy = np.array((*xy, 1)) @ np.linalg.inv(self.camera.matrix).T
         return xy[:2]
+
+    def canvas_rightclick(self, event):
+        print(f"canvas_rightclick: {event=}")
+        if self.hittester:
+            xy = self.device_to_user((event.x, event.y))
+            tags = self.hittester(xy)
+            # tags = [i for _, subtags in tags for i in subtags]
+        else:
+            tags = self.canvas.gettags(self.canvas.find('withtag', 'current'))
+        print(f"  {tags=}")
+
+        context_menu = Menu(self.canvas, tearoff=0)
+        context_menu.add_command(label="Option 1", command=lambda: print("Option 1"))
+
+        try:
+            context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            context_menu.grab_release()
     
     def canvas_press(self, event):
 
-        piece_no  = None
+        piece_no = None
         drag_type = 'move'
 
         if self.hittester:
             xy = self.device_to_user((event.x, event.y))
-            tags = self.hittester(xy)
-            tags = [i for _, subtags in tags for i in subtags]
+            raw_tags = self.hittester(xy)
+            tags = []
+            for _, subtags in raw_tags:
+                if subtags:
+                    tags += [*subtags]
         else:
             tags = self.canvas.gettags(self.canvas.find('withtag', 'current'))
 
+        piece_label = None
         for tag in tags:
             
-            m = re.fullmatch(r"piece_(\d+)", tag)
+            m = re.fullmatch(r"piece=(\w+)", tag)
             if m:
-                piece_no = int(m[1])
+                piece_label = m[1]
             if tag == 'rotate':
                 drag_type = 'turn'
+
+        if piece_label:
+            for i, p in enumerate(self.pieces):
+                if p.piece.label == piece_label:
+                    piece_no = i
 
         had_selection = self.selection is not None
 
@@ -462,7 +535,15 @@ class AlignTk:
             f.render_vertex_details = True
         if self.render_seams:
             f.seams = self.render_seams
+        f.pockets = self.solver.pockets
         f.props['tabs.render'] = self.var_render_tabs.get() != 0
+
+        try:
+            s = self.solver
+            o = puzzler.frontier.frontier_experiment(s.pieces, s.raft, s.distance_query_cache)
+            f.pockets_from_frontier = o['pockets']
+        except Exception as x:
+            print(x)
 
         return f.build()
 
@@ -503,6 +584,13 @@ class AlignTk:
 
         self.scenegraph = None
         self.render()
+
+    def do_frontier(self):
+        print("frontier!")
+        s = self.solver
+        o = puzzler.frontier.frontier_experiment(s.pieces, s.raft, s.distance_query_cache)
+        with open('temp/frontier.json', 'w') as f:
+            f.write(puzzler.frontier.FrontierJSONEncoder(indent=2).encode(o))
 
     def update_coords(self):
         
@@ -591,6 +679,7 @@ class AlignTk:
         self.canvas = Canvas(self.frame, width=viewport[0], height=viewport[1],
                              background='white', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.canvas.bind("<Button-3>", self.canvas_rightclick)
         self.canvas.bind("<Button-1>", self.canvas_press)
         self.canvas.bind("<B1-Motion>", self.canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_release)
@@ -631,9 +720,12 @@ class AlignTk:
         b5 = ttk.Checkbutton(self.controls, text="Ignore Errors", variable=self.var_solve_ignore_errors)
         b5.grid(column=7, row=0, sticky=W)
 
+        b6 = ttk.Button(self.controls, text='Frontier', command=self.do_frontier)
+        b6.grid(column=8, row=0, sticky=W)
+
         self.var_label = StringVar(value="x,y")
         l1 = ttk.Label(self.controls, textvariable=self.var_label, width=80)
-        l1.grid(column=8, row=0, sticky=E)
+        l1.grid(column=9, row=0, sticky=E)
 
         cf2 = ttk.Frame(self.frame)
         cf2.grid(row=2, sticky=(W,E))

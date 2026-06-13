@@ -39,6 +39,16 @@ class ApproxPolyComputer:
 
         indexes, signed_area = self.indexes, self.signed_area
         signs = [(area > 0, i) for i, area in zip(indexes, signed_area)]
+
+        # make sure that the curvature run isn't split across the
+        # arbitrary begin/end boundary of the loop
+        i = 0
+        while i < len(signs) and signs[i][0] == signs[i-1][0]:
+            i += 1
+
+        if 0 < i < len(signs):
+            signs = signs[i:] + signs[:i]
+        
         return [(k,list(i for _, i in g)) for k, g in itertools.groupby(signs, key=operator.itemgetter(0))]
     
     @staticmethod
@@ -109,9 +119,10 @@ class TabComputer:
             
             e = tab['ellipse']
 
-            if e.semi_major / e.semi_minor > 1.8:
+            eccentricity = e.semi_major / e.semi_minor
+            if eccentricity > 1.8:
                 if self.verbose:
-                    print("  ellipse too eccentric, rejecting")
+                    print(f"  ellipse too eccentric ({eccentricity=:.3f}), rejecting")
                 continue
 
             if self.verbose:
@@ -121,7 +132,7 @@ class TabComputer:
 
         for in_out, indices in self.approx_poly.curvature_runs():
 
-            if in_out:
+            if in_out or len(indices) < 2:
                 continue
             
             tab = self.fit_ellipse_to_outdent(indices[0], indices[-1])
@@ -140,9 +151,10 @@ class TabComputer:
             
             e = tab['ellipse']
 
-            if e.semi_major / e.semi_minor > 1.8:
+            eccentricity = e.semi_major / e.semi_minor
+            if eccentricity > 1.8:
                 if self.verbose:
-                    print("  ellipse too eccentric, rejecting")
+                    print(f"  ellipse too eccentric ({eccentricity=:.3f}), rejecting")
                 continue
 
             if e.semi_major > self.max_semi_major:
@@ -150,12 +162,7 @@ class TabComputer:
                     print("   ellipse too big, rejecting")
                 continue
 
-            if e.semi_major < self.min_semi_major:
-                if self.verbose:
-                    print("   ellipse too small, rejecting")
-                continue
-
-            if self.indexes_overlap(tab):
+            if False and any(self.indexes_overlap_any(tab,i) for i in self.tabs):
                 if self.verbose:
                     print("  outdent tab overlaps previously found tab")
                 continue
@@ -165,30 +172,31 @@ class TabComputer:
             
             self.tabs.append(tab)
 
-        return
+        self.tabs.sort(key=operator.itemgetter('indexes'))
 
-        if self.verbose:
-            print(f"Iterate fit process for {len(self.tabs)} ellipses")
-
-        for j in range(3):
-            if self.verbose:
-                print(f"-- pass {j+1}/3 --")
-            for i, tab in enumerate(self.tabs):
-                a, b = tab['trimmed_indexes']
+        i = 0
+        while 2 <= len(self.tabs) and i < len(self.tabs):
+            tabA = self.tabs[i-1]
+            tabB = self.tabs[i]
+            if self.indexes_overlap(tabA, tabB):
+                scoreA = tabA['mse']
+                if tabA['indent']:
+                    scoreA *= 0.3
+                scoreB = tabB['mse']
+                if tabB['indent']:
+                    scoreB *= 0.3
                 if self.verbose:
-                    print(f"{i=}: indexes={tab['indexes']} trimmed={tab['trimmed_indexes']}")
-                tab2 = self.fit_ellipse(a, b, tab['indent'])
-                if tab2 is None:
-                    print("FNORD!")
-                else:
-                    self.tabs[i] = tab2
+                    print("  found tab overlap, dropping tab with higher MSE")
+                    print(f"   tabA={i-1} {scoreA=:.3f} tabB={i} {scoreB=:.3f}")
+                self.tabs.pop(i if scoreA < scoreB else i-1)
+            else:
+                i += 1
 
-    def indexes_overlap(self, tab):
-        
+    def indexes_overlap(self, tabA, tabB):
+            
         n = len(self.perimeter.points)
 
         def overlaps(i, j):
-
             a0, b0 = i
             if b0 < a0:
                 return overlaps((a0, n), j) or overlaps((0, b0), j)
@@ -198,13 +206,8 @@ class TabComputer:
                 return overlaps(i, (a1, n)) or overlaps(i, (0, b1))
 
             return a1 < b0 and a0 < b1
-        
-        for other in self.tabs:
 
-            if overlaps(tab['indexes'], other['indexes']):
-                return True
-
-        return False
+        return overlaps(tabA['indexes'], tabB['indexes'])
             
     def fit_ellipse_to_outdent(self, l, r):
 
@@ -284,7 +287,7 @@ class TabComputer:
             angle = self.angle_between(center, a, b)
 
         if self.verbose:
-            print(f"  center={cx:.1f},{cy:.1f} major={ellipse.semi_major:.1f} minor={ellipse.semi_minor:.1f} phi={math.degrees(ellipse.phi):.1f}")
+            print(f"  center={cx:.1f},{cy:.1f} major={ellipse.semi_major:.1f} minor={ellipse.semi_minor:.1f} phi={math.degrees(ellipse.phi):.1f} eccentricity={ellipse.semi_major/ellipse.semi_minor:.3f}")
             print(f"  angle={math.degrees(angle):.1f}")
 
         tab = {'ellipse': ellipse, 'indexes': (a,b), 'indent':indent, 'angle': angle, 'mse': mse}
@@ -911,7 +914,7 @@ def feature_update_pieces(pieces, verbose=False, epsilon=10.):
         ec = EdgeComputer(perimeter, tc.approx_poly, tc.tabs, False)
 
         piece.tabs = []
-        for i, tab in enumerate(sorted(tc.tabs, key=operator.itemgetter('indexes'))):
+        for tab in sorted(tc.tabs, key=operator.itemgetter('indexes')):
             piece.tabs.append(puzzler.feature.Tab(tab['indexes'], tab['ellipse'], tab['indent'], tab['tangents']))
 
         edges = []

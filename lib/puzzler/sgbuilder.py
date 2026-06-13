@@ -186,21 +186,22 @@ class PieceSceneGraphFactory:
 
     def do_tabs(self, p):
 
-        tags = self.opt.get('tags', (p.label,))
+        tags = self.opt.get('tags', (f"piece={p.label}",))
 
-        e_fill = self.opt['tabs.ellipse.fill']
-        e_outline = self.opt['tabs.ellipse.outline']
-        e_dashes = self.opt['tabs.ellipse.dashes']
-        e_width = self.opt['tabs.ellipse.width']
+        e_props = {'fill':self.opt['tabs.ellipse.fill'],
+                   'outline':self.opt['tabs.ellipse.outline'],
+                   'dashes':self.opt['tabs.ellipse.dashes'],
+                   'width':self.opt['tabs.ellipse.width']}
 
-        l_font = self.opt['tabs.label.font']
-        l_fill = self.opt['tabs.label.fill']
+        l_props = {'font':self.opt['tabs.label.font'],
+                   'fill':self.opt['tabs.label.fill']}
 
         for i, tab in enumerate(p.tabs):
             e = tab.ellipse
+            e_tags = *tags, f'tab={i}'
             self.add_node(sg.Ellipse(e.center, e.semi_major, e.semi_minor, e.phi,
-                                     {'fill':e_fill, 'outline':e_outline, 'dashes':e_dashes, 'width':e_width, 'tags':tags}))
-            self.add_node(sg.Text(e.center, str(i), {'font':l_font, 'fill':l_fill}))
+                                     e_props | {'tags':e_tags}))
+            self.add_node(sg.Text(e.center, str(i), l_props))
 
     def do_edges(self, p):
 
@@ -213,7 +214,7 @@ class PieceSceneGraphFactory:
 
     def do_outline(self, p):
 
-        tags = self.opt.get('tags', (p.label,))
+        tags = self.opt.get('tags', (f"piece={p.label}",))
         props = {'outline': self.opt['points.outline'],
                  'fill': self.opt['points.fill'],
                  'width': self.opt['points.width'],

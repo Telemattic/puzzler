@@ -343,7 +343,7 @@ def pockets_from_corners(corners, adjacency):
         common.discard('none')
         print(f"{tabA=!s} {tabB=!s} {common=}")
         if len(common) == 1:
-            pockets.append(Pocket(tabA, tabB, (tabA.piece, common.pop(), tabB.piece)))
+            pockets.append(Pocket(tabA, tabB, frozenset([tabA.piece, common.pop(), tabB.piece])))
 
     return pockets
 

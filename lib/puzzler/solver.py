@@ -461,6 +461,7 @@ class PuzzleSolver:
         self.last_refine = None
         self.pocket_cache = collections.OrderedDict()
         self.pocket_nscore = 2
+        self.pockets = set()
         self.history = []
 
     def solve(self):
@@ -537,7 +538,7 @@ class PuzzleSolver:
 
         self.distance_query_cache.purge()
 
-        fits = self.score_pockets()
+        fits, self.pockets = self.score_pockets()
 
         if not fits:
             return 0
@@ -690,7 +691,7 @@ class PuzzleSolver:
 
             logger.info(f"{pocket!s}: " + ', '.join(s))
 
-        return fits
+        return fits, pockets
 
     def make_key_for_pocket(self, pocket):
         keys = []
