@@ -1,4 +1,5 @@
 import csv
+import functools
 import json
 import mmap
 import puzzler
@@ -36,7 +37,7 @@ class TabPairsMMap:
                 stride = len(self.outdent_tabs)
 
             return offset + (dst_idx * stride + src_idx) * 6
-            
+
     def __init__(self, path):
         self.f = open(path, 'rb')
         self.mm = mmap.mmap(self.f.fileno(), length=0, access=mmap.ACCESS_READ)
@@ -59,6 +60,19 @@ class TabPairsMMap:
         sse, n = struct.unpack_from("=fH", self.mm, o)
         return FitError(sse, n)
 
+    @functools.cache
+    def get_best_fit(self, dst_tab):
+        o = self.offset_computer
+        src_tabs = o.outdent_tabs if dst_tab in o.indent_tabs else o.indent_tabs
+        mse = 100000.
+        best = None
+        for src_tab in src_tabs:
+            x = self.get_fit_error(dst_tab, src_tab)
+            if 0 < x.n and x.mse < mse:
+                mse = x.mse
+                best = src_tab
+        return best
+
     @staticmethod
     def parse_tab(s):
         label, tab_no = s.split(':')
@@ -67,16 +81,21 @@ class TabPairsMMap:
 class TabPairsCSV:
 
     def __init__(self, path):
-        self.data = TabPairsCSV.read_dict_from_file(path)
+        self.data, self.best_fit = TabPairsCSV.read_dict_from_file(path)
         
     def get_fit_error(self, dst_tab, src_tab):
         return self.data[(dst_tab,src_tab)]
 
+    def get_best_fit(self, dst_tab):
+        return self.best_fit[dst_tab]
+
     @staticmethod
     def read_dict_from_file(path):
         data = {}
+        best_fit = {}
         with open(path, 'r', newline='') as f:
             reader = csv.DictReader(f)
+            find_best_fit = rank in reader.fieldnames
             for row in reader:
                 try:
                     dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
@@ -84,10 +103,16 @@ class TabPairsCSV:
                     err_sse = float(row['sse'])
                     err_n = int(row['n'])
                     data[(dst_tab,src_tab)] = FitError(err_sse, err_n)
+                    if find_best_fit:
+                        if rank == '':
+                            find_best_fit = False
+                            best_fit = {}
+                        elif rank == '1':
+                            best_fit[dst_tab] = src_tab
                 except Exception as x:
                     logger.error(f"TabPairsCSV: error processing line {reader.line_num} from {path}")
                     raise
-        return data
+        return data, best_fit
 
 def load_tab_pairs(path):
 
