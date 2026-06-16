@@ -310,7 +310,7 @@ class FrontierExplorer:
 
         retval = []
         for i, tab in enumerate(p.tabs):
-            if all(j in rr for j in tab.tangent_indexes):
+            if all(j in rr for j in tab.fit_indexes):
                 tab_xy, tab_uv = self.get_tab_center_and_direction(Feature(piece_label,'tab',i))
                 xform = self.coords[piece_label].xform
                 tab_xy = xform.apply_v2(tab_xy)
@@ -319,7 +319,7 @@ class FrontierExplorer:
 
         def position_in_ring(x):
             tab = p.tabs[x.index]
-            begin = tab.tangent_indexes[0]
+            begin = tab.fit_indexes[0]
             if begin < rr.a:
                 begin += rr.n
             return begin
