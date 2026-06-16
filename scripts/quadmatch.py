@@ -88,6 +88,94 @@ class QuadMatch:
 
         return retval
 
+    def write_quad_table(self, path, expected):
+
+        def is_good_quad(quad):
+            for a, b in quad.spec:
+                if expected.get(a,a) != b:
+                    return False
+            return True
+
+        r = self.raftinator
+
+        with open(path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames='id spec good mse'.split())
+            writer.writeheader()
+            for i, q in enumerate(self.quads):
+                writer.writerow({'id':i,
+                                 'spec':r.format_feature_pairs(q.spec),
+                                 'good':is_good_quad(q),
+                                 'mse':q.mse})
+
+    def write_fslp_table(self, path):
+
+        def F(x):
+            return Feature(x.piece,'tab',x.index)
+
+        def FP(x):
+            return (F(x[0]), F(x[1]))
+
+        def L(x):
+            l = np.linalg.norm(x[0].tab_xy - x[1].tab_xy)
+            return f"{l:.1f}"
+        
+        r = self.raftinator
+
+        mapping = {}
+        k = 0
+        with open(path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames='id quad_id spec length'.split())
+            writer.writeheader()
+            for i, q in enumerate(self.quads):
+                for j, fslp in enumerate(q.fslp):
+                    writer.writerow({'id':k,
+                                     'quad_id':i,
+                                     'spec':r.format_feature_pair(FP(fslp)),
+                                     'length':L(fslp)})
+                    mapping[i,j] = k
+                    k += 1
+        return mapping
+
+    def doit4(self, path, expected):
+
+        def rafts_overlap(a, b):
+            return len(set(a.coords).intersection(b.coords)) != 0
+        
+        def F(x):
+            return Feature(x.piece,'tab',x.index)
+
+        def is_good_match(i, j):
+            a, b = F(i[0]), F(j[1])
+            if expected.get(a,a) != b:
+                return False
+            a, b = F(i[1]), F(j[0])
+            if expected.get(a,a) != b:
+                return False
+            return True
+
+        quads_path = path + '_quads.csv'
+        self.write_quad_table(quads_path, expected)
+        
+        fslps_path = path + '_fslps.csv'
+        fslp_lookup = self.write_fslp_table(fslps_path)
+        
+        facts_path = path + '_facts.csv'
+        with open(facts_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, 'dst_fslp_id src_fslp_id good_match'.split())
+            writer.writeheader()
+            
+            for dst_quad_id, dst in enumerate(tqdm.tqdm(self.quads, smoothing=0)):
+                for src_quad_id, src in enumerate(self.quads):
+                    if rafts_overlap(dst.raft, src.raft):
+                        continue
+                    for dst_fslp_id, i in enumerate(dst.fslp):
+                        for src_fslp_id, j in enumerate(src.fslp):
+                            if i[0].indent == j[1].indent or i[1].indent == j[0].indent:
+                                continue
+                            writer.writerow({'dst_fslp_id': fslp_lookup[dst_quad_id,dst_fslp_id],
+                                             'src_fslp_id': fslp_lookup[src_quad_id,src_fslp_id],
+                                             'good_match': is_good_match(i, j)})
+
     def doit3(self, expected):
 
         def is_good_quad(quad):
@@ -97,7 +185,7 @@ class QuadMatch:
             return True
 
         def rafts_overlap(a, b):
-            return len(set(dst.raft.coords).intersection(src.raft.coords)) != 0
+            return len(set(a.coords).intersection(b.coords)) != 0
 
         def F(x):
             return Feature(x.piece,'tab',x.index)
@@ -269,6 +357,9 @@ def main():
     print("initializing...")
 
     qm = QuadMatch(pieces, quads)
+
+    qm.doit4('banana', expected)
+    return
 
     fieldnames = 'dst_quad dst_good dst_mse dst_fslp dst_len src_quad src_good src_mse src_fslp src_len match_good'.split()
     with open(args.output, 'w', newline='') as f:
