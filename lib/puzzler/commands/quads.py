@@ -70,38 +70,6 @@ def griddy(pieces):
 
     return (num_row, num_col, grid)
 
-# see also puzzler.solver.compute_tab_matches
-def compute_tab_matches(pieces, raft):
-    tab_xy = []
-    radii = []
-    features = []
-    for k, v in raft.coords.items():
-        p = pieces[k]
-        centers = np.array([t.ellipse.center for t in p.tabs])
-        radii  += [t.ellipse.semi_major for t in p.tabs]
-        features += [puzzler.raft.Feature(p.label, 'tab', i) for i in range(len(p.tabs))]
-        tab_xy += [xy for xy in v.xform.apply_v2(centers)]
-
-    retval = set()
-
-    kdtree = scipy.spatial.KDTree(tab_xy)
-    neighbor_dist, neighbor_index = kdtree.query(tab_xy, 2)
-    for i, neighbors in enumerate(neighbor_index):
-        for j, k in enumerate(neighbors):
-            if k == i:
-                continue
-            distance = neighbor_dist[i][j]
-            if distance > radii[i]:
-                continue
-            # put the feature in a deterministic order
-            a = features[i]
-            b = features[k]
-            if b < a:
-                a, b = b, a
-            retval.add((a,b))
-
-    return retval
-
 def quadmaster(pieces, quad):
 
     Feature = puzzler.raft.Feature
@@ -167,7 +135,7 @@ def quadmaster(pieces, quad):
         mse = raftinator.get_total_error_for_raft_and_seams(raft)
         desc = raftinator.format_feature_pairs(feature_pairs)
 
-        actual_matches = compute_tab_matches(pieces, raft)
+        actual_matches = set(puzzler.solver.compute_tab_matches(pieces, raft.coords))
         expected_matches = {(a,b) if a<b else (b,a) for a,b in feature_pairs}
         # we expect the actual matches to be a subset of the expected
         # matches, if there are any "extra" matches in the actuals
@@ -233,7 +201,7 @@ def quads_main(args):
 
     for label, piece in pieces.items():
         try:
-            puzzler.pocket.tab_features_for_piece(piece, be_forgiving=False)
+            puzzler.pocket.tab_features_for_piece(piece)
         except puzzler.pocket.PocketFitter.FitException as x:
             print(f"{label} has problem with tab_features_for_piece!", x)
 

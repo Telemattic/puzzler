@@ -789,34 +789,6 @@ class PuzzleSolver:
 
         return sorted(scores)
 
-    def compute_tab_matches(self):
-        tab_xy = []
-        radii = []
-        labels = []
-        for k, v in self.raft.coords.items():
-            p = self.pieces[k]
-            centers = np.array([t.ellipse.center for t in p.tabs])
-            radii  += [t.ellipse.semi_major for t in p.tabs]
-            labels += [(p.label, i) for i in range(len(p.tabs))]
-            tab_xy += [xy for xy in v.xform.apply_v2(centers)]
-
-        retval = []
-
-        kdtree = scipy.spatial.KDTree(tab_xy)
-        neighbor_dist, neighbor_index = kdtree.query(tab_xy, 2)
-        for i, neighbors in enumerate(neighbor_index):
-            for j, k in enumerate(neighbors):
-                if k == i:
-                    continue
-                dst = labels[i]
-                src = labels[k]
-                distance = neighbor_dist[i][j]
-                if distance > radii[i]:
-                    continue
-                retval.append(f"{dst[0]}:{dst[1]}={src[0]}:{src[1]}")
-
-        return retval
-
     def compute_detailed_error(self):
         r = self.raftinator
         seams = r.get_seams_for_raft(self.raft)
@@ -833,11 +805,37 @@ class PuzzleSolver:
 
     def save_json(self, path):
         error = self.compute_detailed_error()
-        matches = self.compute_tab_matches()
+        matches = [str(a) + '=' + str(b) for a, b in compute_tab_matches(self.pieces, self.raft.coords)]
         path = path.replace('\\','/')
         logger.info(f"save_json: {path=}")
         with open(path, 'w') as f:
             f.write(to_json(self, error, matches, self.history))
+
+def compute_tab_matches(pieces, coords):
+    tab_xy = []
+    radii = []
+    features = []
+    for k, v in coords.items():
+        p = pieces[k]
+        centers = np.array([t.ellipse.center for t in p.tabs])
+        radii  += [t.ellipse.semi_major for t in p.tabs]
+        features += [puzzler.raft.Feature(p.label, 'tab', i) for i in range(len(p.tabs))]
+        tab_xy += [xy for xy in v.xform.apply_v2(centers)]
+
+    retval = []
+
+    kdtree = scipy.spatial.KDTree(tab_xy)
+    neighbor_dist, neighbor_index = kdtree.query(tab_xy, 2)
+    for i, neighbors in enumerate(neighbor_index):
+        for j, k in enumerate(neighbors):
+            if k == i:
+                continue
+            distance = neighbor_dist[i][j]
+            if distance > radii[i]:
+                continue
+            retval.append((features[i], features[k]))
+
+    return retval
 
 def load_json(path, pieces):
 
