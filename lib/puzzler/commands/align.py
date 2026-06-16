@@ -375,8 +375,24 @@ class AlignTk:
             context_menu.tk_popup(event.x_root, event.y_root)
         finally:
             context_menu.grab_release()
+
+    def canvas_paste(self, event):
+        print(f"canvas_paste: {event=}")
+        try:
+            pasted_text = self.parent.clipboard_get()
+            print(f"{pasted_text=}")
+        except tk.TclError:
+            print("Clipboard is empty or does not contain text")
+            pasted_text = None
+
+        if pasted_text:
+            self.reset_layout()
+            self.var_show_raft_alignment.set(pasted_text)
+            self.show_raft_alignment()
     
     def canvas_press(self, event):
+
+        self.canvas.focus_set()
 
         piece_no = None
         drag_type = 'move'
@@ -656,6 +672,7 @@ class AlignTk:
                              background='white', highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
         self.canvas.bind("<Button-3>", self.canvas_rightclick)
+        self.canvas.bind("<Control-v>", self.canvas_paste)
         self.canvas.bind("<Button-1>", self.canvas_press)
         self.canvas.bind("<B1-Motion>", self.canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_release)
