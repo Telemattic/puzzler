@@ -27,16 +27,28 @@ class Cell(NamedTuple):
     piece: str
     sides: Tuple[int]
 
+    def __eq__(self, other):
+        return self.piece == other.piece and all(a is None and b is None or a == b for a, b in zip(self.sides, other.sides))
+
 Feature = puzzler.raft.Feature
 
 def cross2d(x, y):
     return x[...,0] * y[...,1] - x[...,1] * y[...,0]
+
+class MosaicException(Exception):
+    pass
 
 class MosaicBuilder:
 
     def __init__(self, pieces, best_fits):
         self.pieces = pieces
         self.best_fits = best_fits
+
+        ambiguous = collections.defaultdict(set)
+        for src, dst in best_fits.items():
+            ambiguous[dst].add(src)
+
+        self.ambiguous = {k for k, v in ambiguous.items() if len(v) > 1}
 
     def get_cell_sides_for_piece(self, piece):
         
@@ -97,8 +109,15 @@ class MosaicBuilder:
         if tab_no is None:
             return None
 
-        m = self.best_fits.get(Feature(cell.piece, 'tab', tab_no))
+        f = Feature(cell.piece, 'tab', tab_no)
+        m = self.best_fits.get(f)
         if m is None:
+            return None
+
+        if self.best_fits.get(m) != f:
+            return None
+
+        if f in self.ambiguous or m in self.ambiguous:
             return None
 
         return self.make_cell(m.piece, side_no^2, m.index)
@@ -107,32 +126,43 @@ class MosaicBuilder:
 
         # cells[x,y]
         cells = dict()
-        cells[0,0] = Cell('A1', (0,None,None,1))
-
+        placed = set()
+        
+        cells[0,0] = self.make_cell('A1', 0, 0)
+        placed.add(cells[0,0].piece)
         q = collections.deque([(0,0)])
-        while q:
-            x, y = q.popleft()
-            src = cells[x,y]
-            print(f"processing {(x,y)}: {src}")
-            for d, (i, j) in enumerate([(1, 0), (0, -1), (-1, 0), (0, 1)]):
 
-                match = self.get_matching_cell(src, d)
-                if match is None:
-                    continue
+        try:
+            while q:
+                x, y = q.popleft()
+                src = cells[x,y]
+                print(f"processing {(x,y)}: {src}")
+                for d, (i, j) in enumerate([(1, 0), (0, -1), (-1, 0), (0, 1)]):
 
-                print(f"  side {d} {match=}")
-
-                if dst := cells.get((x+i,y+j)):
-                    if dst == match:
+                    match = self.get_matching_cell(src, d)
+                    if match is None:
                         continue
-                    
-                    print(f"cell conflict at {(x+i,y+j)}, expected={match} actual={dst}")
-                    break
 
-                print(f"  placing ({x+i,y+j}): {match}")
+                    print(f"  side {d} {match=}")
+                    if dst := cells.get((x+i,y+j)):
+                        if dst != match and not (match.piece == 'G28' and dst.piece == 'C1'):
+                            raise MosaicException(f"cell conflict at {(x+i,y+j)}, expected={match} actual={dst}")
+                        continue
 
-                cells[x+i,y+j] = match
-                q.append((x+i, y+j))
+                    if match.piece in placed:
+                        raise MosaicException(f"cell conflict at {(x+i,y+j)}, expected={match} but {match.piece} has already been placed")
+
+                    if match.piece in self.ambiguous:
+                        print(f"  skipping match, it's marked as ambiguous")
+                        continue
+
+                    print(f"  placing ({x+i,y+j}): {match}")
+                    placed.add(match.piece)
+
+                    cells[x+i,y+j] = match
+                    q.append((x+i, y+j))
+        except MosaicException as x:
+            print(x)
 
         return cells
 
@@ -165,7 +195,7 @@ def filter_best_fits(best_fits, expected=None):
 
         # require the matches to be symmetric (they might be a bad
         # match, but at least they love each other)
-        if best_fits.get(src,src) != dst:
+        if best_fits.get(src,src) != dst and False:
             continue
         
         retval[dst] = src
@@ -223,7 +253,7 @@ def write_dotty(path, cells):
             print(f"  {a} -- {b}", file=f)
         print("}", file=f)
 
-def write_best_fits_dotty(path, best_fits, expected=None):
+def graph_best_fits(path, best_fits, expected=None):
 
     G = nx.DiGraph()
     for k, v in best_fits.items():
@@ -246,6 +276,10 @@ def write_best_fits_dotty(path, best_fits, expected=None):
         return not any(is_good_edge(a,b) for a, b in in_and_out_edges(n))
     
     for i, c in enumerate(sorted(nx.weakly_connected_components(G), key=len, reverse=True)):
+
+        # we're only interested in D1 for the time being
+        if not any('F3:' in i for i in c):
+            continue
 
         if 0 < num_nodes_in_graph and num_nodes_in_graph+len(c) > max_nodes_per_graph:
             print("}", file=f)
@@ -282,24 +316,29 @@ def main():
 
     parser = argparse.ArgumentParser("mosaic")
     parser.add_argument("-p", "--puzzle", required=True)
-    parser.add_argument("-b", "--best", required=True)
+    parser.add_argument("-b", "--best-fits", required=True)
     parser.add_argument("-e", "--expected")
     parser.add_argument("-o", "--output")
+    parser.add_argument("command", choices=['solve', 'compute-best-fits', 'graph-best-fits'], default='solve')
 
     args = parser.parse_args()
 
     puzzle = puzzler.file.load(args.puzzle)
     pieces = {i.label:i for i in puzzle.pieces}
 
-    if False:
+    if args.command == 'compute-best-fits':
         tab_pairs = puzzler.tabpairs.load_tab_pairs(args.tabs)
         best_fits = compute_best_fits(pieces, tab_pairs)
-        write_best_fits(args.output, best_fits)
+        write_best_fits(args.best_fits, best_fits)
         return 0
         
-    best_fits = read_best_fits(args.best)
+    best_fits = read_best_fits(args.best_fits)
 
     expected = read_expected(args.expected) if args.expected else None
+
+    if args.command == 'graph-best-fits':
+        graph_best_fits(args.output, best_fits, expected)
+        return 0
 
     best_fits = filter_best_fits(best_fits, expected)
 
