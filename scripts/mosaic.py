@@ -7,6 +7,8 @@ sys.path.insert(0, lib)
 import argparse
 import collections
 import csv
+import math
+import numpy as np
 import puzzler
 
 from typing import NamedTuple, Tuple
@@ -25,6 +27,9 @@ class Cell(NamedTuple):
 
 Feature = puzzler.raft.Feature
 
+def cross2d(x, y):
+    return x[...,0] * y[...,1] - x[...,1] * y[...,0]
+
 class MosaicBuilder:
 
     def __init__(self, pieces, best_fits):
@@ -32,9 +37,47 @@ class MosaicBuilder:
         self.best_fits = best_fits
 
     def get_cell_sides_for_piece(self, piece):
+        
+        def get_tab_uv(p, i):
+            t = p.tabs[i]
+            v = p.points[np.array(t.tangent_indexes)] - t.ellipse.center
+            v = v / np.linalg.norm(v, axis=1)
+            v = np.sum(v, axis=0)
+            v = v / np.linalg.norm(v)
+            if not t.indent:
+                v = -v
+            return v
+        
         p = self.pieces[piece]
         n = len(p.tabs)
-        return tuple(i if i < n else None for i in range(4))[::-1]
+
+        # shortcut for the common case, and it avoids tripping over
+        # annoying pieces like P31 that might confuse us
+        if n == 4:
+            return (0, 3, 2, 1)
+        
+        uv = [get_tab_uv(p,i) for i in range(n)]
+
+        sides = [None] * 4
+
+        # by arbitrary choice
+        sides[0] = 0
+
+        for i in range(1,n):
+            angle = math.degrees(np.atan2(cross2d(uv[i],uv[0]), np.sum(uv[i] * uv[0])))
+            #print(f"{piece=} tab[{i}] at {angle=:.0f} degrees to tab[0]")
+            if 45 <= angle < 135:
+                j = 3
+            elif -45 <= angle < 45:
+                j = 0
+            elif -135 <= angle < -45:
+                j = 1
+            else:
+                j = 2
+            assert sides[j] is None
+            sides[j] = i
+
+        return tuple(sides)
 
     def make_cell(self, piece, side_no, tab_no):
 
@@ -181,7 +224,9 @@ def main():
     best_fits = filter_best_fits(best_fits, expected)
 
     mosaic = MosaicBuilder(pieces, best_fits)
-    mosaic.breadth_first_search()
+    cells = mosaic.breadth_first_search()
+
+    print(f"placed {len(cells)} pieces!")
 
 if __name__ == '__main__':
     main()
