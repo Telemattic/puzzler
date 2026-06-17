@@ -7,7 +7,9 @@ sys.path.insert(0, lib)
 import argparse
 import collections
 import csv
+import itertools
 import math
+import networkx as nx
 import numpy as np
 import puzzler
 
@@ -121,8 +123,11 @@ class MosaicBuilder:
                 print(f"  side {d} {match=}")
 
                 if dst := cells.get((x+i,y+j)):
-                    assert dst == match, f"cell conflict at {(x+i,y+j)}, expected={match} actual={dst}"
-                    continue
+                    if dst == match:
+                        continue
+                    
+                    print(f"cell conflict at {(x+i,y+j)}, expected={match} actual={dst}")
+                    break
 
                 print(f"  placing ({x+i,y+j}): {match}")
 
@@ -200,12 +205,86 @@ def write_best_fits(path, best_fits):
             writer.writerow({'dst_piece':dst.piece, 'dst_tab_no':dst.index,
                              'src_piece':src.piece, 'src_tab_no':src.index})
 
+def write_dotty(path, cells):
+    edges = set()
+    for (x, y), cell in cells.items():
+        for d, (i, j) in enumerate([(1, 0), (0, -1), (-1, 0), (0, 1)]):
+            if neighbor := cells.get((x+i, y+j)):
+                if cell.sides[d] is not None:
+                    a, b = cell.piece, neighbor.piece
+                    if a > b:
+                        a, b = b, a
+                    edges.add((a, b))
+    with open(path, 'w') as f:
+        print("graph G {", file=f)
+        for (x, y), cell in cells.items():
+            print(f"  {cell.piece} [pos=\"{x},{-y}!\"]", file=f)
+        for a, b in sorted(edges):
+            print(f"  {a} -- {b}", file=f)
+        print("}", file=f)
+
+def write_best_fits_dotty(path, best_fits, expected=None):
+
+    G = nx.DiGraph()
+    for k, v in best_fits.items():
+        G.add_edge(str(k), str(v))
+
+    max_nodes_per_graph = 500
+    num_nodes_in_graph = 0
+    graph_num = 0
+
+    if expected:
+        expected = {str(k):str(v) for k, v in expected.items()}
+
+    def is_good_edge(a, b):
+        return expected.get(a,'') == b
+
+    def in_and_out_edges(n):
+        return itertools.chain(G.in_edges(n), G.out_edges(n))
+    
+    def is_bad_boy(n):
+        return not any(is_good_edge(a,b) for a, b in in_and_out_edges(n))
+    
+    for i, c in enumerate(sorted(nx.weakly_connected_components(G), key=len, reverse=True)):
+
+        if 0 < num_nodes_in_graph and num_nodes_in_graph+len(c) > max_nodes_per_graph:
+            print("}", file=f)
+            f.close()
+            num_nodes_in_graph = 0
+                
+        if num_nodes_in_graph == 0:
+            opath = f"{path}_{graph_num}.dot"
+            print(opath)
+            f = open(opath, 'w')
+            graph_num += 1
+            print("digraph G {", file=f)
+
+        num_nodes_in_graph += len(c)
+
+        print(f"// component[{i}]: {c}", file=f)
+        for j in c:
+            if expected and is_bad_boy(j):
+                print(f"  \"{j}\" [fillcolor=pink,style=filled]", file=f)
+                
+            for k in G.neighbors(j):
+                props = ''
+                if expected:
+                    if is_good_edge(j,k):
+                        props = '[color=darkgreen]'
+                    else:
+                        props = '[style=dashed]'
+                print(f"  \"{j}\" -> \"{k}\" {props}", file=f)
+
+    print("}", file=f)
+    f.close()
+        
 def main():
 
     parser = argparse.ArgumentParser("mosaic")
     parser.add_argument("-p", "--puzzle", required=True)
     parser.add_argument("-b", "--best", required=True)
     parser.add_argument("-e", "--expected")
+    parser.add_argument("-o", "--output")
 
     args = parser.parse_args()
 
@@ -219,6 +298,7 @@ def main():
         return 0
         
     best_fits = read_best_fits(args.best)
+
     expected = read_expected(args.expected) if args.expected else None
 
     best_fits = filter_best_fits(best_fits, expected)
@@ -227,6 +307,9 @@ def main():
     cells = mosaic.breadth_first_search()
 
     print(f"placed {len(cells)} pieces!")
+
+    if args.output:
+        write_dotty(args.output, cells)
 
 if __name__ == '__main__':
     main()
