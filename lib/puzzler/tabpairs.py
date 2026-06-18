@@ -14,146 +14,149 @@ FitError = puzzler.raft.FitError
 
 class TabPairsMMap:
 
-    MAGIC = 0xcafebabe
+    MAGIC = 0xcafebeef
 
     class OffsetComputer:
 
-        def __init__(self, outdent_table_offset, indent_table_offset, outdent_tabs, indent_tabs):
-            self.outdent_table_offset = outdent_table_offset
-            self.indent_table_offset = indent_table_offset
-            self.outdent_tabs = dict((k, v) for v, k in enumerate(outdent_tabs))
-            self.indent_tabs = dict((k, v) for v, k in enumerate(indent_tabs))
+        def __init__(self, o):
+            self.offset = o['offset']
+            self.length = o['length']
+            self.n_rows = o['n_rows']
+            self.n_cols = o['n_cols']
+            self.row_size = o['row_size']
+            self.elem_size = o['elem_size']
 
-        def __call__(self, dst_tab, src_tab):
-            dst_idx = self.indent_tabs.get(dst_tab)
-            if dst_idx is None:
-                offset = self.outdent_table_offset
-                dst_idx = self.outdent_tabs[dst_tab]
-                src_idx = self.indent_tabs[src_tab]
-                stride = len(self.indent_tabs)
-            else:
-                offset = self.indent_table_offset
-                src_idx = self.outdent_tabs[src_tab]
-                stride = len(self.outdent_tabs)
-
-            return offset + (dst_idx * stride + src_idx) * 6
+        def __call__(self, row_no, col_no):
+            return self.offset + row_no * self.row_size + col_no * self.elem_size
 
     def __init__(self, path):
         self.f = open(path, 'rb')
         self.mm = mmap.mmap(self.f.fileno(), length=0, access=mmap.ACCESS_READ)
 
-        magic, length, offset = struct.unpack_from('=LLQ', self.mm, offset=0)
+        magic, json_length, json_offset = struct.unpack_from('=LLQ', self.mm, offset=0)
         if magic != TabPairsMMap.MAGIC:
-            raise ValueError(f"TabPairsMMap: bad magic number {magic:X}")
+            raise ValueError(f"TabRanksMMap: bad magic number {magic:X}")
 
-        s = self.mm[offset:offset+length].decode()
+        s = self.mm[json_offset:json_offset+json_length].decode()
         o = json.loads(s)
 
-        self.offset_computer = TabPairsMMap.OffsetComputer(
-            o['outdent_table_offset'],
-            o['indent_table_offset'],
-            [self.parse_tab(i) for i in o['outdent_tabs']],
-            [self.parse_tab(i) for i in o['indent_tabs']])
+        # each tab (indent and outdent combined) has a unique integer id
+        self.id_to_tab = [self.parse_tab(i) for i in o['id_to_tab']]
+        self.tab_to_id = {j:i for i, j in enumerate(self.id_to_tab)}
+
+        # each tab maps to a unique dense index among its siblings
+        # (indents or outdents)
+        self.n_rows = o['n_rows']
+        self.tab_to_row = {self.parse_tab(i):j for i, j in o['tab_to_row'].items()}
+
+        self.n_cols = o['n_cols']
+        self.tab_to_col = {self.parse_tab(i):j for i, j in o['tab_to_col'].items()}
+
+        self.fit_offset_computer = TabPairsMMap.OffsetComputer(o['fit_table'])
+        self.rank_offset_computer = TabPairsMMap.OffsetComputer(o['rank_table'])
         
     def get_fit_error(self, dst_tab, src_tab):
-        o = self.offset_computer(dst_tab, src_tab)
+        dst_row = self.tab_to_row[dst_tab]
+        src_col = self.tab_to_col[src_tab]
+        o = self.fit_offset_computer(dst_row, src_col)
         sse, n = struct.unpack_from("=fH", self.mm, o)
         return FitError(sse, n)
 
-    @functools.cache
-    def get_best_fit(self, dst_tab):
-        o = self.offset_computer
-        src_tabs = o.outdent_tabs if dst_tab in o.indent_tabs else o.indent_tabs
-        mse = 100000.
-        best = None
-        for src_tab in src_tabs:
-            x = self.get_fit_error(dst_tab, src_tab)
-            if 0 < x.n and x.mse < mse:
-                mse = x.mse
-                best = src_tab
-        return best
+    def get_ranked_fit(self, dst_tab, rank_no):
+        if not (1 <= rank_no <= self.n_cols):
+            raise ValueError(f"rank={rank_no}, must be between 1 and {self.n_cols}")
+        dst_row = self.tab_to_row[dst_tab]
+        src_col = rank_no-1
+        o = self.rank_offset_computer(dst_row, src_col)
+        src_id, = struct.unpack_from("=H", self.mm, o)
+        if src_id == 0xFFFF:
+            raise ValueError(f"no ranked fit for tab={dst_tab!s} rank={rank_no}")
+        return self.id_to_tab[src_id]
 
     @staticmethod
     def parse_tab(s):
         label, tab_no = s.split(':')
         return Feature(label, 'tab', int(tab_no))
 
-class TabPairsCSV:
-
-    def __init__(self, path):
-        self.data, self.best_fit = TabPairsCSV.read_dict_from_file(path)
-        
-    def get_fit_error(self, dst_tab, src_tab):
-        return self.data[(dst_tab,src_tab)]
-
-    def get_best_fit(self, dst_tab):
-        return self.best_fit[dst_tab]
-
-    @staticmethod
-    def read_dict_from_file(path):
-        data = {}
-        best_fit = {}
-        with open(path, 'r', newline='') as f:
-            reader = csv.DictReader(f)
-            find_best_fit = rank in reader.fieldnames
-            for row in reader:
-                try:
-                    dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
-                    src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
-                    err_sse = float(row['sse'])
-                    err_n = int(row['n'])
-                    data[(dst_tab,src_tab)] = FitError(err_sse, err_n)
-                    if find_best_fit:
-                        if rank == '':
-                            find_best_fit = False
-                            best_fit = {}
-                        elif rank == '1':
-                            best_fit[dst_tab] = src_tab
-                except Exception as x:
-                    logger.error(f"TabPairsCSV: error processing line {reader.line_num} from {path}")
-                    raise
-        return data, best_fit
-
 def load_tab_pairs(path):
 
-    if re.search(r"\.csv$", path):
-        return TabPairsCSV(path)
-    elif re.search(r"\.mmap$", path):
+    if re.search(r"\.mmap$", path):
         return TabPairsMMap(path)
     raise Exception(f"load_tab_pairs: don't know how to parse {path}")
 
 def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs):
 
+    # the tables are immediately after the header
+    file_length = 16
+    
+    def allocate_block(n):
+        nonlocal file_length
+        # double alignment
+        o = (file_length + 7) & ~7
+        file_length = o + n
+        return o
+
+    def allocate_table(n_rows, n_cols, elem_size):
+        length = n_rows * n_cols * elem_size
+        offset = allocate_block(length)
+        return {'offset':offset, 'length':length,
+                'n_rows':n_rows, 'n_cols':n_cols,
+                'row_size':n_cols * elem_size,
+                'elem_size':elem_size}
+
+    def fill_table(mm, table, cell_value):
+        
+        init_data = b'\xFF\xFF' * table['n_cols']
+        offset = table['offset']
+        length = table['length']
+        row_size = table['row_size']
+        for i in range(offset, offset+length, row_size):
+            mm[i:i+row_size] = init_data
+
     outdent_tabs = sorted(outdent_tabs)
     indent_tabs = sorted(indent_tabs)
 
-    table_size = len(outdent_tabs) * len(indent_tabs) * 6
+    id_to_tab = sorted(outdent_tabs + indent_tabs)
+    tab_to_row = {j:i for i, j in enumerate(id_to_tab)}
+    assert len(tab_to_row) == len(id_to_tab)
 
-    # the tables are immediately after the header
-    outdent_table_offset = 16
+    # it's the same encoding, this just makes the semantics more
+    # obvious
+    tab_to_id = tab_to_row
 
-    # indent table is 16B aligned
-    indent_table_offset = (outdent_table_offset + table_size + 15) & ~15
+    tab_to_col = {j:i for i, j in enumerate(outdent_tabs)} | {j:i for i, j in enumerate(indent_tabs)}
+    assert len(tab_to_col) == len(id_to_tab)
 
-    o = {'outdent_table_offset': outdent_table_offset,
-         'indent_table_offset': indent_table_offset,
-         'outdent_tabs': [str(i) for i in outdent_tabs],
-         'indent_tabs': [str(i) for i in indent_tabs]}
+    n_rows = len(id_to_tab)
+    n_cols = max(len(outdent_tabs), len(indent_tabs))
+
+    fit_table = allocate_table(n_rows, n_cols, 6)
+    rank_table = allocate_table(n_rows, n_cols, 2)
+
+    o = {
+        'fit_table': fit_table,
+        'rank_table': rank_table,
+        'id_to_tab': [str(i) if i else i for i in id_to_tab],
+        'n_rows': n_rows,
+        'tab_to_row': {str(i):j for i, j in tab_to_row.items()},
+        'n_cols': n_cols,
+        'tab_to_col': {str(i):j for i, j in tab_to_col.items()}
+    }
 
     json_bytes = json.dumps(o).encode()
 
-    json_offset = (indent_table_offset + table_size + 15) & ~15
     json_length = len(json_bytes)
+    json_offset = allocate_block(json_length)
 
-    file_length = json_offset + json_length
-
-    offset_computer = TabPairsMMap.OffsetComputer(
-        outdent_table_offset, indent_table_offset, outdent_tabs, indent_tabs)
+    fit_offset_computer = TabPairsMMap.OffsetComputer(fit_table)
+    rank_offset_computer = TabPairsMMap.OffsetComputer(rank_table)
 
     with open(mmap_opath, 'w+b') as ofile:
         mm = mmap.mmap(ofile.fileno(), file_length)
         struct.pack_into('=LLQ', mm, 0, TabPairsMMap.MAGIC, json_length, json_offset)
         mm[json_offset:json_offset+json_length] = json_bytes
+
+        fill_table(mm, rank_table, b'\xFF\xFF')
 
         with open(csv_ipath, 'r', newline='') as ifile:
             reader = csv.DictReader(ifile)
@@ -163,10 +166,16 @@ def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs
                     src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
                     err_sse = float(row['sse'])
                     err_n = int(row['n'])
+                    rank = int(row['rank'])
                 except Exception as x:
                     logger.error(f"write_tab_pairs_csv_to_mmap: error processing line {reader.line_num} from {csv_ipath}")
                     raise
-                o = offset_computer(dst_tab, src_tab)
+
+                dst_row = tab_to_row[dst_tab]
+                src_col = tab_to_col[src_tab]
+                o = fit_offset_computer(dst_row, src_col)
                 struct.pack_into('=fH', mm, o, err_sse, err_n)
 
-    
+                src_id = tab_to_id[src_tab]
+                o = rank_offset_computer(dst_row, rank-1)
+                struct.pack_into('=H', mm, o, src_id)
