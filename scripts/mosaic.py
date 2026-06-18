@@ -38,39 +38,29 @@ def cross2d(x, y):
 class MosaicException(Exception):
     pass
 
-class MosaicBuilder:
 
-    def __init__(self, pieces, best_fits):
-        self.pieces = pieces
-        self.best_fits = best_fits
-
-        ambiguous = collections.defaultdict(set)
-        for src, dst in best_fits.items():
-            ambiguous[dst].add(src)
-
-        self.ambiguous = {k for k, v in ambiguous.items() if len(v) > 1}
-
-    def get_cell_sides_for_piece(self, piece):
+def make_cell_for_piece(p):
         
-        def get_tab_uv(p, i):
-            t = p.tabs[i]
-            v = p.points[np.array(t.tangent_indexes)] - t.ellipse.center
-            v = v / np.linalg.norm(v, axis=1)
-            v = np.sum(v, axis=0)
-            v = v / np.linalg.norm(v)
-            if not t.indent:
-                v = -v
-            return v
-        
-        p = self.pieces[piece]
+    def get_tab_uv(i):
+        t = p.tabs[i]
+        v = p.points[np.array(t.tangent_indexes)] - t.ellipse.center
+        v = v / np.linalg.norm(v, axis=1)
+        v = np.sum(v, axis=0)
+        v = v / np.linalg.norm(v)
+        if not t.indent:
+            v = -v
+        return v
+
+    def get_sides_for_piece():
+
         n = len(p.tabs)
 
         # shortcut for the common case, and it avoids tripping over
         # annoying pieces like P31 that might confuse us
         if n == 4:
             return (0, 3, 2, 1)
-        
-        uv = [get_tab_uv(p,i) for i in range(n)]
+
+        uv = [get_tab_uv(i) for i in range(n)]
 
         sides = [None] * 4
 
@@ -88,94 +78,220 @@ class MosaicBuilder:
                 j = 1
             else:
                 j = 2
-            assert sides[j] is None
+                if sides[j] is not None:
+                    raise MosaicException(f"get_sides_for_piece: barfed on {p.label} with {n} sides")
             sides[j] = i
 
         return tuple(sides)
 
-    def make_cell(self, piece, side_no, tab_no):
+    return Cell(p.label, get_sides_for_piece())
 
-        sides = self.get_cell_sides_for_piece(piece)
-        i = sides.index(tab_no)
-        if i != side_no:
-            rot = i - side_no
-            sides = sides[rot:] + sides[:rot]
-        assert sides[side_no] == tab_no
-        return Cell(piece, sides)
+def rotate_cell(cell, side_no, tab_no):
+    
+    i = cell.sides.index(tab_no)
+    if i == side_no:
+        return cell
+    
+    rot = i - side_no
+    sides = cell.sides[rot:] + cell.sides[:rot]
+    assert sides[side_no] == tab_no
 
-    def get_matching_cell(self, cell, side_no):
+    return Cell(cell.piece, sides)
 
-        tab_no = cell.sides[side_no]
-        if tab_no is None:
+def get_weakly_connected_nodes(G, source_nodes):
+    visited = set()
+    next_level = set(source_nodes)
+    
+    # Traverse graph structure ignoring edge directions
+    while next_level:
+        this_level = next_level
+        next_level = set()
+        for v in this_level:
+            if v not in visited:
+                visited.add(v)
+                # Add successors (outgoing) and predecessors (incoming)
+                next_level.update(G.succ[v])
+                next_level.update(G.pred[v])
+    return visited
+
+def str_to_tab(s):
+    p, i = s.split(':')
+    return Feature(p, 'tab', int(i))
+
+class MosaicGraph:
+
+    def __init__(self, tab_pairs):
+        self.graph = nx.DiGraph()
+        self.tab_pairs = tab_pairs
+
+        for dst in tab_pairs.id_to_tab:
+            src = tab_pairs.get_ranked_fit(dst, 1)
+            self.graph.add_edge(str(src), str(dst), rank=1)
+
+    def resolve_match(self, tabA, tabB):
+
+        nodeA = str(tabA)
+        nodeB = str(tabB)
+        g = self.graph
+
+        remove_edges = []
+        add_edges = []
+
+        for pred, rank in g.pred[nodeB].data('rank'):
+            if pred != nodeA:
+                remove_edges.append((pred, nodeB, rank))
+
+        if not g.has_edge(nodeA, nodeB):
+            add_edges.append((nodeA, nodeB, None))
+
+        for pred, rank in g.pred[nodeA].data('rank'):
+            if pred != nodeB:
+                remove_edges.append((pred, nodeA, rank))
+                
+        if not g.has_edge(nodeB, nodeA):
+            add_edges.append((nodeB, nodeA, None))
+
+        for prev, succ, rank in remove_edges:
+            repl = self.tab_pairs.get_ranked_fit(str_to_tab(prev), rank+1)
+            add_edges.append((prev, str(repl), rank+1))
+
+        for u, v, _ in remove_edges:
+            self.graph.remove_edge(u, v)
+            
+        for u, v, rank in add_edges:
+            self.graph.add_edge(u, v, rank=rank)
+
+        return remove_edges, add_edges
+
+    def graph_it(dotty_path, removed_edges, added_edges):
+
+        affected_nodes = set()
+        for u, v, _ in removed_edges + added_edges:
+            affected_nodes.add(u)
+            affected_nodes.add(v)
+
+        nodes_to_graph = get_weakly_connected_nodes(self.graph, affected_nodes)
+
+        with open(path, 'w') as f:
+            for u, v, rank in remove_edges:
+                print(f"// remove: {(u,v)} {rank=}", file=f)
+            for u, v, rank in add_edges:
+                print(f"// add: {(u,v)} {rank=}", file=f)
+            print("digraph G {", file=f)
+
+            for pred in nodes_to_graph:
+                for succ, rank in G.succ[pred]:
+                    if rank is not None:
+                        props = f"[label=\"{rank}\"]"
+                    print(f"  \"{pred}\" --> \"{succ}\" {props}", file=f)
+
+            print("}", file=f)
+
+class MosaicBuilder:
+
+    def __init__(self, pieces, graph):
+        self.pieces = pieces
+        self.graph = graph
+
+    def get_best_match_for_tab(self, tab):
+        
+        G = self.graph.graph
+        
+        p = list(G.predecessors(str(tab)))
+        if len(p) != 1:
+            return None
+        m = p[0]
+
+        p = list(G.predecessors(m))
+        if len(p) != 1 or p[0] != str(tab):
             return None
 
-        f = Feature(cell.piece, 'tab', tab_no)
-        m = self.best_fits.get(f)
-        if m is None:
+        return str_to_tab(m)
+
+    def get_best_match_for_neighbors(self, neighbors):
+
+        matches = []
+        for i, n in enumerate(neighbors):
+            if n:
+                if m := self.get_best_match_for_tab(n):
+                    matches.append((i, m))
+                else:
+                    return None
+
+        if not matches:
             return None
 
-        if self.best_fits.get(m) != f:
-            return None
+        matches2 = []
+        for side_no, m in matches:
+            cell = make_cell_for_piece(self.pieces[m.piece])
+            matches2.append(rotate_cell(cell, side_no, m.index))
 
-        if f in self.ambiguous or m in self.ambiguous:
-            return None
+        if len(matches2) == 1:
+            return matches2[0]
 
-        return self.make_cell(m.piece, side_no^2, m.index)
+        if all(matches2[0] == m for m in matches2[1:]):
+            return matches2[0]
+
+        print("*** an abundance of choices!")
+        for m in matches2:
+            print(f"--> {m}")
+            
+        return None
 
     def breadth_first_search(self):
 
+        directions = ((1, 0), (0, -1), (-1, 0), (0, 1))
+
+        def get_cell_feature(x, y, side_no):
+            c = cells.get((x,y))
+            if c is None:
+                return None
+            index = c.sides[side_no]
+            if index is None:
+                return None
+            return Feature(c.piece, 'tab', index)
+
+        def get_neighbors(x, y):
+            return tuple(get_cell_feature(x+i, y+j, d^2)
+                         for d, (i, j) in enumerate(directions))
+                
         # cells[x,y]
         cells = dict()
-        placed = set()
+        placed = dict()
         
-        cells[0,0] = self.make_cell('A1', 0, 0)
-        placed.add(cells[0,0].piece)
-        q = collections.deque([(0,0)])
+        cells[0,0] = make_cell_for_piece(self.pieces['A1'])
+        placed['A1'] = (0,0)
+        q = collections.deque([(0,1), (1,0)])
 
         try:
             while q:
                 x, y = q.popleft()
-                src = cells[x,y]
-                print(f"processing {(x,y)}: {src}")
-                for d, (i, j) in enumerate([(1, 0), (0, -1), (-1, 0), (0, 1)]):
+                if (x,y) in cells:
+                    continue
+                
+                print(f"processing {(x,y)}:")
+                
+                neighbors = get_neighbors(x, y)
+                print(f"  neighbors={tuple(str(i) if i else i for i in neighbors)}")
 
-                    match = self.get_matching_cell(src, d)
-                    if match is None:
-                        continue
+                match = self.get_best_match_for_neighbors(neighbors)
+                if match is None:
+                    continue
+                
+                if match.piece in placed:
+                    raise MosaicException(f"cell conflict at {(x,y)}, expected{match} but {match.piece} has already been placed at {placed[match.piece]}")
 
-                    print(f"  side {d} {match=}")
-                    if dst := cells.get((x+i,y+j)):
-                        if dst != match and not (match.piece == 'G28' and dst.piece == 'C1'):
-                            raise MosaicException(f"cell conflict at {(x+i,y+j)}, expected={match} actual={dst}")
-                        continue
+                print(f"  placing ({x,y}): {match}")
+                placed[match.piece] = (x,y)
 
-                    if match.piece in placed:
-                        raise MosaicException(f"cell conflict at {(x+i,y+j)}, expected={match} but {match.piece} has already been placed")
-
-                    if match.piece in self.ambiguous:
-                        print(f"  skipping match, it's marked as ambiguous")
-                        continue
-
-                    print(f"  placing ({x+i,y+j}): {match}")
-                    placed.add(match.piece)
-
-                    cells[x+i,y+j] = match
+                cells[x,y] = match
+                for i, j in directions:
                     q.append((x+i, y+j))
+                
         except MosaicException as x:
             print(x)
 
         return cells
-
-def compute_best_fits(pieces, tab_pairs):
-
-    best_fits = {}
-    for p in pieces.values():
-        for i in range(len(p.tabs)):
-            dst = Feature(p.label, 'tab', i)
-            src = tab_pairs.get_best_fit(dst)
-            best_fits[dst] = src
-
-    return best_fits
 
 def filter_best_fits(best_fits, expected=None):
 
@@ -214,50 +330,46 @@ def read_expected(path):
             
     return expected
 
-def read_best_fits(path):
+def write_dotty(path, cells, expected = None):
     
-    best_fits = {}
-    with open(path, 'r', newline='') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            dst = Feature(row['dst_piece'], 'tab', int(row['dst_tab_no']))
-            src = Feature(row['src_piece'], 'tab', int(row['src_tab_no']))
-            best_fits[dst] = src
-            
-    return best_fits
-
-def write_best_fits(path, best_fits):
-
-    with open(path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames='dst_piece dst_tab_no src_piece src_tab_no'.split())
-        writer.writeheader()
-        for dst, src in best_fits.items():
-            writer.writerow({'dst_piece':dst.piece, 'dst_tab_no':dst.index,
-                             'src_piece':src.piece, 'src_tab_no':src.index})
-
-def write_dotty(path, cells):
     edges = set()
     for (x, y), cell in cells.items():
         for d, (i, j) in enumerate([(1, 0), (0, -1), (-1, 0), (0, 1)]):
             if neighbor := cells.get((x+i, y+j)):
-                if cell.sides[d] is not None:
-                    a, b = cell.piece, neighbor.piece
+                if cell.sides[d] is not None and neighbor.sides[d^2] is not None:
+                    a = Feature(cell.piece, 'tab', cell.sides[d])
+                    b = Feature(neighbor.piece, 'tab', neighbor.sides[d^2])
                     if a > b:
                         a, b = b, a
                     edges.add((a, b))
+                    
     with open(path, 'w') as f:
         print("graph G {", file=f)
+        print("  edge [fontname=\"Arial\", fontsize=8];", file=f)
         for (x, y), cell in cells.items():
-            print(f"  {cell.piece} [pos=\"{x},{-y}!\"]", file=f)
+            print(f"  {cell.piece} [pos=\"{x*1.5},{-y}!\"]", file=f)
         for a, b in sorted(edges):
-            print(f"  {a} -- {b}", file=f)
+            if expected:
+                color = 'darkgreen' if expected.get(a) == b else 'red'
+            else:
+                color = 'black'
+            print(f"  {a.piece} -- {b.piece} [color={color} taillabel=\"{str(a)}\" headlabel=\"{str(b)}\"]", file=f)
         print("}", file=f)
 
-def graph_best_fits(path, best_fits, expected=None):
+def graph_best_fits(path, tab_pairs, expected=None):
+
+    best_fits = {}
+    for dst in tab_pairs.id_to_tab:
+        src = tab_pairs.get_ranked_fit(dst, 1)
+        best_fits[dst] = src
 
     G = nx.DiGraph()
-    for k, v in best_fits.items():
-        G.add_edge(str(k), str(v))
+
+    # each node represents a single tab and has a *single* outbound
+    # edge to the tab it would most like to be matched with. A node *may*
+    # have multiple inbound edges.
+    for a, b in best_fits.items():
+        G.add_edge(str(a), str(b))
 
     max_nodes_per_graph = 500
     num_nodes_in_graph = 0
@@ -277,8 +389,7 @@ def graph_best_fits(path, best_fits, expected=None):
     
     for i, c in enumerate(sorted(nx.weakly_connected_components(G), key=len, reverse=True)):
 
-        # we're only interested in D1 for the time being
-        if not any('F3:' in i for i in c):
+        if not any((i.startswith('S6:') or i.startswith('G16:')) for i in c):
             continue
 
         if 0 < num_nodes_in_graph and num_nodes_in_graph+len(c) > max_nodes_per_graph:
@@ -295,7 +406,7 @@ def graph_best_fits(path, best_fits, expected=None):
 
         num_nodes_in_graph += len(c)
 
-        print(f"// component[{i}]: {c}", file=f)
+        print(f"  // component[{i}]: {c}", file=f)
         for j in c:
             if expected and is_bad_boy(j):
                 print(f"  \"{j}\" [fillcolor=pink,style=filled]", file=f)
@@ -306,7 +417,9 @@ def graph_best_fits(path, best_fits, expected=None):
                     if is_good_edge(j,k):
                         props = '[color=darkgreen]'
                     else:
-                        props = '[style=dashed]'
+                        e = expected.get(j)
+                        if e and e in c and not G.has_edge(e,j):
+                            print(f"  \"{j}\" -> \"{e}\" [style=dashed color=darkgreen]", file=f)
                 print(f"  \"{j}\" -> \"{k}\" {props}", file=f)
 
     print("}", file=f)
@@ -316,39 +429,32 @@ def main():
 
     parser = argparse.ArgumentParser("mosaic")
     parser.add_argument("-p", "--puzzle", required=True)
-    parser.add_argument("-b", "--best-fits", required=True)
+    parser.add_argument("-t", "--tab-pairs", required=True)
     parser.add_argument("-e", "--expected")
     parser.add_argument("-o", "--output")
-    parser.add_argument("command", choices=['solve', 'compute-best-fits', 'graph-best-fits'], default='solve')
+    parser.add_argument("command", choices=['solve', 'graph-best-fits'], default='solve')
 
     args = parser.parse_args()
 
     puzzle = puzzler.file.load(args.puzzle)
     pieces = {i.label:i for i in puzzle.pieces}
 
-    if args.command == 'compute-best-fits':
-        tab_pairs = puzzler.tabpairs.load_tab_pairs(args.tabs)
-        best_fits = compute_best_fits(pieces, tab_pairs)
-        write_best_fits(args.best_fits, best_fits)
-        return 0
-        
-    best_fits = read_best_fits(args.best_fits)
+    tab_pairs = puzzler.tabpairs.load_tab_pairs(args.tab_pairs)
 
     expected = read_expected(args.expected) if args.expected else None
 
     if args.command == 'graph-best-fits':
-        graph_best_fits(args.output, best_fits, expected)
+        graph_best_fits(args.output, tab_pairs, expected)
         return 0
 
-    best_fits = filter_best_fits(best_fits, expected)
-
-    mosaic = MosaicBuilder(pieces, best_fits)
+    graph = MosaicGraph(tab_pairs)
+    mosaic = MosaicBuilder(pieces, graph)
     cells = mosaic.breadth_first_search()
 
     print(f"placed {len(cells)} pieces!")
 
     if args.output:
-        write_dotty(args.output, cells)
+        write_dotty(args.output, cells, expected)
 
 if __name__ == '__main__':
     main()
