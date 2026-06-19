@@ -293,31 +293,6 @@ class MosaicBuilder:
 
         return cells
 
-def filter_best_fits(best_fits, expected=None):
-
-    doubles = {'B18', 'B27', 'E26', 'G6', 'J17', 'R5', 'R14', 'X21'}
-
-    retval = {}
-    for dst, src in best_fits.items():
-
-        # we don't support double pieces yet
-        if dst.piece in doubles or src.piece in doubles:
-            continue
-
-        # if the expected matches are provided then *only* consider
-        # the known good matches
-        if expected and expected.get(dst,dst) != src:
-            continue
-
-        # require the matches to be symmetric (they might be a bad
-        # match, but at least they love each other)
-        if best_fits.get(src,src) != dst and False:
-            continue
-        
-        retval[dst] = src
-
-    return retval
-
 def read_expected(path):
 
     expected = {}
@@ -356,75 +331,6 @@ def write_dotty(path, cells, expected = None):
             print(f"  {a.piece} -- {b.piece} [color={color} taillabel=\"{str(a)}\" headlabel=\"{str(b)}\"]", file=f)
         print("}", file=f)
 
-def graph_best_fits(path, tab_pairs, expected=None):
-
-    best_fits = {}
-    for dst in tab_pairs.id_to_tab:
-        src = tab_pairs.get_ranked_fit(dst, 1)
-        best_fits[dst] = src
-
-    G = nx.DiGraph()
-
-    # each node represents a single tab and has a *single* outbound
-    # edge to the tab it would most like to be matched with. A node *may*
-    # have multiple inbound edges.
-    for a, b in best_fits.items():
-        G.add_edge(str(a), str(b))
-
-    max_nodes_per_graph = 500
-    num_nodes_in_graph = 0
-    graph_num = 0
-
-    if expected:
-        expected = {str(k):str(v) for k, v in expected.items()}
-
-    def is_good_edge(a, b):
-        return expected.get(a,'') == b
-
-    def in_and_out_edges(n):
-        return itertools.chain(G.in_edges(n), G.out_edges(n))
-    
-    def is_bad_boy(n):
-        return not any(is_good_edge(a,b) for a, b in in_and_out_edges(n))
-    
-    for i, c in enumerate(sorted(nx.weakly_connected_components(G), key=len, reverse=True)):
-
-        if not any((i.startswith('S6:') or i.startswith('G16:')) for i in c):
-            continue
-
-        if 0 < num_nodes_in_graph and num_nodes_in_graph+len(c) > max_nodes_per_graph:
-            print("}", file=f)
-            f.close()
-            num_nodes_in_graph = 0
-                
-        if num_nodes_in_graph == 0:
-            opath = f"{path}_{graph_num}.dot"
-            print(opath)
-            f = open(opath, 'w')
-            graph_num += 1
-            print("digraph G {", file=f)
-
-        num_nodes_in_graph += len(c)
-
-        print(f"  // component[{i}]: {c}", file=f)
-        for j in c:
-            if expected and is_bad_boy(j):
-                print(f"  \"{j}\" [fillcolor=pink,style=filled]", file=f)
-                
-            for k in G.neighbors(j):
-                props = ''
-                if expected:
-                    if is_good_edge(j,k):
-                        props = '[color=darkgreen]'
-                    else:
-                        e = expected.get(j)
-                        if e and e in c and not G.has_edge(e,j):
-                            print(f"  \"{j}\" -> \"{e}\" [style=dashed color=darkgreen]", file=f)
-                print(f"  \"{j}\" -> \"{k}\" {props}", file=f)
-
-    print("}", file=f)
-    f.close()
-        
 def main():
 
     parser = argparse.ArgumentParser("mosaic")
@@ -432,7 +338,6 @@ def main():
     parser.add_argument("-t", "--tab-pairs", required=True)
     parser.add_argument("-e", "--expected")
     parser.add_argument("-o", "--output")
-    parser.add_argument("command", choices=['solve', 'graph-best-fits'], default='solve')
 
     args = parser.parse_args()
 
@@ -442,10 +347,6 @@ def main():
     tab_pairs = puzzler.tabpairs.load_tab_pairs(args.tab_pairs)
 
     expected = read_expected(args.expected) if args.expected else None
-
-    if args.command == 'graph-best-fits':
-        graph_best_fits(args.output, tab_pairs, expected)
-        return 0
 
     graph = MosaicGraph(tab_pairs)
     mosaic = MosaicBuilder(pieces, graph)
