@@ -94,7 +94,7 @@ class TabsComputer:
 
         retval = {'dst_label':dst.piece, 'dst_tab_no':dst.index,
                   'src_label':src.piece, 'src_tab_no':src.index,
-                  'raft':desc, 'sse':1e8, 'n':64}
+                  'sse':1e8, 'n':64}
         try:
             r = self.raftinator
 
@@ -157,7 +157,7 @@ def tabs_main(args):
     print(f"{len(puzzle.pieces)} pieces: {num_indents} indents, {num_outdents} outdents")
 
     with open(args.output, 'w', newline='') as f:
-        field_names = 'dst_label dst_tab_no src_label src_tab_no raft sse n mse rank'.split()
+        field_names = 'dst_label dst_tab_no src_label src_tab_no sse n'.split()
         writer = csv.DictWriter(f, field_names)
         writer.writeheader()
 

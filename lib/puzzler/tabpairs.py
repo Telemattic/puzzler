@@ -1,7 +1,9 @@
 import csv
 import functools
+import itertools
 import json
 import mmap
+import operator
 import puzzler
 import re
 import struct
@@ -84,6 +86,20 @@ def load_tab_pairs(path):
         return TabPairsMMap(path)
     raise Exception(f"load_tab_pairs: don't know how to parse {path}")
 
+def read_tab_pairs_csv(csv_path):
+
+    retval = []
+    with open(csv_path, 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
+            src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
+            sse = float(row['sse'])
+            n = int(row['n'])
+            retval.append((dst_tab, src_tab, sse, n))
+
+    return retval
+
 def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs):
 
     # the tables are immediately after the header
@@ -151,6 +167,21 @@ def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs
     fit_offset_computer = TabPairsMMap.OffsetComputer(fit_table)
     rank_offset_computer = TabPairsMMap.OffsetComputer(rank_table)
 
+    csv_data = read_tab_pairs_csv(csv_ipath)
+
+    # 0: dst_tab
+    # 1: src_tab
+    # 2: SSE
+    # 3: n
+
+    # group by dst_tab
+    group_key = operator.itemgetter(0)
+    
+    csv_data.sort(key=group_key)
+
+    # within a group sort by MSE=SSE/n and break ties by srt_tab
+    sort_key = lambda x: (x[2]/x[3], x[1])
+
     with open(mmap_opath, 'w+b') as ofile:
         mm = mmap.mmap(ofile.fileno(), file_length)
         struct.pack_into('=LLQ', mm, 0, TabPairsMMap.MAGIC, json_length, json_offset)
@@ -158,23 +189,17 @@ def write_tab_pairs_csv_to_mmap(mmap_opath, csv_ipath, outdent_tabs, indent_tabs
 
         fill_table(mm, rank_table, b'\xFF\xFF')
 
-        with open(csv_ipath, 'r', newline='') as ifile:
-            reader = csv.DictReader(ifile)
-            for row in reader:
-                try:
-                    dst_tab = Feature(row['dst_label'], 'tab', int(row['dst_tab_no']))
-                    src_tab = Feature(row['src_label'], 'tab', int(row['src_tab_no']))
-                    err_sse = float(row['sse'])
-                    err_n = int(row['n'])
-                    rank = int(row['rank'])
-                except Exception as x:
-                    logger.error(f"write_tab_pairs_csv_to_mmap: error processing line {reader.line_num} from {csv_ipath}")
-                    raise
+        for k, g in itertools.groupby(csv_data, key=group_key):
+
+            rows = list(g)
+            rows.sort(key=sort_key)
+
+            for rank, (dst_tab, src_tab, sse, n) in enumerate(rows, start=1):
 
                 dst_row = tab_to_row[dst_tab]
                 src_col = tab_to_col[src_tab]
                 o = fit_offset_computer(dst_row, src_col)
-                struct.pack_into('=fH', mm, o, err_sse, err_n)
+                struct.pack_into('=fH', mm, o, sse, n)
 
                 src_id = tab_to_id[src_tab]
                 o = rank_offset_computer(dst_row, rank-1)
