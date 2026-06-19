@@ -37,19 +37,35 @@ class GraphBestiary:
 
 def make_dotty_graph(path, G):
 
+    def format_prop(k, v):
+        return f"{k}={v}"
+
+    def format_props(props):
+        if not props:
+            return ''
+        
+        return '[' + ','.join(format_prop(k,v) for k,v in props.items()) + ']'
+
     def output_component(component):
         print("", file=f)
         for i in component:
+            node_props = {}
             if G.nodes[i].get('is_marooned'):
-                print(f"  \"{i}\" [fillcolor=pink,style=filled]", file=f)
+                node_props['fillcolor'] = 'pink'
+                node_props['style'] = 'filled'
+            if G.nodes[i].get('is_filtered'):
+                node_props['peripheries'] = 2
+
+            if node_props:
+                print(f"  \"{i}\" {format_props(node_props)}", file=f)
                 
             for j in G.succ[i]:
-                props = ''
+                edge_props = {}
                 if G[i][j].get('is_good'):
-                    props = '[color=darkgreen]'
+                    edge_props['color'] = 'darkgreen'
                 if G[i][j].get('is_fake'):
-                    props = '[color=darkgreen, style=dashed]'
-                print(f"  \"{i}\" -> \"{j}\" {props}", file=f)
+                    edge_props['style'] = 'dashed'
+                print(f"  \"{i}\" -> \"{j}\" {format_props(edge_props)}", file=f)
 
     with open(path, 'w') as f:
         print("digraph G {", file=f)
@@ -101,16 +117,17 @@ def filter_to(G, filters):
     def keep_component(component):
         return any(keep_node(i) for i in component)
 
-    nodes_to_remove = set()
+    nodes_to_keep = set()
     
-    for c in nx.weakly_connected_components(G):
+    for component in nx.weakly_connected_components(G):
 
-        if not keep_component(c):
-            nodes_to_remove.update(c)
+        if keep_component(component):
+            nodes_to_keep.update(component)
+            for n in component:
+                if keep_node(n):
+                    G.add_node(n, is_filtered=True)
 
-    G.remove_nodes_from(nodes_to_remove)
-
-    return G
+    return G.subgraph(nodes_to_keep)
         
 def just_unique_examples(G):
 
@@ -185,7 +202,7 @@ def show_graph(G):
     png.close()
 
     args = [r'C:\Program Files\Graphviz\bin\dot.exe', '-Tpng', '-o', png.name, dot.name]
-    print(' '.join(args))
+    # print(' '.join(args))
 
     subprocess.run(args)
     os.unlink(dot.name)
