@@ -40,13 +40,15 @@ def make_dotty_graph(path, G):
     def output_component(component):
         print("", file=f)
         for i in component:
-            if not G.nodes[i]['is_good']:
+            if G.nodes[i].get('is_marooned'):
                 print(f"  \"{i}\" [fillcolor=pink,style=filled]", file=f)
                 
             for j in G.succ[i]:
                 props = ''
-                if G[i][j]['is_good']:
+                if G[i][j].get('is_good'):
                     props = '[color=darkgreen]'
+                if G[i][j].get('is_fake'):
+                    props = '[color=darkgreen, style=dashed]'
                 print(f"  \"{i}\" -> \"{j}\" {props}", file=f)
 
     with open(path, 'w') as f:
@@ -73,15 +75,21 @@ def make_graph_from_best_fits(best_fits, expected = None):
     # edge to the tab it would most like to be matched with. A node *may*
     # have multiple inbound edges.
     for a, b in best_fits.items():
-        is_good = expected and expected.get(str(a),'') == str(b)
-        G.add_edge(str(a), str(b), is_good=is_good)
+        if expected and expected.get(str(a),'') == str(b):
+            G.add_edge(str(a), str(b), is_good=True)
+        else:
+            G.add_edge(str(a), str(b))
 
-    for n in G.nodes:
-        is_good = False
-        if expected:
+    if expected:
+        for n in G.nodes:
             e = expected.get(n,'')
-            is_good = e in G.pred[n] or e in G.succ[n]
-        G.add_node(n, is_good=is_good)
+            if not (e in G.pred[n] or e in G.succ[n]):
+                G.add_node(n, is_marooned=True)
+
+    if expected:
+        for a, b in expected.items():
+            if a < b and not G.has_edge(a, b) and not G.has_edge(b, a):
+                G.add_edge(a, b, is_good=True, is_fake=True)
 
     return G
 
