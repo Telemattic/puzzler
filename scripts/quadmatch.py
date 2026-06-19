@@ -5,6 +5,7 @@ lib = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
 sys.path.insert(0, lib)
 
 import argparse
+import bisect
 import collections
 import csv
 import functools
@@ -31,6 +32,24 @@ class Quad:
 
 class FrontierException(Exception):
     pass
+
+@staticmethod
+def feature_kind(f):
+    kind = 0
+    if f[0].indent:
+        kind |= 1
+    if f[1].indent:
+        kind |= 2
+    return kind
+
+@staticmethod
+def feature_kind_compliment(k):
+    comp = [3,1,2,0]
+    return comp[k]
+
+@staticmethod
+def feature_length(f):
+    return np.linalg.norm(f[0].tab_xy - f[1].tab_xy)
 
 class QuadMatch:
 
@@ -63,6 +82,64 @@ class QuadMatch:
         raft = r.refine_alignment_within_raft(raft)
         fslp = self.get_frontier_straight_line_pairs(raft)
         return Quad(spec, raft, fslp, mse)
+
+    def index_features(self):
+
+        self.feature_index = [list() for _ in range(4)]
+        for i, quad in enumerate(self.quads):
+            for j, feature in enumerate(quad.fslp):
+                kind = feature_kind(feature)
+                length = feature_length(feature)
+                self.feature_index[kind].append((length, i, j))
+
+        for i in self.feature_index:
+            i.sort()
+
+    def find_features(self, kind, min_length, max_length):
+        a = self.feature_index[kind]
+        lo = bisect.bisect_left(a, min_length, key=operator.itemgetter(0))
+        hi = bisect.bisect_right(a, max_length, lo=lo, key=operator.itemgetter(0))
+        return a[lo:hi]
+
+    def doit5(self, expected, writer):
+
+        def is_good_match(m):
+            
+            def helper(s):
+                for i in s.split(','):
+                    a, b = i.split('=')
+                    if expected.get(a,a) != b:
+                        return False;
+                return True
+
+            return all(helper(m[i]) for i in ('dst_quad', 'src_quad', 'match'))
+
+        # convert from features to strings
+        expected = {str(a):str(b) for a, b in expected.items()}
+        
+        self.index_features()
+
+        retval = []
+        search_width = 5
+
+        for i, dstq in enumerate(tqdm.tqdm(self.quads, smoothing=0)):
+            for j, dstf in enumerate(dstq.fslp):
+                kind = feature_kind(dstf)
+                length = feature_length(dstf)
+                to_search = self.find_features(
+                    feature_kind_compliment(kind),
+                    length-search_width,
+                    length+search_width)
+                n = 0
+                for _, k, l in to_search:
+                    srcq = self.quads[k]
+                    srcf = srcq.fslp[l]
+
+                    if m := self.try_slp_match(dstq, dstf, srcq, srcf):
+                        m['good_match'] = is_good_match(m)
+                        writer.writerow(m)
+
+        return retval
 
     def doit(self, dst: Quad):
 
@@ -357,6 +434,14 @@ def main():
     print("initializing...")
 
     qm = QuadMatch(pieces, quads)
+
+    fieldnames = 'dst_quad src_quad match dst_len src_len mse good_match'.split()
+    with open(args.output, 'w', newline='') as f:
+        
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        qm.doit5(expected, writer)
+    return
 
     qm.doit4('banana', expected)
     return

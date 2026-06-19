@@ -54,18 +54,36 @@ class QuadProp:
     def doit(self):
 
         r = self.raftinator
-        for q in self.quads:
-            print(f"quad \"{r.format_feature_pairs(q.spec)}\"")
-            for p in q.fslp:
-                c = self.get_quad_internal_connector_for_fslp(q, p)
-                print(f"   slfp={r.format_feature_pair(p)}, c={'None' if c is None else r.format_feature_pair(c)}:", self.match_count(p, c))
 
-    def match_count(self, p, c):
-        n = 0
-        for q in self.quads:
-            if any(p[0] in i for i in q.spec) and any(p[1] in i for i in q.spec) and (c is None or c in q.spec):
-                n += 1
-        return n
+        valid = [i for i in range(len(self.quads))]
+        iter_no = 0
+        while len(valid):
+            print(f"ITERATION {iter_no}")
+            iter_no += 1
+            next_valid = []
+            for i in valid:
+                if self.is_quad_valid(i, valid):
+                    next_valid.append(i)
+                else:
+                    print(f"rejecting quad[{i}] \"{r.format_feature_pairs(self.quads[i].spec)}\"")
+            if len(next_valid) == len(valid):
+                break
+            valid = next_valid
+
+        print(f"{iter_no} iterations reduces {len(self.quads)} quads to {len(valid)}")
+
+    def is_quad_valid(self, i, valid):
+
+        q = self.quads[i]
+        for p in q.fslp:
+            c = self.get_quad_internal_connector_for_fslp(q, p)
+            if not any(self.is_match(self.quads[j], p, c) for j in valid):
+                return False
+
+        return True
+
+    def is_match(self, q, p, c):
+        return any(p[0] in i for i in q.spec) and any(p[1] in i for i in q.spec) and (c is None or c in q.spec)
 
     def get_quad_internal_connector_for_fslp(self, q, p):
         # p is a straight-line feature pair, i.e. two tabs pointing in
