@@ -67,11 +67,17 @@ def make_dotty_graph(path, G):
                     edge_props['style'] = 'dashed'
                 print(f"  \"{i}\" -> \"{j}\" {format_props(edge_props)}", file=f)
 
+    if path is None:
+        with tempfile.NamedTemporaryFile(prefix='mosaic_', suffix='.dot') as f:
+            path = f.name
+
     with open(path, 'w') as f:
         print("digraph G {", file=f)
         for c in sorted(nx.weakly_connected_components(G), key=len, reverse=True):
             output_component(c)
         print("}", file=f)
+
+    return path
 
 def make_best_fits_from_tab_pairs(tab_pairs):
     best_fits = {}
@@ -191,21 +197,42 @@ def read_expected(path):
             
     return expected
 
+def output_graph(output_path, G):
+
+    if output_path.endswith('.dot'):
+        
+        make_dotty_graph(output_path, G)
+        
+    elif output_path.endswith('.png'):
+        
+        dot_path = make_dotty_graph(None, G)
+        run_dotty(['-Tpng', '-o', output_path, dot_path])
+        os.unlink(dot_path)
+        
+    elif output_path.endswith('.pdf'):
+
+        dot_path = make_dotty_graph(None, G)
+        run_dotty(['-Tpdf', '-o', output_path, dot_path])
+        os.unlink(dot_path)
+        
+    else:
+        raise ValueError(f"don't know how to generate {output_path}")
+
+def run_dotty(args):
+    
+    exe = r'C:\Program Files\Graphviz\bin\dot.exe'
+    subprocess.run([exe] + args)
+    
 def show_graph(G):
 
-    dot = tempfile.NamedTemporaryFile(prefix='mosaic_', suffix='.dot', delete=False)
-    dot.close()
-
-    make_dotty_graph(dot.name, G)
+    dot_path = make_dotty_graph(None, G)
 
     png = tempfile.NamedTemporaryFile(prefix='mosaic_', suffix='.png', delete=False)
     png.close()
 
-    args = [r'C:\Program Files\Graphviz\bin\dot.exe', '-Tpng', '-o', png.name, dot.name]
-    # print(' '.join(args))
+    run_dotty(['-Tpng', '-o', png.name, dot_path])
 
-    subprocess.run(args)
-    os.unlink(dot.name)
+    os.unlink(dot_path)
     
     os.startfile(png.name)
 
@@ -236,7 +263,7 @@ def main():
     if args.page_size:
         page_graph(args.output, G, args.page_size)
     elif args.output:
-        make_dotty_graph(args.output, G)
+        output_graph(args.output, G)
     elif args.window:
         show_graph(G)
 
