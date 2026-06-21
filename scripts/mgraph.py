@@ -13,27 +13,9 @@ import puzzler
 import subprocess
 import tempfile
 import time
+from msat import *
 
 Feature = puzzler.raft.Feature
-
-class GraphBestiary:
-
-    def __init__(self):
-        self.zoo = collections.defaultdict(list)
-
-    def is_known_graph(self, G2):
-
-        edge_match = node_match = lambda a,b: a['is_good'] == b['is_good']
-        
-        for G1 in self.zoo[len(G2)]:
-            GM = isomorphism.DiGraphMatcher(G1, G2, node_match=node_match, edge_match=edge_match)
-            if GM.is_isomorphic():
-                return True
-        return False
-
-    def add_unknown_graph(self, G2):
-
-        self.zoo[len(G2)].append(G2)
 
 def make_dotty_graph(path, G):
 
@@ -44,7 +26,7 @@ def make_dotty_graph(path, G):
         if not props:
             return ''
         
-        return '[' + ','.join(format_prop(k,v) for k,v in props.items()) + ']'
+        return '[' + ', '.join(format_prop(k,v) for k,v in props.items()) + ']'
 
     def output_component(component):
         print("", file=f)
@@ -63,8 +45,13 @@ def make_dotty_graph(path, G):
                 edge_props = {}
                 if G[i][j].get('is_good'):
                     edge_props['color'] = 'darkgreen'
+                    edge_props['penwidth'] = '2.0'
                 if G[i][j].get('is_fake'):
                     edge_props['style'] = 'dashed'
+                if G[i][j].get('z3'):
+                    edge_props['color'] = 'darkblue' if G[i][j].get('valid',True) else 'darkred'
+                    edge_props['penwidth'] = '3.0'
+                    
                 print(f"  \"{i}\" -> \"{j}\" {format_props(edge_props)}", file=f)
 
     if path is None:
@@ -73,6 +60,7 @@ def make_dotty_graph(path, G):
 
     with open(path, 'w') as f:
         print("digraph G {", file=f)
+        print("  node [fontname=\"Courier New\"]", file=f)
         for c in sorted(nx.weakly_connected_components(G), key=len, reverse=True):
             output_component(c)
         print("}", file=f)
@@ -88,9 +76,6 @@ def make_best_fits_from_tab_pairs(tab_pairs):
 
 def make_graph_from_best_fits(best_fits, expected = None):
         
-    if expected:
-        expected = {str(k):str(v) for k, v in expected.items()}
-
     G = nx.DiGraph()
 
     # each node represents a single tab and has a *single* outbound
@@ -108,7 +93,7 @@ def make_graph_from_best_fits(best_fits, expected = None):
             if not (e in G.pred[n] or e in G.succ[n]):
                 G.add_node(n, is_marooned=True)
 
-    if expected:
+    if expected and False:
         for a, b in expected.items():
             if a < b and not G.has_edge(a, b) and not G.has_edge(b, a):
                 G.add_edge(a, b, is_good=True, is_fake=True)
@@ -194,8 +179,8 @@ def read_expected(path):
             dst = Feature(row['dst_piece'], 'tab', int(row['dst_tab_no']))
             src = Feature(row['src_piece'], 'tab', int(row['src_tab_no']))
             expected[dst] = src
-            
-    return expected
+
+    return {str(k):str(v) for k, v in expected.items()}
 
 def output_graph(output_path, G):
 
@@ -248,6 +233,7 @@ def main():
     parser.add_argument("-f", "--filter")
     parser.add_argument("-p", "--page-size", type=int)
     parser.add_argument("-w", "--window", action='store_true')
+    parser.add_argument("--z3")
     
     args = parser.parse_args()
 
@@ -257,6 +243,24 @@ def main():
     best_fits = make_best_fits_from_tab_pairs(tab_pairs)
     G = make_graph_from_best_fits(best_fits, expected)
 
+    if args.z3:
+        edges_to_add = []
+        with open(args.z3, 'r') as f:
+            for row in f:
+                a, b = row.split()
+                if G.has_edge(a, b):
+                    edges_to_add.append((a,b))
+                    if G.has_edge(b, a):
+                        edges_to_add.append((b,a))
+                else:
+                    edges_to_add.append((b,a))
+
+        for a, b in edges_to_add:
+            if expected:
+                G.add_edge(a, b, z3=True, valid=expected.get(a,'') == b)
+            else:
+                G.add_edge(a, b, z3=True)
+                    
     if args.filter:
         G = filter_to(G, args.filter.split(','))
 

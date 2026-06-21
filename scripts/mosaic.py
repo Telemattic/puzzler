@@ -7,11 +7,15 @@ sys.path.insert(0, lib)
 import argparse
 import collections
 import csv
+import functools
 import itertools
 import math
 import networkx as nx
 import numpy as np
 import puzzler
+import tqdm
+from msat import *
+from rocksdict import Rdict
 
 from typing import NamedTuple, Tuple
 
@@ -29,6 +33,12 @@ class Cell(NamedTuple):
 
     def __eq__(self, other):
         return self.piece == other.piece and all(a is None and b is None or a == b for a, b in zip(self.sides, other.sides))
+    
+    def get_tab_for_side(self, i):
+        index = self.sides[i]
+        if index is None:
+            raise ValueError(f"no tab for piece {self.piece} on side {i} of cell")
+        return Feature(self.piece, 'tab', index)
 
 Feature = puzzler.raft.Feature
 
@@ -83,6 +93,9 @@ def make_cell_for_piece(p):
             sides[j] = i
 
         return tuple(sides)
+
+    if len(p.tabs) > 4:
+        raise MosaicException(f"make_cell_for_piece: too many tabs on {p.label}!")
 
     return Cell(p.label, get_sides_for_piece())
 
@@ -187,11 +200,195 @@ class MosaicGraph:
 
             print("}", file=f)
 
+class RaftTester:
+
+    def __init__(self, pieces, db_path=None):
+        self.pieces = pieces
+        self.raftinator = puzzler.raft.Raftinator(pieces)
+        self.db = Rdict(db_path) if db_path else None
+
+    def get_raft_error(self, feature_pairs):
+        
+        r = self.raftinator
+        desc = r.format_feature_pairs(feature_pairs)
+        
+        mse = self.db.get(desc)
+        if mse is not None:
+            return mse
+
+        raft = r.make_raft_from_feature_pairs(feature_pairs)
+
+        # repeated refinement
+        for _ in range(3):
+            raft = r.refine_alignment_within_raft(raft)
+            
+        mse = r.get_total_error_for_raft_and_seams(raft)
+
+        # print(f"{mse:8.1f} <-- {desc}")
+
+        self.db[desc] = mse
+
+        return mse
+
 class MosaicBuilder:
 
-    def __init__(self, pieces, graph):
+    def __init__(self, pieces, graph, db_path=None):
         self.pieces = pieces
         self.graph = graph
+        self.raft_tester = RaftTester(self.pieces, db_path)
+
+    def get_matches_for_tab(self, tab):
+        G = self.graph.graph
+        s = set(G.predecessors(str(tab))) | set(G.successors(str(tab)))
+        return list(str_to_tab(i) for i in s)
+
+    @functools.cache
+    def get_cell_for_tab(self, tab, side_no):
+        cell = make_cell_for_piece(self.pieces[tab.piece])
+        return rotate_cell(cell, side_no, tab.index)
+
+    def is_good_raft(self, feature_pairs):
+        return self.raft_tester.get_raft_error(feature_pairs) < 20.
+
+    def test_tab_pair(self, tabA, tabB):
+
+        def check_neighbors(side_no):
+
+            # a non-empty list containing None is a sentinel for an edge match
+            if cellA.sides[side_no] is None and cellB.sides[side_no] is None:
+                return [None]
+
+            # if one is an edge and the other isn't then something is
+            # busted, the edge can't just disappear
+            if cellA.sides[side_no] is None or cellB.sides[side_no] is None:
+                return []
+
+            tabAC = cellA.get_tab_for_side(side_no)
+            tabBD = cellB.get_tab_for_side(side_no)
+
+            good_matches = []
+            for tabCA, tabDB in itertools.product(
+                    self.get_matches_for_tab(tabAC),
+                    self.get_matches_for_tab(tabBD)):
+                fps = [(tabA, tabB), (tabAC, tabCA), (tabBD, tabDB)]
+                if self.is_good_raft(fps):
+                    good_matches.append(fps)
+            return good_matches
+
+        #    +---+
+        #  D | B | D'
+        # -- +---+---
+        #  C | A | C'
+        #    +---+
+
+        print(f"test_tab_pair: {tabA=!s} {tabB=!s}")
+        
+        # arbitrarily make tabA face up (side 1)
+        cellA = self.get_cell_for_tab(tabA, 1)
+
+        # so tabB will face down to match it (side 3)
+        cellB = self.get_cell_for_tab(tabB, 3)
+
+        print(f"  {cellA=} {cellB=}")
+        
+        print("  left...")
+        left = check_neighbors(2)
+        
+        print("  right...")
+        right = check_neighbors(0)
+
+        is_good = len(left) > 0 and len(right) > 0
+        print("  is_good:", is_good)
+        print()
+
+        return is_good
+
+    def test_single_tab(self, tabA):
+
+        for tabB in self.get_matches_for_tab(tabA):
+            self.test_tab_pair(tabA, tabB)
+
+    def test_all_edges(self, G):
+
+        for a, b in G.edges:
+            self.test_tab_pair(str_to_tab(a), str_to_tab(b))
+
+    def test_isolated_pairs(self):
+
+        retval = {}
+        
+        for c in nx.weakly_connected_components(self.graph.graph):
+            if len(c) != 2:
+                continue
+            tabA, tabB = (str_to_tab(i) for i in c)
+
+            try:
+                retval[tabA, tabB] = self.test_tab_pair(tabA, tabB)
+            except (ValueError, MosaicException):
+                retval[tabA, tabB] = None
+                
+        for (a, b), good in sorted(retval.items()):
+            if good is None:
+                g = 'Unknown'
+            elif good:
+                g = 'GOOD   '
+            else:
+                g = 'BAD    '
+            print(f"{g} {a!s}={b!s}")
+
+        return retval
+                
+    def check_tab_pair_for_rejects(self, tabA, tabB, expected=None):
+
+        def check_neighbors(side_no):
+
+            if cellA.sides[side_no] is None or cellB.sides[side_no] is None:
+                return []
+
+            tabAC = cellA.get_tab_for_side(side_no)
+            tabBD = cellB.get_tab_for_side(side_no)
+
+            rejects = []
+            for tabCA, tabDB in itertools.product(
+                    self.get_matches_for_tab(tabAC),
+                    self.get_matches_for_tab(tabBD)):
+                fps = [(tabA, tabB), (tabAC, tabCA), (tabBD, tabDB)]
+                mse = self.raft_tester.get_raft_error(fps)
+                if mse > 20.:
+                    rejects.append(fps)
+
+            return rejects
+
+        #    +---+
+        #  D | B | D'
+        # -- +---+---
+        #  C | A | C'
+        #    +---+
+
+        # arbitrarily make tabA face up (side 1)
+        cellA = self.get_cell_for_tab(tabA, 1)
+
+        # so tabB will face down to match it (side 3)
+        cellB = self.get_cell_for_tab(tabB, 3)
+
+        if any(cellA.sides[i] is None != cellB.sides[i] is None for i in (0, 2)):
+            return [[(tabA, tabB)]]
+
+        return check_neighbors(0) + check_neighbors(2)
+
+    def check_all_tab_pairs_for_rejects(self, expected=None):
+
+        G = self.graph.graph
+
+        rejects = []
+        for a, b in tqdm.tqdm(G.edges(), smoothing=0):
+            try:
+                rejects += self.check_tab_pair_for_rejects(
+                    str_to_tab(a), str_to_tab(b), expected)
+            except MosaicException:
+                pass
+
+        return rejects
 
     def get_best_match_for_tab(self, tab):
         
@@ -338,6 +535,8 @@ def main():
     parser.add_argument("-t", "--tab-pairs", required=True)
     parser.add_argument("-e", "--expected")
     parser.add_argument("-o", "--output")
+    parser.add_argument("-r", "--rocksdb")
+    parser.add_argument("--fnord")
 
     args = parser.parse_args()
 
@@ -349,7 +548,61 @@ def main():
     expected = read_expected(args.expected) if args.expected else None
 
     graph = MosaicGraph(tab_pairs)
-    mosaic = MosaicBuilder(pieces, graph)
+
+    if args.fnord:
+        G = graph.graph
+        with open(args.fnord, 'r') as f:
+            reader = csv.DictReader(f)
+            for i, row in enumerate(reader):
+                if i >= 2000:
+                    break
+                dst, src = row['dst'], row['src']
+                if not G.has_edge(dst, src):
+                    G.add_edge(dst, src)
+    
+    mosaic = MosaicBuilder(pieces, graph, args.rocksdb)
+
+    if False:
+        mosaic.test_tab_pair(str_to_tab('Q14:2'), str_to_tab('N23:2'))
+        return
+
+    if True:
+        G = graph.graph
+        sat = MosaicSat(G.to_undirected())
+
+        rejects = mosaic.check_all_tab_pairs_for_rejects()
+        for i in rejects:
+            s = ','.join(f"{a!s}={b!s}" for a, b in i)
+            if expected:
+                if all(expected.get(a,'') == b for a, b in i):
+                    s += ' (WRONG, rejected a valid raft)'
+                else:
+                    s += ' (CORRECT, at least one bad match in raft)'
+            print(f"reject {s}")
+            sat.reject(i)
+        
+        edges = sat.check()
+        if edges and args.output:
+            with open(args.output, 'w') as f:
+                for a, b in edges:
+                    print(a, b, file=f)
+        return
+
+    if True:
+        G = graph.graph
+        c = get_weakly_connected_nodes(G, {'I18:0'})
+        mosaic.test_all_edges(G.subgraph(c))
+        return
+
+    if True:
+        for i in ('T7:3','Q19:1','R19:0','P31:3','Q17:3','C16:2','A5:1'):
+            mosaic.test_single_tab(str_to_tab(i))
+        return
+
+    if True:
+        mosaic.test_isolated_pairs()
+        return
+    
     cells = mosaic.breadth_first_search()
 
     print(f"placed {len(cells)} pieces!")
